@@ -1,0 +1,5 @@
+streamlit>=1.28.0
+pandas>=1.5.0
+openai-whisper>=20231117
+requests>=2.31.0
+

@@ -1,0 +1,97 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.log
+*.pot
+venv/
+ENV/
+env/
+.venv
+
+# Java / Maven
+FFmpegGUI/target/
+FFmpegGUI/.mvn/wrapper/maven-wrapper.jar
+FFmpegGUI/pom.xml.tag
+FFmpegGUI/pom.xml.releaseBackup
+FFmpegGUI/pom.xml.versionsBackup
+FFmpegGUI/pom.xml.next
+FFmpegGUI/release.properties
+FFmpegGUI/dependency-reduced-pom.xml
+FFmpegGUI/buildNumber.properties
+FFmpegGUI/.mvn/timing.properties
+FFmpegGUI/.mvn/wrapper/maven-wrapper.properties
+*.class
+*.jar
+*.war
+*.ear
+*.iml
+.idea/
+.project
+.classpath
+.settings/
+.vscode/
+
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# FFmpeg
+ffmpeg.exe
+ffprobe.exe
+ffmpeg
+ffprobe
+
+# Output files
+*.mp4
+*.mkv
+converted/
+output/
+
+# Logs
+*.log
+logs/
+
+# Temp files
+*.tmp
+temp/
+.cache/
+
+# IDE
+*.swp
+*.swo
+*~
+.project
+.metadata
+.settings
+
+# Application specific
+config.json
+settings.json
+.cursor/
