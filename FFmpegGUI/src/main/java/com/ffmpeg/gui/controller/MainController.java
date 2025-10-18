@@ -38,7 +38,7 @@ public class MainController {
     
     private final PythonBridge pythonBridge;
     private final ObservableList<ConversionJob> conversionQueue = FXCollections.observableArrayList();
-    private final ConversionSettings settings = new ConversionSettings();
+    private final ConversionSettings settings;
     private boolean isProcessing = false;
     private File lastDirectory;
     
@@ -53,48 +53,70 @@ public class MainController {
     @FXML private Label statusLabel;
     
     // Mode-Specific Quick Settings
-    @FXML private javafx.scene.layout.HBox encoderQuickSettings;
-    @FXML private javafx.scene.layout.HBox subtitleQuickSettings;
-    @FXML private javafx.scene.layout.HBox renamerQuickSettings;
+    @FXML private javafx.scene.layout.VBox encoderQuickSettings;
+    @FXML private javafx.scene.layout.VBox subtitleQuickSettings;
+    @FXML private javafx.scene.layout.VBox renamerQuickSettings;
+    
+    // Mode Layouts
+    @FXML private javafx.scene.control.SplitPane encoderModeLayout;
+    @FXML private javafx.scene.control.SplitPane subtitleModeLayout;
+    @FXML private javafx.scene.control.SplitPane renamerModeLayout;
     
     // Encoder Quick Settings
     @FXML private ComboBox<String> quickFormatCombo;
     @FXML private ComboBox<String> quickCodecCombo;
     @FXML private ComboBox<String> quickQualityCombo;
+    @FXML private ComboBox<String> quickPresetCombo;
     @FXML private CheckBox quickHwAccelCheck;
+    @FXML private CheckBox quickDownloadSubsCheck;
+    @FXML private CheckBox quickRenameCheck;
+    @FXML private Button configSubtitlesButton;
+    @FXML private Button configRenamerButton;
     
     // Subtitle Quick Settings
     @FXML private ComboBox<String> quickSubProviderCombo;
-    @FXML private ComboBox<String> quickSubLanguageCombo;
-    @FXML private CheckBox quickAutoDownloadCheck;
-    @FXML private Label whisperStatusLabel;
-    @FXML private Label openSubsStatusLabel;
+    @FXML private CheckBox langEnglishCheck;
+    @FXML private CheckBox langSpanishCheck;
+    @FXML private CheckBox langFrenchCheck;
+    @FXML private CheckBox langGermanCheck;
+    @FXML private CheckBox langJapaneseCheck;
+    @FXML private CheckBox langChineseCheck;
+    @FXML private CheckBox langKoreanCheck;
+    @FXML private CheckBox langArabicCheck;
+    @FXML private Button whisperStatusButton;
+    @FXML private Button openSubsStatusButton;
+    @FXML private Button subtitleSearchButton;
+    @FXML private Button subtitleDownloadButton;
+    @FXML private Button subtitleGenerateButton;
+    @FXML private Label subtitleSelectedFilesLabel;
+    @FXML private ComboBox<String> subtitleLogLevelCombo;
+    @FXML private TextArea subtitleLogArea;
     
     // Renamer Quick Settings
     @FXML private ComboBox<String> quickRenameProviderCombo;
     @FXML private ComboBox<String> quickRenameTypeCombo;
-    @FXML private Label tmdbStatusLabel;
-    @FXML private Label tvdbStatusLabel;
-    @FXML private Label anilistStatusLabel;
+    @FXML private Button tmdbStatusButton;
+    @FXML private Button tvdbStatusButton;
+    @FXML private Button anilistStatusButton;
+    @FXML private Button refreshMetadataButton;
+    @FXML private Button applyRenameButton;
+    @FXML private Label renamerSelectedFilesLabel;
+    @FXML private Label renameProgressLabel;
+    @FXML private ComboBox<String> renamerLogLevelCombo;
+    @FXML private TextArea renamerLogArea;
     
-    // Preview Tabs
-    @FXML private Tab renamePreviewTab;
-    @FXML private Tab subtitlePreviewTab;
-    
-    // Rename Preview
+    // Preview elements (now in separate mode layouts)
     @FXML private ComboBox<String> previewProviderCombo;
     @FXML private ListView<String> originalNamesListView;
     @FXML private ListView<String> suggestedNamesListView;
     @FXML private Label activeProviderLabel;
     @FXML private Label renameStatsLabel;
     @FXML private CheckBox createBackupCheck;
-    
-    // Subtitle Preview
     @FXML private ComboBox<String> subtitleFileCombo;
-    @FXML private TableView<SubtitleItem> availableSubtitlesTable;
     @FXML private Label subtitleDetailsLabel;
     @FXML private Label subtitleStatsLabel;
     @FXML private CheckBox embedSubtitlesCheck;
+    @FXML private TableView<SubtitleItem> availableSubtitlesTable;
     
     private String currentMode = "encoder";
     
@@ -136,6 +158,10 @@ public class MainController {
     
     public MainController(PythonBridge pythonBridge) {
         this.pythonBridge = pythonBridge;
+        
+        // Load settings from disk
+        this.settings = ConversionSettings.load();
+        logger.info("Settings loaded from: {}", ConversionSettings.getSettingsFilePath());
     }
     
     @FXML
@@ -166,64 +192,19 @@ public class MainController {
         if (selected != null) {
             if (selected.contains("Encoder")) {
                 currentMode = "encoder";
-                startButton.setText("▶️ Start Encoding");
                 showModePanel(encoderQuickSettings);
-                
-                // Show encoder-specific UI
-                if (leftPanelSplit != null) {
-                    leftPanelSplit.setVisible(true);
-                    leftPanelSplit.setManaged(true);
-                }
-                if (rightPanelTabs != null) {
-                    rightPanelTabs.setVisible(true);
-                    rightPanelTabs.setManaged(true);
-                    // Show only File Info and Logs tabs
-                    rightPanelTabs.getTabs().clear();
-                    if (fileInfoTab != null) rightPanelTabs.getTabs().add(fileInfoTab);
-                    if (logsTab != null) rightPanelTabs.getTabs().add(logsTab);
-                }
+                showModeLayout(encoderModeLayout);
                 
             } else if (selected.contains("Subtitle")) {
                 currentMode = "subtitle";
-                startButton.setText("🎙️ Generate/Download");
                 showModePanel(subtitleQuickSettings);
-                
-                // Hide queue/progress, show only subtitle preview
-                if (leftPanelSplit != null) {
-                    leftPanelSplit.setVisible(false);
-                    leftPanelSplit.setManaged(false);
-                }
-                if (rightPanelTabs != null) {
-                    rightPanelTabs.setVisible(true);
-                    rightPanelTabs.setManaged(true);
-                    rightPanelTabs.getTabs().clear();
-                    if (subtitlePreviewTab != null) {
-                        subtitlePreviewTab.setDisable(false);
-                        rightPanelTabs.getTabs().add(subtitlePreviewTab);
-                    }
-                    if (logsTab != null) rightPanelTabs.getTabs().add(logsTab);
-                }
+                showModeLayout(subtitleModeLayout);
+                updateSubtitleFileList();
                 
             } else if (selected.contains("Renamer")) {
                 currentMode = "renamer";
-                startButton.setText("📝 Preview/Rename");
                 showModePanel(renamerQuickSettings);
-                
-                // Hide queue/progress, show only rename preview
-                if (leftPanelSplit != null) {
-                    leftPanelSplit.setVisible(false);
-                    leftPanelSplit.setManaged(false);
-                }
-                if (rightPanelTabs != null) {
-                    rightPanelTabs.setVisible(true);
-                    rightPanelTabs.setManaged(true);
-                    rightPanelTabs.getTabs().clear();
-                    if (renamePreviewTab != null) {
-                        renamePreviewTab.setDisable(false);
-                        rightPanelTabs.getTabs().add(renamePreviewTab);
-                    }
-                    if (logsTab != null) rightPanelTabs.getTabs().add(logsTab);
-                }
+                showModeLayout(renamerModeLayout);
                 
                 // Immediately load files and show original names
                 if (!conversionQueue.isEmpty()) {
@@ -231,7 +212,30 @@ public class MainController {
                 }
             }
             
+            updateSelectedFilesLabel();
             log("Switched to " + currentMode + " mode");
+        }
+    }
+    
+    private void showModeLayout(javafx.scene.control.SplitPane layout) {
+        // Hide all layouts
+        if (encoderModeLayout != null) {
+            encoderModeLayout.setVisible(false);
+            encoderModeLayout.setManaged(false);
+        }
+        if (subtitleModeLayout != null) {
+            subtitleModeLayout.setVisible(false);
+            subtitleModeLayout.setManaged(false);
+        }
+        if (renamerModeLayout != null) {
+            renamerModeLayout.setVisible(false);
+            renamerModeLayout.setManaged(false);
+        }
+        
+        // Show selected layout
+        if (layout != null) {
+            layout.setVisible(true);
+            layout.setManaged(true);
         }
     }
     
@@ -257,21 +261,6 @@ public class MainController {
         }
     }
     
-    private void hidePreviewTabs() {
-        if (renamePreviewTab != null) {
-            renamePreviewTab.setDisable(true);
-        }
-        if (subtitlePreviewTab != null) {
-            subtitlePreviewTab.setDisable(true);
-        }
-    }
-    
-    private void showPreviewTab(Tab tab) {
-        hidePreviewTabs();
-        if (tab != null) {
-            tab.setDisable(false);
-        }
-    }
     
     private void setupQueueTable() {
         // Setup columns
@@ -383,6 +372,7 @@ public class MainController {
         }
         
         updateQueueCount();
+        updateSelectedFilesLabel();
         log("Added " + added + " file(s) to queue");
     }
     
@@ -773,6 +763,10 @@ public class MainController {
     
     @FXML
     private void handleSettings() {
+        openSettings(null);
+    }
+    
+    private void openSettings(String category) {
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/SettingsDialog.fxml"));
             SettingsController controller = new SettingsController();
@@ -782,7 +776,7 @@ public class MainController {
             scene.getStylesheets().add(getClass().getResource("/styles/application.css").toExternalForm());
             
             Stage dialogStage = new Stage();
-            dialogStage.setTitle("Settings");
+            dialogStage.setTitle("Settings - EncodeForge");
             dialogStage.initModality(Modality.WINDOW_MODAL);
             dialogStage.initOwner(settingsButton.getScene().getWindow());
             dialogStage.setScene(scene);
@@ -791,10 +785,21 @@ public class MainController {
             controller.setSettings(settings);
             controller.setPythonBridge(pythonBridge);
             
+            // Navigate to specific category if provided
+            if (category != null) {
+                controller.navigateToCategory(category);
+            }
+            
             dialogStage.showAndWait();
             
             if (controller.isApplied()) {
-                log("Settings updated");
+                // Save settings to disk
+                if (settings.save()) {
+                    log("Settings updated and saved successfully");
+                } else {
+                    log("ERROR: Failed to save settings");
+                }
+                checkProviderStatus(); // Refresh provider status after settings change
             }
             
         } catch (IOException e) {
@@ -904,7 +909,7 @@ public class MainController {
     private void handleDocumentation() {
         try {
             java.awt.Desktop.getDesktop().browse(
-                new java.net.URI("https://github.com/yourusername/ffmpeg-gui")
+                new java.net.URI("https://github.com/SirStig/EncodeForge")
             );
         } catch (Exception e) {
             logger.error("Error opening documentation", e);
@@ -915,8 +920,13 @@ public class MainController {
     private void handleAbout() {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("About");
-        alert.setHeaderText("FFmpeg Batch Transcoder");
-        alert.setContentText("Version 2.0\n\nA modern, cross-platform video transcoding application.");
+        alert.setHeaderText("EncodeForge");
+        alert.setContentText(
+            "Version 1.0.0\n\n" +
+            "A modern, cross-platform media encoding, subtitle management, and file renaming tool.\n\n" +
+            "GitHub: https://github.com/SirStig/EncodeForge\n\n" +
+            "Settings Location:\n" + ConversionSettings.getSettingsFilePath()
+        );
         alert.showAndWait();
     }
     
@@ -1331,46 +1341,61 @@ public class MainController {
         // Initialize encoder quick settings
         if (quickFormatCombo != null) {
             quickFormatCombo.setItems(FXCollections.observableArrayList(
-                "MP4", "MKV", "AVI", "MOV", "WEBM"
+                "MP4", "MKV", "AVI", "MOV", "WEBM", "TS"
             ));
             quickFormatCombo.setValue("MP4");
         }
         
         if (quickCodecCombo != null) {
             quickCodecCombo.setItems(FXCollections.observableArrayList(
-                "HEVC (H.265)", "AVC (H.264)", "AV1", "VP9", "Copy"
+                "HEVC (H.265)", "AVC (H.264)", "AV1", "VP9", "MPEG-2", "Copy"
             ));
             quickCodecCombo.setValue("HEVC (H.265)");
         }
         
         if (quickQualityCombo != null) {
             quickQualityCombo.setItems(FXCollections.observableArrayList(
-                "High (CQ 18)", "Medium (CQ 23)", "Low (CQ 28)", "Very Low (CQ 32)"
+                "Highest (CQ 15)", "High (CQ 18)", "Medium (CQ 23)", "Low (CQ 28)", "Very Low (CQ 32)"
             ));
             quickQualityCombo.setValue("Medium (CQ 23)");
+        }
+        
+        if (quickPresetCombo != null) {
+            quickPresetCombo.setItems(FXCollections.observableArrayList(
+                "Fast", "Medium", "Slow", "Quality", "Balanced"
+            ));
+            quickPresetCombo.setValue("Medium");
         }
         
         if (quickHwAccelCheck != null) {
             quickHwAccelCheck.setSelected(true);
         }
         
+        if (quickDownloadSubsCheck != null) {
+            quickDownloadSubsCheck.setSelected(false);
+        }
+        
+        if (quickRenameCheck != null) {
+            quickRenameCheck.setSelected(false);
+        }
+        
         // Initialize subtitle quick settings
         if (quickSubProviderCombo != null) {
             quickSubProviderCombo.setItems(FXCollections.observableArrayList(
-                "Automatic", "OpenSubtitles Only", "Whisper AI Only", "Both Sources"
+                "Automatic (Prefer Download)", "Download Only", "Generate Only"
             ));
-            quickSubProviderCombo.setValue("Automatic");
+            quickSubProviderCombo.setValue("Automatic (Prefer Download)");
         }
         
-        if (quickSubLanguageCombo != null) {
-            quickSubLanguageCombo.setItems(FXCollections.observableArrayList(
-                "English", "Spanish", "French", "German", "Japanese", "Korean", "Chinese", "Multi-Language"
-            ));
-            quickSubLanguageCombo.setValue("English");
+        // Language checkboxes are already initialized with default values in FXML
+        // Log level combos for modes
+        if (subtitleLogLevelCombo != null) {
+            subtitleLogLevelCombo.setItems(FXCollections.observableArrayList("All", "Info", "Warning", "Error"));
+            subtitleLogLevelCombo.setValue("All");
         }
-        
-        if (quickAutoDownloadCheck != null) {
-            quickAutoDownloadCheck.setSelected(true);
+        if (renamerLogLevelCombo != null) {
+            renamerLogLevelCombo.setItems(FXCollections.observableArrayList("All", "Info", "Warning", "Error"));
+            renamerLogLevelCombo.setValue("All");
         }
         
         // Initialize renamer quick settings
@@ -1413,9 +1438,6 @@ public class MainController {
         if (subtitleFileCombo != null) {
             subtitleFileCombo.setItems(FXCollections.observableArrayList());
         }
-        
-        // Hide preview tabs by default
-        hidePreviewTabs();
     }
     
     private void checkProviderStatus() {
@@ -1447,70 +1469,70 @@ public class MainController {
                                           whisperResponse.get("whisper_available").getAsBoolean();
                 
                 Platform.runLater(() -> {
-                    if (whisperStatusLabel != null) {
+                    if (whisperStatusButton != null) {
                         if (whisperAvailable) {
-                            whisperStatusLabel.setText("🤖 Whisper: Installed");
-                            whisperStatusLabel.getStyleClass().removeAll("error", "warning");
-                            whisperStatusLabel.getStyleClass().add("active");
+                            whisperStatusButton.setText("🤖 Whisper: Ready");
+                            whisperStatusButton.getStyleClass().removeAll("error", "warning");
+                            whisperStatusButton.getStyleClass().add("active");
                         } else {
-                            whisperStatusLabel.setText("🤖 Whisper: Not Installed");
-                            whisperStatusLabel.getStyleClass().removeAll("active");
-                            whisperStatusLabel.getStyleClass().add("warning");
+                            whisperStatusButton.setText("🤖 Whisper: Not Setup");
+                            whisperStatusButton.getStyleClass().removeAll("active");
+                            whisperStatusButton.getStyleClass().add("warning");
                         }
                     }
                 });
                 
                 // Update OpenSubtitles status
                 Platform.runLater(() -> {
-                    if (openSubsStatusLabel != null) {
+                    if (openSubsStatusButton != null) {
                         if (settings.getOpensubtitlesApiKey() != null && !settings.getOpensubtitlesApiKey().isEmpty()) {
-                            openSubsStatusLabel.setText("🌐 OpenSubtitles: Configured");
-                            openSubsStatusLabel.getStyleClass().removeAll("error", "warning");
-                            openSubsStatusLabel.getStyleClass().add("active");
+                            openSubsStatusButton.setText("🌐 OpenSubtitles: Ready");
+                            openSubsStatusButton.getStyleClass().removeAll("error", "warning");
+                            openSubsStatusButton.getStyleClass().add("active");
                         } else {
-                            openSubsStatusLabel.setText("🌐 OpenSubtitles: No API Key");
-                            openSubsStatusLabel.getStyleClass().removeAll("active");
-                            openSubsStatusLabel.getStyleClass().add("warning");
+                            openSubsStatusButton.setText("🌐 OpenSubtitles: Not Setup");
+                            openSubsStatusButton.getStyleClass().removeAll("active");
+                            openSubsStatusButton.getStyleClass().add("warning");
                         }
                     }
                 });
                 
                 // Update TMDB status
                 Platform.runLater(() -> {
-                    if (tmdbStatusLabel != null) {
+                    if (tmdbStatusButton != null) {
                         if (settings.getTmdbApiKey() != null && !settings.getTmdbApiKey().isEmpty()) {
-                            tmdbStatusLabel.setText("🎬 TMDB: Configured");
-                            tmdbStatusLabel.getStyleClass().removeAll("error", "warning");
-                            tmdbStatusLabel.getStyleClass().add("active");
+                            tmdbStatusButton.setText("🎬 TMDB: Ready");
+                            tmdbStatusButton.getStyleClass().removeAll("error", "warning");
+                            tmdbStatusButton.getStyleClass().add("active");
                         } else {
-                            tmdbStatusLabel.setText("🎬 TMDB: No API Key");
-                            tmdbStatusLabel.getStyleClass().removeAll("active");
-                            tmdbStatusLabel.getStyleClass().add("warning");
+                            tmdbStatusButton.setText("🎬 TMDB: Not Setup");
+                            tmdbStatusButton.getStyleClass().removeAll("active");
+                            tmdbStatusButton.getStyleClass().add("warning");
                         }
                     }
                 });
                 
                 // Update TVDB status
                 Platform.runLater(() -> {
-                    if (tvdbStatusLabel != null) {
+                    if (tvdbStatusButton != null) {
                         if (settings.getTvdbApiKey() != null && !settings.getTvdbApiKey().isEmpty()) {
-                            tvdbStatusLabel.setText("📺 TVDB: Configured");
-                            tvdbStatusLabel.getStyleClass().removeAll("error", "warning");
-                            tvdbStatusLabel.getStyleClass().add("active");
+                            tvdbStatusButton.setText("📺 TVDB: Ready");
+                            tvdbStatusButton.getStyleClass().removeAll("error", "warning");
+                            tvdbStatusButton.getStyleClass().add("active");
                         } else {
-                            tvdbStatusLabel.setText("📺 TVDB: No API Key");
-                            tvdbStatusLabel.getStyleClass().removeAll("active");
-                            tvdbStatusLabel.getStyleClass().add("warning");
+                            tvdbStatusButton.setText("📺 TVDB: Not Setup");
+                            tvdbStatusButton.getStyleClass().removeAll("active");
+                            tvdbStatusButton.getStyleClass().add("warning");
                         }
                     }
                 });
                 
                 // AniList doesn't require API key
                 Platform.runLater(() -> {
-                    if (anilistStatusLabel != null) {
-                        anilistStatusLabel.setText("🎌 AniList: Available");
-                        anilistStatusLabel.getStyleClass().removeAll("error", "warning");
-                        anilistStatusLabel.getStyleClass().add("active");
+                    if (anilistStatusButton != null) {
+                        anilistStatusButton.setText("🎌 AniList: Available");
+                        anilistStatusButton.getStyleClass().removeAll("error", "warning");
+                        anilistStatusButton.getStyleClass().add("active");
                     }
                 });
                 
@@ -1521,6 +1543,73 @@ public class MainController {
     }
     
     // ========== New Action Handlers ==========
+    
+    @FXML
+    private void handleConfigureSubtitles() {
+        openSettings("Subtitles");
+    }
+    
+    @FXML
+    private void handleConfigureRenamer() {
+        openSettings("Metadata");
+    }
+    
+    @FXML
+    private void handleConfigureWhisper() {
+        openSettings("Subtitles");
+    }
+    
+    @FXML
+    private void handleConfigureOpenSubtitles() {
+        openSettings("Subtitles");
+    }
+    
+    @FXML
+    private void handleConfigureTMDB() {
+        openSettings("Metadata");
+    }
+    
+    @FXML
+    private void handleConfigureTVDB() {
+        openSettings("Metadata");
+    }
+    
+    @FXML
+    private void handleConfigureAniList() {
+        showInfo("AniList", "AniList does not require any configuration. It's ready to use!");
+    }
+    
+    @FXML
+    private void handleSaveSubtitles() {
+        log("Saving selected subtitles...");
+        // TODO: Implement subtitle saving functionality
+        showInfo("Save Subtitles", "Subtitle saving functionality coming soon!");
+    }
+    
+    private void updateSubtitleFileList() {
+        if (subtitleFileCombo != null && !conversionQueue.isEmpty()) {
+            ObservableList<String> fileNames = FXCollections.observableArrayList();
+            for (ConversionJob job : conversionQueue) {
+                fileNames.add(job.getFileName());
+            }
+            subtitleFileCombo.setItems(fileNames);
+            if (!fileNames.isEmpty()) {
+                subtitleFileCombo.getSelectionModel().selectFirst();
+            }
+        }
+    }
+    
+    private void updateSelectedFilesLabel() {
+        int fileCount = conversionQueue.size();
+        String text = fileCount == 0 ? "No files selected" : fileCount + " file(s) selected";
+        
+        if (subtitleSelectedFilesLabel != null) {
+            subtitleSelectedFilesLabel.setText(text);
+        }
+        if (renamerSelectedFilesLabel != null) {
+            renamerSelectedFilesLabel.setText(text);
+        }
+    }
     
     @FXML
     private void handleConfigureSubtitleProviders() {

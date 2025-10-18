@@ -13,6 +13,8 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Optional;
+
 import java.io.File;
 
 /**
@@ -35,11 +37,12 @@ public class SettingsController {
     @FXML private VBox videoSettings;
     @FXML private VBox audioSettings;
     @FXML private VBox subtitleSettings;
+    @FXML private VBox metadataSettings;
     @FXML private VBox outputSettings;
-    @FXML private VBox apiKeysSettings;
     @FXML private VBox advancedSettings;
     
     // General Settings
+    @FXML private Label settingsLocationLabel;
     @FXML private TextField outputDirField;
     @FXML private CheckBox deleteOriginalCheck;
     @FXML private CheckBox overwriteCheck;
@@ -75,18 +78,23 @@ public class SettingsController {
     @FXML private TextField whisperLanguagesField;
     @FXML private CheckBox downloadSubsCheck;
     
-    // Output Settings
-    @FXML private TextField namingPatternField;
-    @FXML private CheckBox createSubfoldersCheck;
-    @FXML private CheckBox copyMetadataCheck;
-    @FXML private CheckBox stripMetadataCheck;
-    
-    // API Keys Settings
-    @FXML private TextField tmdbApiKeyField;
-    @FXML private TextField tvdbApiKeyField;
+    // Subtitle Settings (continued)
     @FXML private TextField opensubtitlesApiKeyField;
     @FXML private TextField opensubtitlesUsernameField;
     @FXML private PasswordField opensubtitlesPasswordField;
+    @FXML private Label openSubsValidationLabel;
+    
+    // Metadata Settings
+    @FXML private TextField namingPatternField;
+    @FXML private CheckBox createSubfoldersCheck;
+    @FXML private TextField tmdbApiKeyField;
+    @FXML private TextField tvdbApiKeyField;
+    @FXML private Label tmdbValidationLabel;
+    @FXML private Label tvdbValidationLabel;
+    
+    // Output Settings
+    @FXML private CheckBox copyMetadataCheck;
+    @FXML private CheckBox stripMetadataCheck;
     
     // Advanced Settings
     @FXML private TextArea customArgsArea;
@@ -98,13 +106,18 @@ public class SettingsController {
     public void initialize() {
         // Initialize category list
         categoryList.setItems(javafx.collections.FXCollections.observableArrayList(
-            "General", "FFmpeg", "Video", "Audio", "Subtitles", "Output", "API Keys", "Advanced"
+            "General", "FFmpeg", "Video", "Audio", "Subtitles", "Metadata", "Output", "Advanced"
         ));
         
         // Setup category selection
         categoryList.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
             showCategory(newVal);
         });
+        
+        // Show settings location
+        if (settingsLocationLabel != null) {
+            settingsLocationLabel.setText(ConversionSettings.getSettingsFilePath());
+        }
         
         // Select first category by default
         categoryList.getSelectionModel().selectFirst();
@@ -210,6 +223,12 @@ public class SettingsController {
         checkFFmpegStatus();
     }
     
+    public void navigateToCategory(String category) {
+        if (categoryList != null) {
+            categoryList.getSelectionModel().select(category);
+        }
+    }
+    
     public boolean isApplied() {
         return applied;
     }
@@ -226,10 +245,10 @@ public class SettingsController {
         audioSettings.setManaged(false);
         subtitleSettings.setVisible(false);
         subtitleSettings.setManaged(false);
+        metadataSettings.setVisible(false);
+        metadataSettings.setManaged(false);
         outputSettings.setVisible(false);
         outputSettings.setManaged(false);
-        apiKeysSettings.setVisible(false);
-        apiKeysSettings.setManaged(false);
         advancedSettings.setVisible(false);
         advancedSettings.setManaged(false);
         
@@ -255,13 +274,13 @@ public class SettingsController {
                 subtitleSettings.setVisible(true);
                 subtitleSettings.setManaged(true);
                 break;
+            case "Metadata":
+                metadataSettings.setVisible(true);
+                metadataSettings.setManaged(true);
+                break;
             case "Output":
                 outputSettings.setVisible(true);
                 outputSettings.setManaged(true);
-                break;
-            case "API Keys":
-                apiKeysSettings.setVisible(true);
-                apiKeysSettings.setManaged(true);
                 break;
             case "Advanced":
                 advancedSettings.setVisible(true);
@@ -326,6 +345,30 @@ public class SettingsController {
         if (opensubtitlesApiKeyField != null) settings.setOpensubtitlesApiKey(opensubtitlesApiKeyField.getText());
         if (opensubtitlesUsernameField != null) settings.setOpensubtitlesUsername(opensubtitlesUsernameField.getText());
         if (opensubtitlesPasswordField != null) settings.setOpensubtitlesPassword(opensubtitlesPasswordField.getText());
+    }
+    
+    @FXML
+    private void handleOpenSettingsFolder() {
+        try {
+            File settingsDir = new File(ConversionSettings.getSettingsFilePath()).getParentFile();
+            if (settingsDir.exists()) {
+                java.awt.Desktop.getDesktop().open(settingsDir);
+            } else {
+                logger.warn("Settings folder does not exist yet: {}", settingsDir);
+                Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                alert.setTitle("Settings Folder");
+                alert.setHeaderText("Settings folder will be created on first save");
+                alert.setContentText("Path: " + settingsDir.getAbsolutePath());
+                alert.showAndWait();
+            }
+        } catch (Exception e) {
+            logger.error("Error opening settings folder", e);
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Error");
+            alert.setHeaderText("Could not open settings folder");
+            alert.setContentText(e.getMessage());
+            alert.showAndWait();
+        }
     }
     
     @FXML
@@ -426,10 +469,28 @@ public class SettingsController {
     
     @FXML
     private void handleRestoreDefaults() {
-        // Restore default settings
-        if (settings != null) {
-            settings.restoreDefaults();
-            loadSettings();
+        // Confirm with user
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("Restore Defaults");
+        confirm.setHeaderText("Restore all settings to default values?");
+        confirm.setContentText("This will reset all your settings. This action cannot be undone.");
+        
+        Optional<ButtonType> result = confirm.showAndWait();
+        if (result.isPresent() && result.get() == ButtonType.OK) {
+            // Restore default settings
+            if (settings != null) {
+                settings.restoreDefaults();
+                loadSettings();
+                
+                // Save the defaults
+                if (settings.save()) {
+                    logger.info("Settings restored to defaults and saved");
+                    Alert info = new Alert(Alert.AlertType.INFORMATION);
+                    info.setTitle("Settings Restored");
+                    info.setHeaderText("Settings have been restored to defaults");
+                    info.showAndWait();
+                }
+            }
         }
     }
     
@@ -449,6 +510,88 @@ public class SettingsController {
     private void handleOK() {
         handleApply();
         dialogStage.close();
+    }
+    
+    @FXML
+    private void handleValidateOpenSubtitles() {
+        if (openSubsValidationLabel != null) {
+            openSubsValidationLabel.setText("⏳ Validating...");
+        }
+        
+        // TODO: Implement actual API validation via Python backend
+        new Thread(() -> {
+            try {
+                Thread.sleep(1000); // Simulate API call
+                Platform.runLater(() -> {
+                    if (openSubsValidationLabel != null) {
+                        if (opensubtitlesUsernameField.getText().isEmpty() || 
+                            opensubtitlesPasswordField.getText().isEmpty()) {
+                            openSubsValidationLabel.setText("❌ Please enter username and password");
+                            openSubsValidationLabel.setStyle("-fx-text-fill: #f48771;");
+                        } else {
+                            openSubsValidationLabel.setText("✅ Login successful!");
+                            openSubsValidationLabel.setStyle("-fx-text-fill: #4ec9b0;");
+                        }
+                    }
+                });
+            } catch (InterruptedException e) {
+                logger.error("Validation interrupted", e);
+            }
+        }).start();
+    }
+    
+    @FXML
+    private void handleValidateTMDB() {
+        if (tmdbValidationLabel != null) {
+            tmdbValidationLabel.setText("⏳ Validating...");
+        }
+        
+        // TODO: Implement actual API validation via Python backend
+        new Thread(() -> {
+            try {
+                Thread.sleep(1000); // Simulate API call
+                Platform.runLater(() -> {
+                    if (tmdbValidationLabel != null) {
+                        if (tmdbApiKeyField.getText().isEmpty()) {
+                            tmdbValidationLabel.setText("❌ Please enter an API key");
+                            tmdbValidationLabel.setStyle("-fx-text-fill: #f48771;");
+                        } else {
+                            tmdbValidationLabel.setText("✅ API key is valid!");
+                            tmdbValidationLabel.setStyle("-fx-text-fill: #4ec9b0;");
+                        }
+                    }
+                });
+            } catch (InterruptedException e) {
+                logger.error("Validation interrupted", e);
+            }
+        }).start();
+    }
+    
+    @FXML
+    private void handleValidateTVDB() {
+        if (tvdbValidationLabel != null) {
+            tvdbValidationLabel.setText("⏳ Validating...");
+        }
+        
+        // TODO: Implement actual API validation via Python backend
+        new Thread(() -> {
+            try {
+                Thread.sleep(1000); // Simulate API call
+                Platform.runLater(() -> {
+                    if (tvdbValidationLabel != null) {
+                        if (tvdbApiKeyField.getText().isEmpty()) {
+                            tvdbValidationLabel.setText("❌ Please enter an API key");
+                            tvdbValidationLabel.setStyle("-fx-text-fill: #f48771;");
+                        } else {
+                            tvdbValidationLabel.setText("✅ API key is valid!");
+                            tvdbValidationLabel.setStyle("-fx-text-fill: #4ec9b0;");
+                        }
+                    }
+                });
+            } catch (InterruptedException e) {
+                logger.error("Validation interrupted", e);
+            }
+        }).start();
     }
 }
 

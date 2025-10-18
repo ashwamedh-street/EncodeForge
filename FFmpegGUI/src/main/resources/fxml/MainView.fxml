@@ -21,7 +21,6 @@
                 </Menu>
                 <Menu text="Edit">
                     <MenuItem text="Settings..." onAction="#handleSettings"/>
-                    <MenuItem text="Profiles..." onAction="#handleProfiles"/>
                 </Menu>
                 <Menu text="Tools">
                     <MenuItem text="Rename Files..." onAction="#handleBatchRename"/>
@@ -50,10 +49,6 @@
                 <Button fx:id="addFilesButton" text="➕ Add Files" onAction="#handleAddFiles" styleClass="toolbar-button"/>
                 <Button fx:id="addFolderButton" text="📁 Add Folder" onAction="#handleAddFolder" styleClass="toolbar-button"/>
                 <Separator orientation="VERTICAL"/>
-                <Button fx:id="startButton" text="▶️ Start" onAction="#handleStartProcessing" styleClass="toolbar-button, primary-button" disable="true"/>
-                <Button fx:id="pauseButton" text="⏸️ Pause" onAction="#handlePause" styleClass="toolbar-button" disable="true"/>
-                <Button fx:id="stopButton" text="⏹️ Stop" onAction="#handleStop" styleClass="toolbar-button" disable="true"/>
-                <Separator orientation="VERTICAL"/>
                 <Button fx:id="settingsButton" text="⚙️ Settings" onAction="#handleSettings" styleClass="toolbar-button"/>
                 <Region HBox.hgrow="ALWAYS"/>
                 <Label fx:id="statusLabel" text="Ready" styleClass="status-label"/>
@@ -62,65 +57,178 @@
             <!-- Mode-Specific Quick Settings Panel -->
             <VBox fx:id="modeSpecificPanel" styleClass="mode-panel">
                 <!-- Encoder Quick Settings -->
-                <HBox fx:id="encoderQuickSettings" spacing="20" alignment="CENTER_LEFT" styleClass="quick-settings" managed="false" visible="false">
+                <VBox fx:id="encoderQuickSettings" spacing="10" styleClass="quick-settings" managed="false" visible="false">
                     <padding>
-                        <Insets top="10" right="15" bottom="10" left="15"/>
+                        <Insets top="15" right="15" bottom="15" left="15"/>
                     </padding>
-                    <Label text="Quick Settings:" styleClass="quick-settings-label"/>
-                    <Label text="Format:" styleClass="setting-label"/>
-                    <ComboBox fx:id="quickFormatCombo" styleClass="quick-combo" prefWidth="90"/>
-                    <Label text="Codec:" styleClass="setting-label"/>
-                    <ComboBox fx:id="quickCodecCombo" styleClass="quick-combo" prefWidth="130"/>
-                    <Label text="Quality:" styleClass="setting-label"/>
-                    <ComboBox fx:id="quickQualityCombo" styleClass="quick-combo" prefWidth="130"/>
-                    <CheckBox fx:id="quickHwAccelCheck" text="Hardware Acceleration" styleClass="quick-check"/>
-                    <Region HBox.hgrow="ALWAYS"/>
-                </HBox>
+                    
+                    <!-- Row 1: Video Settings -->
+                    <HBox spacing="15" alignment="CENTER_LEFT">
+                        <VBox spacing="4" styleClass="settings-group">
+                            <Label text="Video Settings" styleClass="group-label"/>
+                            <HBox spacing="10" alignment="CENTER_LEFT">
+                                <Label text="Format:" styleClass="setting-label"/>
+                                <ComboBox fx:id="quickFormatCombo" styleClass="quick-combo" prefWidth="100"/>
+                                <Label text="Codec:" styleClass="setting-label"/>
+                                <ComboBox fx:id="quickCodecCombo" styleClass="quick-combo" prefWidth="160"/>
+                                <Label text="Quality:" styleClass="setting-label"/>
+                                <ComboBox fx:id="quickQualityCombo" styleClass="quick-combo" prefWidth="160"/>
+                                <Label text="Preset:" styleClass="setting-label"/>
+                                <ComboBox fx:id="quickPresetCombo" styleClass="quick-combo" prefWidth="120"/>
+                            </HBox>
+                        </VBox>
+                        
+                        <Region HBox.hgrow="ALWAYS"/>
+                        
+                        <!-- Control Buttons -->
+                        <HBox spacing="10">
+                            <Button fx:id="startButton" text="▶️ Start Encoding" onAction="#handleStartProcessing" styleClass="toolbar-button, primary-button" disable="true" prefWidth="160"/>
+                            <Button fx:id="pauseButton" text="⏸️ Pause" onAction="#handlePause" styleClass="toolbar-button" disable="true" prefWidth="110"/>
+                            <Button fx:id="stopButton" text="⏹️ Stop" onAction="#handleStop" styleClass="toolbar-button" disable="true" prefWidth="110"/>
+                        </HBox>
+                    </HBox>
+                    
+                    <!-- Row 2: Processing Options -->
+                    <HBox spacing="15" alignment="CENTER_LEFT">
+                        <VBox spacing="6" styleClass="settings-group">
+                            <Label text="Processing Options" styleClass="group-label"/>
+                            <HBox spacing="15">
+                                <CheckBox fx:id="quickHwAccelCheck" text="Hardware Acceleration" styleClass="quick-check" selected="true"/>
+                                <CheckBox fx:id="quickDownloadSubsCheck" text="Download Subtitles" styleClass="quick-check"/>
+                                <CheckBox fx:id="quickRenameCheck" text="Rename Files" styleClass="quick-check"/>
+                            </HBox>
+                        </VBox>
+                        
+                        <Separator orientation="VERTICAL"/>
+                        
+                        <VBox spacing="4" styleClass="settings-group">
+                            <Label text="Configure" styleClass="group-label"/>
+                            <HBox spacing="10">
+                                <Button fx:id="configSubtitlesButton" text="💬 Subtitles" onAction="#handleConfigureSubtitles" styleClass="small-button" prefWidth="110"/>
+                                <Button fx:id="configRenamerButton" text="📝 Renamer" onAction="#handleConfigureRenamer" styleClass="small-button" prefWidth="110"/>
+                            </HBox>
+                        </VBox>
+                    </HBox>
+                </VBox>
                 
                 <!-- Subtitle Quick Settings -->
-                <HBox fx:id="subtitleQuickSettings" spacing="20" alignment="CENTER_LEFT" styleClass="quick-settings" managed="false" visible="false">
+                <VBox fx:id="subtitleQuickSettings" spacing="10" styleClass="quick-settings" managed="false" visible="false">
                     <padding>
-                        <Insets top="10" right="15" bottom="10" left="15"/>
+                        <Insets top="15" right="15" bottom="15" left="15"/>
                     </padding>
-                    <Label text="Quick Settings:" styleClass="quick-settings-label"/>
-                    <Label text="Provider:" styleClass="setting-label"/>
-                    <ComboBox fx:id="quickSubProviderCombo" styleClass="quick-combo" prefWidth="160"/>
-                    <Label text="Languages:" styleClass="setting-label"/>
-                    <ComboBox fx:id="quickSubLanguageCombo" styleClass="quick-combo" prefWidth="130"/>
-                    <CheckBox fx:id="quickAutoDownloadCheck" text="Auto-Download" styleClass="quick-check"/>
-                    <Region HBox.hgrow="ALWAYS"/>
-                    <Label fx:id="whisperStatusLabel" text="🤖 Whisper AI: Not Installed" styleClass="provider-status"/>
-                    <Label fx:id="openSubsStatusLabel" text="🌐 OpenSubtitles: Not Configured" styleClass="provider-status"/>
-                    <Button text="⚙️ Configure" onAction="#handleConfigureSubtitleProviders" styleClass="small-button"/>
-                </HBox>
+                    
+                    <!-- Row 1: Mode and Language Selection -->
+                    <HBox spacing="15" alignment="CENTER_LEFT">
+                        <VBox spacing="4" styleClass="settings-group">
+                            <Label text="Mode" styleClass="group-label"/>
+                            <ComboBox fx:id="quickSubProviderCombo" styleClass="quick-combo" prefWidth="250"/>
+                        </VBox>
+                        
+                        <Separator orientation="VERTICAL"/>
+                        
+                        <VBox spacing="4" styleClass="settings-group">
+                            <Label text="Languages (Select Multiple)" styleClass="group-label"/>
+                            <HBox spacing="10" alignment="CENTER_LEFT">
+                                <CheckBox fx:id="langEnglishCheck" text="English" selected="true"/>
+                                <CheckBox fx:id="langSpanishCheck" text="Spanish"/>
+                                <CheckBox fx:id="langFrenchCheck" text="French"/>
+                                <CheckBox fx:id="langGermanCheck" text="German"/>
+                                <CheckBox fx:id="langJapaneseCheck" text="Japanese"/>
+                                <CheckBox fx:id="langChineseCheck" text="Chinese"/>
+                                <CheckBox fx:id="langKoreanCheck" text="Korean"/>
+                                <CheckBox fx:id="langArabicCheck" text="Arabic"/>
+                            </HBox>
+                        </VBox>
+                        
+                        <Region HBox.hgrow="ALWAYS"/>
+                        
+                        <!-- Control Buttons -->
+                        <HBox spacing="10">
+                            <Button fx:id="subtitleSearchButton" text="🔍 Search" onAction="#handleSearchSubtitles" styleClass="toolbar-button" prefWidth="110"/>
+                            <Button fx:id="subtitleDownloadButton" text="⬇️ Download" onAction="#handleDownloadSubtitles" styleClass="toolbar-button" prefWidth="120"/>
+                            <Button fx:id="subtitleGenerateButton" text="🎙️ Generate" onAction="#handleGenerateAI" styleClass="toolbar-button, primary-button" prefWidth="120"/>
+                        </HBox>
+                    </HBox>
+                    
+                    <!-- Row 2: Provider Status and Selected Files -->
+                    <HBox spacing="15" alignment="CENTER_LEFT">
+                        <VBox spacing="4" styleClass="settings-group">
+                            <Label text="Providers" styleClass="group-label"/>
+                            <HBox spacing="10">
+                                <Button fx:id="whisperStatusButton" text="🤖 Whisper: Not Setup" onAction="#handleConfigureWhisper" styleClass="provider-status-button" prefWidth="180"/>
+                                <Button fx:id="openSubsStatusButton" text="🌐 OpenSubtitles: Not Setup" onAction="#handleConfigureOpenSubtitles" styleClass="provider-status-button" prefWidth="200"/>
+                            </HBox>
+                        </VBox>
+                        
+                        <Separator orientation="VERTICAL"/>
+                        
+                        <VBox spacing="4" styleClass="settings-group" HBox.hgrow="ALWAYS">
+                            <Label text="Selected Files" styleClass="group-label"/>
+                            <Label fx:id="subtitleSelectedFilesLabel" text="No files selected" styleClass="info-label"/>
+                        </VBox>
+                    </HBox>
+                </VBox>
                 
                 <!-- Renamer Quick Settings -->
-                <HBox fx:id="renamerQuickSettings" spacing="20" alignment="CENTER_LEFT" styleClass="quick-settings" managed="false" visible="false">
+                <VBox fx:id="renamerQuickSettings" spacing="10" styleClass="quick-settings" managed="false" visible="false">
                     <padding>
-                        <Insets top="10" right="15" bottom="10" left="15"/>
+                        <Insets top="15" right="15" bottom="15" left="15"/>
                     </padding>
-                    <Label text="Quick Settings:" styleClass="quick-settings-label"/>
-                    <Label text="Provider:" styleClass="setting-label"/>
-                    <ComboBox fx:id="quickRenameProviderCombo" styleClass="quick-combo" prefWidth="130"/>
-                    <Label text="Type:" styleClass="setting-label"/>
-                    <ComboBox fx:id="quickRenameTypeCombo" styleClass="quick-combo" prefWidth="120"/>
-                    <Button text="📝 Format" onAction="#handleOpenFormatter" styleClass="small-button"/>
-                    <Region HBox.hgrow="ALWAYS"/>
-                    <Label fx:id="tmdbStatusLabel" text="🎬 TMDB: No API Key" styleClass="provider-status"/>
-                    <Label fx:id="tvdbStatusLabel" text="📺 TVDB: No API Key" styleClass="provider-status"/>
-                    <Label fx:id="anilistStatusLabel" text="🎌 AniList: Available" styleClass="provider-status"/>
-                    <Button text="🔍 Preview" onAction="#handlePreviewRename" styleClass="small-button, primary-button"/>
-                </HBox>
+                    
+                    <!-- Row 1: Settings and Control Buttons -->
+                    <HBox spacing="15" alignment="CENTER_LEFT">
+                        <VBox spacing="4" styleClass="settings-group">
+                            <Label text="Settings" styleClass="group-label"/>
+                            <HBox spacing="10" alignment="CENTER_LEFT">
+                                <Label text="Provider:" styleClass="setting-label"/>
+                                <ComboBox fx:id="quickRenameProviderCombo" styleClass="quick-combo" prefWidth="150"/>
+                                <Label text="Type:" styleClass="setting-label"/>
+                                <ComboBox fx:id="quickRenameTypeCombo" styleClass="quick-combo" prefWidth="140"/>
+                                <Button text="📝 Format Pattern" onAction="#handleOpenFormatter" styleClass="small-button" prefWidth="160"/>
+                            </HBox>
+                        </VBox>
+                        
+                        <Region HBox.hgrow="ALWAYS"/>
+                        
+                        <!-- Control Buttons -->
+                        <HBox spacing="10">
+                            <Button fx:id="refreshMetadataButton" text="🔄 Refresh" onAction="#handleRefreshMetadata" styleClass="toolbar-button" prefWidth="110"/>
+                            <Button fx:id="applyRenameButton" text="✅ Apply Selected" onAction="#handleApplyRename" styleClass="toolbar-button, primary-button" prefWidth="160"/>
+                        </HBox>
+                    </HBox>
+                    
+                    <!-- Row 2: Provider Status and Selected Files -->
+                    <HBox spacing="15" alignment="CENTER_LEFT">
+                        <VBox spacing="4" styleClass="settings-group">
+                            <Label text="Providers" styleClass="group-label"/>
+                            <HBox spacing="10">
+                                <Button fx:id="tmdbStatusButton" text="🎬 TMDB: Not Setup" onAction="#handleConfigureTMDB" styleClass="provider-status-button" prefWidth="170"/>
+                                <Button fx:id="tvdbStatusButton" text="📺 TVDB: Not Setup" onAction="#handleConfigureTVDB" styleClass="provider-status-button" prefWidth="170"/>
+                                <Button fx:id="anilistStatusButton" text="🎌 AniList: Available" onAction="#handleConfigureAniList" styleClass="provider-status-button" prefWidth="170"/>
+                            </HBox>
+                        </VBox>
+                        
+                        <Separator orientation="VERTICAL"/>
+                        
+                        <VBox spacing="4" styleClass="settings-group" HBox.hgrow="ALWAYS">
+                            <Label text="Selected Files" styleClass="group-label"/>
+                            <Label fx:id="renamerSelectedFilesLabel" text="No files selected" styleClass="info-label"/>
+                        </VBox>
+                    </HBox>
+                </VBox>
             </VBox>
         </VBox>
     </top>
     
     <!-- Center: Main Content Area -->
     <center>
-        <SplitPane dividerPositions="0.60" orientation="HORIZONTAL" styleClass="main-split-pane" VBox.vgrow="ALWAYS">
+        <StackPane fx:id="mainContentStack">
             
-            <!-- Left Panel: Queue and Progress -->
-            <SplitPane fx:id="leftPanelSplit" dividerPositions="0.70" orientation="VERTICAL" styleClass="left-panel-split">
+            <!-- Encoder Mode Layout -->
+            <SplitPane fx:id="encoderModeLayout" dividerPositions="0.60" orientation="HORIZONTAL" styleClass="main-split-pane" managed="true" visible="true">
+                
+                <!-- Left Panel: Queue and Progress -->
+                <SplitPane fx:id="leftPanelSplit" dividerPositions="0.70" orientation="VERTICAL" styleClass="left-panel-split">
                 
                 <!-- File Queue -->
                 <VBox spacing="0" styleClass="queue-section">
@@ -129,10 +237,10 @@
                         <Label text="(Drag to reorder)" styleClass="hint-label" style="-fx-padding: 0 0 0 8;"/>
                         <Region HBox.hgrow="ALWAYS"/>
                         <Label fx:id="queueCountLabel" text="0 files" styleClass="queue-count"/>
+                        <Separator orientation="VERTICAL" style="-fx-padding: 0 10;"/>
+                        <Button fx:id="removeSelectedButton" text="➖ Remove" onAction="#handleRemoveSelected" styleClass="toolbar-button" style="-fx-padding: 6 16;"/>
                         <Separator orientation="VERTICAL" style="-fx-padding: 0 8;"/>
-                        <Button fx:id="removeSelectedButton" text="➖ Remove" onAction="#handleRemoveSelected" styleClass="danger-button" style="-fx-padding: 6 16;"/>
-                        <Separator orientation="VERTICAL" style="-fx-padding: 0 5;"/>
-                        <Button fx:id="clearQueueButton" text="🗑️ Clear All" onAction="#handleClearQueue" styleClass="danger-button" style="-fx-padding: 6 16;"/>
+                        <Button fx:id="clearQueueButton" text="🗑️ Clear All" onAction="#handleClearQueue" styleClass="toolbar-button" style="-fx-padding: 6 16;"/>
                         <padding>
                             <Insets top="10" right="15" bottom="10" left="15"/>
                         </padding>
@@ -257,81 +365,51 @@
                     </VBox>
                 </Tab>
                 
-                <!-- Rename Preview Tab (Visible in Renamer Mode) -->
-                <Tab fx:id="renamePreviewTab" text="📋 Rename Preview" closable="false" disable="true">
-                    <VBox spacing="10" styleClass="tab-content">
-                        <padding>
-                            <Insets top="10" right="10" bottom="10" left="10"/>
-                        </padding>
-                        
-                        <HBox spacing="10" alignment="CENTER_LEFT" styleClass="preview-header">
-                            <Label text="Provider Comparison:" styleClass="section-subtitle"/>
-                            <ComboBox fx:id="previewProviderCombo" styleClass="preview-combo" prefWidth="150"/>
-                            <Button text="🔄 Refresh Metadata" onAction="#handleRefreshMetadata" styleClass="small-button"/>
-                            <Region HBox.hgrow="ALWAYS"/>
-                            <Button text="✅ Apply Selected" onAction="#handleApplyRename" styleClass="small-button, primary-button"/>
-                        </HBox>
-                        
-                        <SplitPane dividerPositions="0.5" VBox.vgrow="ALWAYS" styleClass="comparison-split">
-                            <!-- Original Names -->
-                            <VBox spacing="5" styleClass="comparison-panel">
-                                <Label text="Original Filenames" styleClass="comparison-title"/>
-                                <ListView fx:id="originalNamesListView" VBox.vgrow="ALWAYS" styleClass="comparison-list"/>
-                            </VBox>
-                            
-                            <!-- Suggested Names -->
-                            <VBox spacing="5" styleClass="comparison-panel">
-                                <HBox spacing="10" alignment="CENTER_LEFT">
-                                    <Label text="Suggested Filenames" styleClass="comparison-title"/>
-                                    <Label fx:id="activeProviderLabel" text="" styleClass="provider-badge"/>
-                                </HBox>
-                                <ListView fx:id="suggestedNamesListView" VBox.vgrow="ALWAYS" styleClass="comparison-list"/>
-                            </VBox>
-                        </SplitPane>
-                        
-                        <HBox spacing="10" alignment="CENTER_LEFT" styleClass="preview-footer">
-                            <Label fx:id="renameStatsLabel" text="0 files | 0 changes" styleClass="stats-label"/>
-                            <Region HBox.hgrow="ALWAYS"/>
-                            <CheckBox fx:id="createBackupCheck" text="Create backup before renaming" selected="true" styleClass="preview-check"/>
-                        </HBox>
-                    </VBox>
-                </Tab>
+                </TabPane>
+            </SplitPane>
+            <!-- End Encoder Mode Layout -->
+            
+            <!-- Subtitle Mode Layout -->
+            <SplitPane fx:id="subtitleModeLayout" dividerPositions="0.75" orientation="HORIZONTAL" styleClass="main-split-pane" managed="false" visible="false">
                 
-                <!-- Subtitle Preview Tab (Visible in Subtitle Mode) -->
-                <Tab fx:id="subtitlePreviewTab" text="💬 Subtitle Preview" closable="false" disable="true">
-                    <VBox spacing="10" styleClass="tab-content">
+                <!-- Main Content: Subtitle Preview -->
+                <ScrollPane fitToWidth="true" styleClass="preview-scroll">
+                    <VBox fx:id="subtitlePreviewContent" spacing="15" styleClass="preview-content">
                         <padding>
-                            <Insets top="10" right="10" bottom="10" left="10"/>
+                            <Insets top="15" right="15" bottom="15" left="15"/>
                         </padding>
                         
-                        <HBox spacing="10" alignment="CENTER_LEFT" styleClass="preview-header">
-                            <Label text="Subtitle Status:" styleClass="section-subtitle"/>
-                            <ComboBox fx:id="subtitleFileCombo" styleClass="preview-combo" prefWidth="250"/>
-                            <Button text="🔍 Search Subtitles" onAction="#handleSearchSubtitles" styleClass="small-button"/>
-                            <Button text="🤖 Generate AI" onAction="#handleGenerateAI" styleClass="small-button"/>
-                            <Region HBox.hgrow="ALWAYS"/>
-                            <Button text="⬇️ Download Selected" onAction="#handleDownloadSubtitles" styleClass="small-button, primary-button"/>
+                        <Label text="💬 Subtitle Preview" styleClass="preview-title"/>
+                        
+                        <!-- File Selector -->
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <Label text="Current File:" styleClass="setting-label"/>
+                            <ComboBox fx:id="subtitleFileCombo" styleClass="preview-combo" prefWidth="400" HBox.hgrow="ALWAYS"/>
                         </HBox>
                         
-                        <SplitPane dividerPositions="0.3" VBox.vgrow="ALWAYS" styleClass="comparison-split">
+                        <Separator/>
+                        
+                        <!-- Subtitle Results -->
+                        <SplitPane dividerPositions="0.4" VBox.vgrow="ALWAYS" styleClass="comparison-split">
                             <!-- Available Subtitles -->
-                            <VBox spacing="5" styleClass="comparison-panel">
+                            <VBox spacing="10" styleClass="comparison-panel">
                                 <Label text="Available Subtitles" styleClass="comparison-title"/>
                                 <TableView fx:id="availableSubtitlesTable" VBox.vgrow="ALWAYS" styleClass="subtitle-table">
                                     <columns>
-                                        <TableColumn text="✓" prefWidth="30"/>
-                                        <TableColumn text="Language" prefWidth="80"/>
-                                        <TableColumn text="Provider" prefWidth="100"/>
-                                        <TableColumn text="Format" prefWidth="60"/>
+                                        <TableColumn text="✓" prefWidth="40"/>
+                                        <TableColumn text="Language" prefWidth="120"/>
+                                        <TableColumn text="Provider" prefWidth="120"/>
+                                        <TableColumn text="Format" prefWidth="80"/>
+                                        <TableColumn text="Rating" prefWidth="80"/>
                                     </columns>
                                 </TableView>
                             </VBox>
                             
-                            <!-- Subtitle Preview/Details -->
-                            <VBox spacing="5" styleClass="comparison-panel">
+                            <!-- Subtitle Details/Preview -->
+                            <VBox spacing="10" styleClass="comparison-panel">
                                 <Label text="Subtitle Details" styleClass="comparison-title"/>
                                 <ScrollPane fitToWidth="true" VBox.vgrow="ALWAYS">
-                                    <VBox spacing="8" styleClass="subtitle-details">
+                                    <VBox spacing="12" styleClass="subtitle-details">
                                         <padding>
                                             <Insets top="10" right="10" bottom="10" left="10"/>
                                         </padding>
@@ -341,17 +419,112 @@
                             </VBox>
                         </SplitPane>
                         
-                        <HBox spacing="10" alignment="CENTER_LEFT" styleClass="preview-footer">
+                        <!-- Footer -->
+                        <HBox spacing="15" alignment="CENTER_LEFT" styleClass="preview-footer">
                             <Label fx:id="subtitleStatsLabel" text="0 available | 0 languages" styleClass="stats-label"/>
                             <Region HBox.hgrow="ALWAYS"/>
                             <CheckBox fx:id="embedSubtitlesCheck" text="Embed subtitles in video" styleClass="preview-check"/>
+                            <Button text="💾 Save Selected" onAction="#handleSaveSubtitles" styleClass="primary-button"/>
                         </HBox>
                     </VBox>
-                </Tab>
+                </ScrollPane>
                 
-            </TabPane>
+                <!-- Sidebar: Logs Only -->
+                <TabPane tabClosingPolicy="UNAVAILABLE" styleClass="info-tab-pane">
+                    <Tab text="📋 Logs" closable="false">
+                        <VBox spacing="10" styleClass="tab-content">
+                            <padding>
+                                <Insets top="10" right="10" bottom="10" left="10"/>
+                            </padding>
+                            
+                            <HBox spacing="10" alignment="CENTER_LEFT">
+                                <Label text="Log Level:" styleClass="info-title"/>
+                                <ComboBox fx:id="subtitleLogLevelCombo" styleClass="log-level-combo"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Button text="Clear" onAction="#handleClearLogs" styleClass="small-button"/>
+                                <Button text="Export" onAction="#handleExportLogs" styleClass="small-button"/>
+                            </HBox>
+                            
+                            <TextArea fx:id="subtitleLogArea" VBox.vgrow="ALWAYS" editable="false" wrapText="false" styleClass="log-area"/>
+                        </VBox>
+                    </Tab>
+                </TabPane>
+            </SplitPane>
+            <!-- End Subtitle Mode Layout -->
             
-        </SplitPane>
+            <!-- Renamer Mode Layout -->
+            <SplitPane fx:id="renamerModeLayout" dividerPositions="0.75" orientation="HORIZONTAL" styleClass="main-split-pane" managed="false" visible="false">
+                
+                <!-- Main Content: Rename Preview -->
+                <ScrollPane fitToWidth="true" styleClass="preview-scroll">
+                    <VBox fx:id="renamePreviewContent" spacing="15" styleClass="preview-content">
+                        <padding>
+                            <Insets top="15" right="15" bottom="15" left="15"/>
+                        </padding>
+                        
+                        <Label text="📝 Rename Preview" styleClass="preview-title"/>
+                        
+                        <!-- Provider Selection -->
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <Label text="Provider Comparison:" styleClass="setting-label"/>
+                            <ComboBox fx:id="previewProviderCombo" styleClass="preview-combo" prefWidth="200"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <Label fx:id="renameProgressLabel" text="" styleClass="info-label"/>
+                        </HBox>
+                        
+                        <Separator/>
+                        
+                        <!-- File Comparison -->
+                        <SplitPane dividerPositions="0.5" VBox.vgrow="ALWAYS" styleClass="comparison-split">
+                            <!-- Original Names -->
+                            <VBox spacing="10" styleClass="comparison-panel">
+                                <Label text="Original Filenames" styleClass="comparison-title"/>
+                                <ListView fx:id="originalNamesListView" VBox.vgrow="ALWAYS" styleClass="comparison-list"/>
+                            </VBox>
+                            
+                            <!-- Suggested Names -->
+                            <VBox spacing="10" styleClass="comparison-panel">
+                                <HBox spacing="10" alignment="CENTER_LEFT">
+                                    <Label text="Suggested Filenames" styleClass="comparison-title"/>
+                                    <Label fx:id="activeProviderLabel" text="" styleClass="provider-badge"/>
+                                </HBox>
+                                <ListView fx:id="suggestedNamesListView" VBox.vgrow="ALWAYS" styleClass="comparison-list"/>
+                            </VBox>
+                        </SplitPane>
+                        
+                        <!-- Footer -->
+                        <HBox spacing="15" alignment="CENTER_LEFT" styleClass="preview-footer">
+                            <Label fx:id="renameStatsLabel" text="0 files | 0 changes" styleClass="stats-label"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <CheckBox fx:id="createBackupCheck" text="Create backup before renaming" selected="true" styleClass="preview-check"/>
+                        </HBox>
+                    </VBox>
+                </ScrollPane>
+                
+                <!-- Sidebar: Logs Only -->
+                <TabPane tabClosingPolicy="UNAVAILABLE" styleClass="info-tab-pane">
+                    <Tab text="📋 Logs" closable="false">
+                        <VBox spacing="10" styleClass="tab-content">
+                            <padding>
+                                <Insets top="10" right="10" bottom="10" left="10"/>
+                            </padding>
+                            
+                            <HBox spacing="10" alignment="CENTER_LEFT">
+                                <Label text="Log Level:" styleClass="info-title"/>
+                                <ComboBox fx:id="renamerLogLevelCombo" styleClass="log-level-combo"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Button text="Clear" onAction="#handleClearLogs" styleClass="small-button"/>
+                                <Button text="Export" onAction="#handleExportLogs" styleClass="small-button"/>
+                            </HBox>
+                            
+                            <TextArea fx:id="renamerLogArea" VBox.vgrow="ALWAYS" editable="false" wrapText="false" styleClass="log-area"/>
+                        </VBox>
+                    </Tab>
+                </TabPane>
+            </SplitPane>
+            <!-- End Renamer Mode Layout -->
+            
+        </StackPane>
     </center>
     
 </BorderPane>

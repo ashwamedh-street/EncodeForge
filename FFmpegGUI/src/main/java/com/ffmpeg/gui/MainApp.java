@@ -16,11 +16,11 @@ import java.io.IOException;
 
 /**
  * Main Application Entry Point
- * FFmpeg Batch Transcoder - Beautiful cross-platform video conversion GUI
+ * EncodeForge - Beautiful cross-platform video conversion GUI
  */
 public class MainApp extends Application {
     private static final Logger logger = LoggerFactory.getLogger(MainApp.class);
-    private static final String APP_TITLE = "FFmpeg Batch Transcoder";
+    private static final String APP_TITLE = "EncodeForge";
     private static final String VERSION = "1.0.0";
     
     private PythonBridge pythonBridge;
@@ -28,7 +28,7 @@ public class MainApp extends Application {
 
     @Override
     public void init() throws Exception {
-        logger.info("Initializing FFmpeg Batch Transcoder v{}", VERSION);
+        logger.info("Initializing EncodeForge v{}", VERSION);
         
         // Extract Python runtime and scripts to temporary directory
         try {

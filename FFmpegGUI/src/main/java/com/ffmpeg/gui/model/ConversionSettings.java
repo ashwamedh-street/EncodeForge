@@ -1,11 +1,28 @@
 package com.ffmpeg.gui.model;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 
 /**
  * Model for conversion settings that will be passed to Python backend
+ * Settings are automatically persisted to ~/.encodeforge/settings.json
  */
 public class ConversionSettings {
+    private static final Logger logger = LoggerFactory.getLogger(ConversionSettings.class);
+    private static final String SETTINGS_DIR = System.getProperty("user.home") + File.separator + ".encodeforge";
+    private static final String SETTINGS_FILE = SETTINGS_DIR + File.separator + "settings.json";
+    
     // FFmpeg paths
     private String ffmpegPath = "ffmpeg";
     private String ffprobePath = "ffprobe";
@@ -217,6 +234,64 @@ public class ConversionSettings {
         opensubtitlesApiKey = "";
         opensubtitlesUsername = "";
         opensubtitlesPassword = "";
+    }
+    
+    /**
+     * Load settings from disk
+     * @return ConversionSettings instance, either loaded from file or with defaults
+     */
+    public static ConversionSettings load() {
+        File settingsFile = new File(SETTINGS_FILE);
+        
+        if (settingsFile.exists()) {
+            try (FileReader reader = new FileReader(settingsFile)) {
+                Gson gson = new Gson();
+                ConversionSettings settings = gson.fromJson(reader, ConversionSettings.class);
+                logger.info("Settings loaded from: {}", SETTINGS_FILE);
+                return settings;
+            } catch (IOException e) {
+                logger.error("Failed to load settings from file", e);
+            }
+        } else {
+            logger.info("No settings file found, using defaults");
+        }
+        
+        return new ConversionSettings();
+    }
+    
+    /**
+     * Save settings to disk
+     * @return true if successful, false otherwise
+     */
+    public boolean save() {
+        try {
+            // Create directory if it doesn't exist
+            Path settingsDir = Paths.get(SETTINGS_DIR);
+            if (!Files.exists(settingsDir)) {
+                Files.createDirectories(settingsDir);
+                logger.info("Created settings directory: {}", SETTINGS_DIR);
+            }
+            
+            // Save settings as JSON
+            Gson gson = new GsonBuilder().setPrettyPrinting().create();
+            try (FileWriter writer = new FileWriter(SETTINGS_FILE)) {
+                gson.toJson(this, writer);
+                logger.info("Settings saved to: {}", SETTINGS_FILE);
+                return true;
+            }
+            
+        } catch (IOException e) {
+            logger.error("Failed to save settings to file", e);
+            return false;
+        }
+    }
+    
+    /**
+     * Get the settings file path
+     * @return the full path to the settings file
+     */
+    public static String getSettingsFilePath() {
+        return SETTINGS_FILE;
     }
     
     /**

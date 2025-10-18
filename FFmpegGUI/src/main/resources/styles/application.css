@@ -591,7 +591,21 @@
 
 /* Separator */
 .separator {
-    -fx-background-color: #3e3e42;
+    -fx-background-color: transparent;
+}
+
+.separator .line {
+    -fx-border-color: rgba(255, 255, 255, 0.15);
+    -fx-border-width: 0.5px;
+    -fx-border-style: solid;
+}
+
+.separator:horizontal .line {
+    -fx-border-width: 0.5px 0 0 0;
+}
+
+.separator:vertical .line {
+    -fx-border-width: 0 0 0 0.5px;
 }
 
 /* Context Menu */

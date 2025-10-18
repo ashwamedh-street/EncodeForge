@@ -24,6 +24,16 @@
                     <Label text="General Settings" styleClass="category-title"/>
                     
                     <VBox spacing="10">
+                        <Label text="Settings Location:" styleClass="setting-label"/>
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <Label fx:id="settingsLocationLabel" text="~/.encodeforge/settings.json" styleClass="hint-label" HBox.hgrow="ALWAYS"/>
+                            <Button text="📁 Open Folder" onAction="#handleOpenSettingsFolder" styleClass="small-button"/>
+                        </HBox>
+                    </VBox>
+                    
+                    <Separator/>
+                    
+                    <VBox spacing="10">
                         <Label text="Default Output Directory:" styleClass="setting-label"/>
                         <HBox spacing="10">
                             <TextField fx:id="outputDirField" HBox.hgrow="ALWAYS" promptText="Same as source"/>
@@ -143,33 +153,36 @@
                 
                 <!-- Subtitle Settings -->
                 <VBox fx:id="subtitleSettings" spacing="20" styleClass="settings-category" visible="false" managed="false">
-                    <Label text="Subtitle Options" styleClass="category-title"/>
+                    <Label text="Subtitle Configuration" styleClass="category-title"/>
+                    <Label text="Configure subtitle download, generation, and embedding options" styleClass="hint-label"/>
                     
                     <VBox spacing="12">
-                        <CheckBox fx:id="convertSubsCheck" text="Convert/embed subtitles" selected="true"/>
+                        <CheckBox fx:id="convertSubsCheck" text="Convert/embed subtitles during encoding" selected="true"/>
                         
                         <VBox spacing="10">
                             <Label text="Subtitle Format:" styleClass="setting-label"/>
                             <ComboBox fx:id="subtitleFormatCombo" maxWidth="Infinity"/>
+                            <Label text="Format used when embedding or converting subtitles" styleClass="hint-label"/>
                         </VBox>
                     </VBox>
                     
                     <Separator/>
                     
                     <VBox spacing="12">
-                        <Label text="AI Subtitle Generation (Whisper):" styleClass="subsection-title"/>
-                        <CheckBox fx:id="enableWhisperCheck" text="Enable Whisper AI generation"/>
+                        <Label text="AI Subtitle Generation (Whisper)" styleClass="subsection-title"/>
+                        <CheckBox fx:id="enableWhisperCheck" text="Enable Whisper AI subtitle generation"/>
                         
                         <VBox fx:id="whisperOptions" spacing="10" visible="false" managed="false">
                             <VBox spacing="8">
                                 <Label text="Whisper Model:" styleClass="setting-label"/>
                                 <ComboBox fx:id="whisperModelCombo" maxWidth="Infinity"/>
+                                <Label text="Larger models are more accurate but slower. 'base' is recommended for most users." styleClass="hint-label"/>
                             </VBox>
                             
                             <VBox spacing="8">
-                                <Label text="Target Languages:" styleClass="setting-label"/>
+                                <Label text="Default Languages:" styleClass="setting-label"/>
                                 <TextField fx:id="whisperLanguagesField" promptText="eng,spa,jpn"/>
-                                <Label text="Comma-separated language codes" styleClass="hint-label"/>
+                                <Label text="Comma-separated language codes (e.g., eng for English, spa for Spanish)" styleClass="hint-label"/>
                             </VBox>
                         </VBox>
                     </VBox>
@@ -177,68 +190,76 @@
                     <Separator/>
                     
                     <VBox spacing="12">
-                        <Label text="Online Subtitle Download:" styleClass="subsection-title"/>
-                        <CheckBox fx:id="downloadSubsCheck" text="Download subtitles from OpenSubtitles"/>
+                        <Label text="OpenSubtitles Download" styleClass="subsection-title"/>
+                        <CheckBox fx:id="downloadSubsCheck" text="Enable subtitle downloads from OpenSubtitles"/>
+                        
+                        <VBox spacing="8">
+                            <Label text="API Key:" styleClass="setting-label"/>
+                            <TextField fx:id="opensubtitlesApiKeyField" promptText="Optional - for better rate limits"/>
+                            <Label text="Get a free API key at https://www.opensubtitles.com/consumers" styleClass="hint-label"/>
+                        </VBox>
+                        
+                        <VBox spacing="8">
+                            <Label text="Username:" styleClass="setting-label"/>
+                            <TextField fx:id="opensubtitlesUsernameField" promptText="OpenSubtitles username"/>
+                        </VBox>
+                        
+                        <VBox spacing="8">
+                            <Label text="Password:" styleClass="setting-label"/>
+                            <PasswordField fx:id="opensubtitlesPasswordField" promptText="OpenSubtitles password"/>
+                        </VBox>
+                        
+                        <HBox spacing="10">
+                            <Button text="✓ Validate Login" onAction="#handleValidateOpenSubtitles" styleClass="small-button"/>
+                            <Label fx:id="openSubsValidationLabel" text="" styleClass="hint-label"/>
+                        </HBox>
+                    </VBox>
+                </VBox>
+                
+                <!-- Metadata Settings (New) -->
+                <VBox fx:id="metadataSettings" spacing="20" styleClass="settings-category" visible="false" managed="false">
+                    <Label text="Metadata &amp; Renaming" styleClass="category-title"/>
+                    <Label text="Configure metadata providers for automatic file renaming" styleClass="hint-label"/>
+                    
+                    <VBox spacing="12">
+                        <Label text="Metadata Providers" styleClass="subsection-title"/>
+                        
+                        <VBox spacing="8">
+                            <Label text="TMDB API Key:" styleClass="setting-label"/>
+                            <TextField fx:id="tmdbApiKeyField" promptText="Required for movie/TV metadata"/>
+                            <Label text="Get free API key from https://www.themoviedb.org/settings/api" styleClass="hint-label"/>
+                            <HBox spacing="10">
+                                <Button text="✓ Validate Key" onAction="#handleValidateTMDB" styleClass="small-button"/>
+                                <Label fx:id="tmdbValidationLabel" text="" styleClass="hint-label"/>
+                            </HBox>
+                        </VBox>
+                        
+                        <VBox spacing="8">
+                            <Label text="TVDB API Key:" styleClass="setting-label"/>
+                            <TextField fx:id="tvdbApiKeyField" promptText="Optional - for TV show metadata"/>
+                            <Label text="Get free API key from https://thetvdb.com/api-information" styleClass="hint-label"/>
+                            <HBox spacing="10">
+                                <Button text="✓ Validate Key" onAction="#handleValidateTVDB" styleClass="small-button"/>
+                                <Label fx:id="tvdbValidationLabel" text="" styleClass="hint-label"/>
+                            </HBox>
+                        </VBox>
+                        
+                        <Label text="AniList does not require an API key and is always available" styleClass="hint-label"/>
                     </VBox>
                 </VBox>
                 
                 <!-- Output Settings -->
                 <VBox fx:id="outputSettings" spacing="15" styleClass="settings-category" visible="false" managed="false">
                     <Label text="Output Settings" styleClass="category-title"/>
+                    <Label text="Configure output file handling and metadata options" styleClass="hint-label"/>
                     
-                    <VBox spacing="8">
-                        <Label text="File Naming Pattern:" styleClass="setting-label"/>
-                        <TextField fx:id="namingPatternField" promptText="{title} - S{season}E{episode} - {episodeTitle}"/>
-                        <Label text="Available tokens: {title}, {season}, {episode}, {episodeTitle}, {year}, {resolution}" styleClass="hint-label"/>
-                    </VBox>
-                    
-                    <CheckBox fx:id="createSubfoldersCheck" text="Create subfolders by series/movie"/>
-                    
-                    <VBox spacing="8">
-                        <Label text="Metadata Options:" styleClass="setting-label"/>
-                        <CheckBox fx:id="copyMetadataCheck" text="Copy metadata from source" selected="true"/>
+                    <VBox spacing="12">
+                        <Label text="File Metadata" styleClass="subsection-title"/>
+                        <CheckBox fx:id="copyMetadataCheck" text="Copy metadata from source file" selected="true"/>
+                        <Label text="Preserve title, language, and other metadata tags" styleClass="hint-label"/>
                         <CheckBox fx:id="stripMetadataCheck" text="Strip unnecessary metadata"/>
+                        <Label text="Remove creation date, encoding software tags, and other non-essential metadata" styleClass="hint-label"/>
                     </VBox>
-                </VBox>
-                
-                <!-- API Keys Settings -->
-                <VBox fx:id="apiKeysSettings" spacing="15" styleClass="settings-category" visible="false" managed="false">
-                    <Label text="API Keys &amp; Authentication" styleClass="category-title"/>
-                    
-                    <VBox spacing="8">
-                        <Label text="TMDB API Key:" styleClass="setting-label"/>
-                        <TextField fx:id="tmdbApiKeyField" promptText="Required for movie/TV metadata"/>
-                        <Label text="Get free API key from https://www.themoviedb.org/settings/api" styleClass="hint-label"/>
-                    </VBox>
-                    
-                    <Separator/>
-                    
-                    <VBox spacing="8">
-                        <Label text="TVDB API Key:" styleClass="setting-label"/>
-                        <TextField fx:id="tvdbApiKeyField" promptText="Optional, for TV show metadata"/>
-                        <Label text="Get free API key from https://thetvdb.com/api-information" styleClass="hint-label"/>
-                    </VBox>
-                    
-                    <Separator/>
-                    
-                    <Label text="OpenSubtitles Authentication" styleClass="subsection-title"/>
-                    
-                    <VBox spacing="8">
-                        <Label text="API Key:" styleClass="setting-label"/>
-                        <TextField fx:id="opensubtitlesApiKeyField" promptText="Optional, for better rate limits"/>
-                    </VBox>
-                    
-                    <VBox spacing="8">
-                        <Label text="Username:" styleClass="setting-label"/>
-                        <TextField fx:id="opensubtitlesUsernameField" promptText="OpenSubtitles username"/>
-                    </VBox>
-                    
-                    <VBox spacing="8">
-                        <Label text="Password:" styleClass="setting-label"/>
-                        <PasswordField fx:id="opensubtitlesPasswordField" promptText="OpenSubtitles password"/>
-                    </VBox>
-                    
-                    <Label text="Sign up at https://www.opensubtitles.com/en/users/sign_up" styleClass="hint-label"/>
                 </VBox>
                 
                 <!-- Advanced Settings -->

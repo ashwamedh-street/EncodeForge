@@ -4,13 +4,13 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.ffmpeg</groupId>
-    <artifactId>ffmpeg-batch-transcoder-gui</artifactId>
+    <groupId>com.encodeforge</groupId>
+    <artifactId>encodeforge</artifactId>
     <version>1.0.0</version>
     <packaging>jar</packaging>
 
-    <name>FFmpeg Batch Transcoder GUI</name>
-    <description>Beautiful cross-platform GUI for FFmpeg batch video transcoding</description>
+    <name>EncodeForge</name>
+    <description>Beautiful cross-platform media encoding, subtitle management, and file renaming tool</description>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -142,9 +142,9 @@
                 <artifactId>jpackage-maven-plugin</artifactId>
                 <version>1.6.0</version>
                 <configuration>
-                    <name>FFmpegTranscoder</name>
+                    <name>EncodeForge</name>
                     <appVersion>${project.version}</appVersion>
-                    <vendor>FFmpeg Batch Transcoder</vendor>
+                    <vendor>EncodeForge</vendor>
                     <destination>target/dist</destination>
                     <module>com.ffmpeg.gui/com.ffmpeg.gui.MainApp</module>
                     <runtimeImage>target/image</runtimeImage>
