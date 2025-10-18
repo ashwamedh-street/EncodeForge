@@ -22,35 +22,47 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
-*.log
 *.pot
 venv/
 ENV/
 env/
 .venv
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
 
 # Java / Maven
-FFmpegGUI/target/
-FFmpegGUI/.mvn/wrapper/maven-wrapper.jar
-FFmpegGUI/pom.xml.tag
-FFmpegGUI/pom.xml.releaseBackup
-FFmpegGUI/pom.xml.versionsBackup
-FFmpegGUI/pom.xml.next
-FFmpegGUI/release.properties
-FFmpegGUI/dependency-reduced-pom.xml
-FFmpegGUI/buildNumber.properties
-FFmpegGUI/.mvn/timing.properties
-FFmpegGUI/.mvn/wrapper/maven-wrapper.properties
 *.class
 *.jar
 *.war
 *.ear
-*.iml
+hs_err_pid*
 .idea/
 .project
 .classpath
 .settings/
 .vscode/
+.metadata/
+.factorypath
+
+# Maven specific
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.properties
+.mvn/wrapper/maven-wrapper.jar
 
 # OS Files
 .DS_Store
@@ -61,37 +73,143 @@ FFmpegGUI/.mvn/wrapper/maven-wrapper.properties
 ehthumbs.db
 Thumbs.db
 desktop.ini
+.AppleDouble
+.LSOverride
+Icon
+.fseventsd
+.Spotlight-V100
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
 
-# FFmpeg
+# FFmpeg binaries (downloaded by app)
 ffmpeg.exe
 ffprobe.exe
-ffmpeg
-ffprobe
+bin/ffmpeg
+bin/ffprobe
+ffmpeg-*
+ffprobe-*
 
-# Output files
+# Media output files (user generated)
 *.mp4
 *.mkv
+*.avi
+*.mov
+*.webm
+*.m4v
+*.flv
+*.wmv
+*.3gp
+*.ogv
+*.ogg
+*.mp3
+*.aac
+*.flac
+*.wav
+*.opus
+*.vorbis
+*.ac3
+*.eac3
+*.dts
+*.truehd
+*.atmos
+*.srt
+*.ass
+*.ssa
+*.vtt
+*.sub
+*.idx
+*.sub
 converted/
 output/
+processed/
+temp_media/
 
-# Logs
+# Application logs
 *.log
 logs/
+log/
 
-# Temp files
+# Temporary files
 *.tmp
-temp/
-.cache/
-
-# IDE
+*.temp
+*.bak
+*.backup
 *.swp
 *.swo
 *~
-.project
-.metadata
-.settings
+temp/
+tmp/
+.cache/
 
-# Application specific
+# Application configuration (user-specific)
 config.json
 settings.json
+profiles.json
+api_keys.json
+user_config.json
 .cursor/
+
+# Whisper models (downloaded by app)
+whisper-models/
+models/
+.cache/whisper/
+
+# Streamlit
+.streamlit/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# Application specific
+*.pid
+*.seed
+*.pid.lock

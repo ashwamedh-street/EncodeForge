@@ -1,4 +1,4 @@
-# 🎬 FFmpeg Batch Transcoder v1.0
+# 🎬 EncodeForge v1.0
 
 > A comprehensive, all-in-one media processing tool with three powerful modes and three interfaces.
 
@@ -99,8 +99,8 @@ start_web_ui.bat
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/ffmpeg-batch-transcoder.git
-cd ffmpeg-batch-transcoder
+git clone https://github.com/yourusername/encodeforge.git
+cd encodeforge
 
 # Install Python dependencies
 pip install -r requirements.txt
@@ -244,7 +244,7 @@ Customize how files are renamed:
 ## 🏗️ Architecture
 
 ```
-FFmpeg Batch Transcoder v2.0
+EncodeForge v1.0
 │
 ├── 🐍 Python Backend (Modular)
 │   ├── ffmpeg_core.py          # Core functionality
@@ -344,61 +344,27 @@ Contributions are very welcome!
 
 ---
 
-## 📋 Roadmap
-
-### Planned Features
-- [ ] Profile system for saving presets
-- [ ] Audio/subtitle sync detection and correction
-- [ ] Batch metadata editing
-- [ ] Chapter support
-- [ ] Hardware decode acceleration
-- [ ] Jellyfin/Plex direct integration
-- [ ] Video quality comparison tools
-
-### Under Consideration
-- [ ] Docker container for easy deployment
-- [ ] REST API for external integration
-- [ ] Notification system (email, Discord, etc.)
-- [ ] Schedule conversions for off-hours
-
 ---
 
 ## 📜 License
 
 MIT License - Use it, modify it, share it!
-
 See [LICENSE](LICENSE) for details.
 
 ---
-
-## 🙏 Credits
-
-**Built with:**
-- 🐍 [Python](https://www.python.org/) - Backend and CLI
-- ☕ [Java](https://openjdk.org/) + [JavaFX](https://openjfx.io/) - Desktop GUI
-- 🌐 [Streamlit](https://streamlit.io/) - Web UI
-- 🎥 [FFmpeg](https://ffmpeg.org/) - Video processing
-- 🤖 [OpenAI Whisper](https://github.com/openai/whisper) - AI subtitles
-- 🎬 [TMDB](https://www.themoviedb.org/) - Movie/TV metadata
-- 💬 [OpenSubtitles](https://www.opensubtitles.com/) - Subtitle database
-
-**Special thanks** to all contributors and users who've reported bugs and suggested features!
 
 ---
 
 ## 📬 Support
 
-- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/yourusername/ffmpeg-batch-transcoder/issues)
-- 💡 **Feature Requests**: [GitHub Discussions](https://github.com/yourusername/ffmpeg-batch-transcoder/discussions)
+- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/yourusername/encodeforge/issues)
+- 💡 **Feature Requests**: [GitHub Discussions](https://github.com/yourusername/encodeforge/discussions)
 - 📧 **Email**: your.email@example.com
 - 💬 **Discord**: [Join our server](https://discord.gg/yourserver)
 
 ---
 
 <p align="center">
-  <strong>Made with ❤️ by someone who was tired of juggling too many tools</strong>
-</p>
-
-<p align="center">
   <sub>If this saved you time, consider ⭐ starring the repo or contributing!</sub>
 </p>
+
