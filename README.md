@@ -1,4 +1,4 @@
-# 🎬 EncodeForge v1.0
+# 🎬 EncodeForge Alpha v0.1
 
 > A comprehensive, all-in-one media processing tool with three powerful modes and three interfaces.
 
