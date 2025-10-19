@@ -17,11 +17,11 @@ import java.io.IOException;
 
 /**
  * Main Application Entry Point
- * EncodeForge - Beautiful cross-platform video conversion GUI
+ * Encode Forge - Beautiful cross-platform video conversion GUI
  */
 public class MainApp extends Application {
     private static final Logger logger = LoggerFactory.getLogger(MainApp.class);
-    private static final String APP_TITLE = "EncodeForge";
+    private static final String APP_TITLE = "Encode Forge";
     private static final String VERSION = "0.0.2";
     
     private PythonBridge pythonBridge;
@@ -29,7 +29,7 @@ public class MainApp extends Application {
 
     @Override
     public void init() throws Exception {
-        logger.info("Initializing EncodeForge v{}", VERSION);
+        logger.info("Initializing Encode Forge v{}", VERSION);
         
         // Extract Python runtime and scripts to temporary directory
         try {

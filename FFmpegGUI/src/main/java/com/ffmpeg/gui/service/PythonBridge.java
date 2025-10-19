@@ -348,19 +348,15 @@ public class PythonBridge {
      * Get path to Python executable (bundled or system)
      */
     private Path getPythonExecutable() throws IOException {
-        // First, check if we have a bundled Python executable
-        Path bundledPython = Paths.get(System.getProperty("user.dir"), "python", "ffmpeg_backend.exe");
-        
-        if (Files.exists(bundledPython)) {
-            logger.info("Using bundled Python: {}", bundledPython);
-            return bundledPython;
-        }
-        
-        // On Windows, look for .exe
-        if (System.getProperty("os.name").toLowerCase().contains("win")) {
-            bundledPython = Paths.get(System.getProperty("user.dir"), "python", "ffmpeg_backend.exe");
-            if (Files.exists(bundledPython)) {
-                return bundledPython;
+        // First, check if we have an extracted Python runtime
+        String runtimeDir = System.getProperty("python.runtime.dir");
+        if (runtimeDir != null) {
+            Path runtimePath = Paths.get(runtimeDir);
+            Path bundledExecutable = com.ffmpeg.gui.util.PythonRuntimeExtractor.getPythonExecutablePath(runtimePath);
+            
+            if (Files.exists(bundledExecutable)) {
+                logger.info("Using bundled Python executable: {}", bundledExecutable);
+                return bundledExecutable;
             }
         }
         
@@ -377,8 +373,17 @@ public class PythonBridge {
         // First try extracted runtime directory
         String runtimeDir = System.getProperty("python.runtime.dir");
         if (runtimeDir != null) {
-            Path scriptPath = Paths.get(runtimeDir, "ffmpeg_api.py");
+            Path runtimePath = Paths.get(runtimeDir);
+            Path scriptPath = runtimePath.resolve("scripts").resolve("ffmpeg_manager.py");
             if (Files.exists(scriptPath)) {
+                logger.info("Using bundled Python script: {}", scriptPath);
+                return scriptPath;
+            }
+            
+            // Fallback to ffmpeg_api.py in runtime directory
+            scriptPath = runtimePath.resolve("ffmpeg_api.py");
+            if (Files.exists(scriptPath)) {
+                logger.info("Using bundled Python API script: {}", scriptPath);
                 return scriptPath;
             }
         }
@@ -386,22 +391,26 @@ public class PythonBridge {
         // Fallback to project directory (for development)
         Path devScriptPath = Paths.get(System.getProperty("user.dir"), "..", "ffmpeg_api.py");
         if (Files.exists(devScriptPath)) {
+            logger.info("Using development Python script: {}", devScriptPath);
             return devScriptPath;
         }
         
         // Try parent directory
         Path parentScriptPath = Paths.get("ffmpeg_api.py");
         if (Files.exists(parentScriptPath)) {
+            logger.info("Using parent directory Python script: {}", parentScriptPath);
             return parentScriptPath;
         }
         
         // Fallback to resources directory
         Path resourceScriptPath = Paths.get("src", "main", "resources", "python", "ffmpeg_api.py");
         if (Files.exists(resourceScriptPath)) {
+            logger.info("Using resource Python script: {}", resourceScriptPath);
             return resourceScriptPath;
         }
         
         throw new IOException("Python API script not found. Checked:\n" +
+            "  - " + (runtimeDir != null ? Paths.get(runtimeDir, "scripts", "ffmpeg_manager.py") : "(runtime dir not set)") + "\n" +
             "  - " + (runtimeDir != null ? Paths.get(runtimeDir, "ffmpeg_api.py") : "(runtime dir not set)") + "\n" +
             "  - " + devScriptPath + "\n" +
             "  - " + parentScriptPath + "\n" +

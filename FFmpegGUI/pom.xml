@@ -9,7 +9,7 @@
     <version>1.0.0</version>
     <packaging>jar</packaging>
 
-    <name>EncodeForge</name>
+    <name>Encode Forge</name>
     <description>Beautiful cross-platform media encoding, subtitle management, and file renaming tool</description>
 
     <properties>
@@ -92,6 +92,14 @@
                     <include>**/*</include>
                 </includes>
             </resource>
+            <!-- Include Python runtime bundle -->
+            <resource>
+                <directory>target/python-runtime</directory>
+                <includes>
+                    <include>**/*</include>
+                </includes>
+                <targetPath>python-runtime</targetPath>
+            </resource>
         </resources>
 
         <plugins>
@@ -148,33 +156,118 @@
                 </executions>
             </plugin>
 
+            <!-- Exec Maven Plugin - Run Python bundle creation -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>build-python-bundle</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>${project.basedir}/build-python-bundle.bat</executable>
+                            <workingDirectory>${project.basedir}</workingDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!-- JPackage Plugin - Creates native installers -->
             <plugin>
                 <groupId>org.panteleyev</groupId>
                 <artifactId>jpackage-maven-plugin</artifactId>
                 <version>1.6.0</version>
-                <configuration>
-                    <name>EncodeForge</name>
-                    <appVersion>${project.version}</appVersion>
-                    <vendor>EncodeForge</vendor>
-                    <destination>target/dist</destination>
-                    <module>com.ffmpeg.gui/com.ffmpeg.gui.MainApp</module>
-                    <runtimeImage>target/image</runtimeImage>
-                    <javaOptions>
-                        <option>-Dfile.encoding=UTF-8</option>
-                    </javaOptions>
+                <executions>
+                    <!-- Windows Executable -->
+                    <execution>
+                        <id>jpackage-windows</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>jpackage</goal>
+                        </goals>
+                        <configuration>
+                            <name>EncodeForge</name>
+                            <appVersion>${project.version}</appVersion>
+                            <vendor>Encode Forge</vendor>
+                            <destination>target/dist/windows</destination>
+                            <mainJar>encodeforge-${project.version}.jar</mainJar>
+                            <mainClass>com.ffmpeg.gui.MainApp</mainClass>
+                            <type>EXE</type>
+                            <icon>src/main/resources/icons/app-icon.png</icon>
+                            <javaOptions>
+                                <option>-Dfile.encoding=UTF-8</option>
+                                <option>-Xmx2g</option>
+                            </javaOptions>
+                            
+                            <!-- Windows specific -->
+                            <winDirChooser>true</winDirChooser>
+                            <winMenu>true</winMenu>
+                            <winShortcut>true</winShortcut>
+                            <winMenuGroup>Encode Forge</winMenuGroup>
+                            <winUpgradeUuid>12345678-1234-1234-1234-123456789012</winUpgradeUuid>
+                        </configuration>
+                    </execution>
                     
-                    <!-- Windows specific -->
-                    <winDirChooser>true</winDirChooser>
-                    <winMenu>true</winMenu>
-                    <winShortcut>true</winShortcut>
+                    <!-- Linux AppImage -->
+                    <execution>
+                        <id>jpackage-linux</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>jpackage</goal>
+                        </goals>
+                        <configuration>
+                            <name>EncodeForge</name>
+                            <appVersion>${project.version}</appVersion>
+                            <vendor>Encode Forge</vendor>
+                            <destination>target/dist/linux</destination>
+                            <mainJar>encodeforge-${project.version}.jar</mainJar>
+                            <mainClass>com.ffmpeg.gui.MainApp</mainClass>
+                            <type>APP_IMAGE</type>
+                            <icon>src/main/resources/icons/app-icon.png</icon>
+                            <javaOptions>
+                                <option>-Dfile.encoding=UTF-8</option>
+                                <option>-Xmx2g</option>
+                            </javaOptions>
+                            
+                            <!-- Linux specific -->
+                            <linuxShortcut>true</linuxShortcut>
+                            <linuxMenuGroup>AudioVideo</linuxMenuGroup>
+                            <linuxPackageName>encodeforge</linuxPackageName>
+                        </configuration>
+                    </execution>
                     
-                    <!-- Mac specific -->
-                    <macPackageIdentifier>com.ffmpeg.gui</macPackageIdentifier>
-                    
-                    <!-- Linux specific -->
-                    <linuxShortcut>true</linuxShortcut>
-                </configuration>
+                    <!-- macOS App -->
+                    <execution>
+                        <id>jpackage-mac</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>jpackage</goal>
+                        </goals>
+                        <configuration>
+                            <name>Encode Forge</name>
+                            <appVersion>${project.version}</appVersion>
+                            <vendor>Encode Forge</vendor>
+                            <destination>target/dist/mac</destination>
+                            <mainJar>encodeforge-${project.version}.jar</mainJar>
+                            <mainClass>com.ffmpeg.gui.MainApp</mainClass>
+                            <type>DMG</type>
+                            <icon>src/main/resources/icons/app-icon.png</icon>
+                            <javaOptions>
+                                <option>-Dfile.encoding=UTF-8</option>
+                                <option>-Xmx2g</option>
+                            </javaOptions>
+                            
+                            <!-- Mac specific -->
+                            <macPackageIdentifier>com.encodeforge.app</macPackageIdentifier>
+                            <macPackageName>Encode Forge</macPackageName>
+                            <macSign>false</macSign>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
