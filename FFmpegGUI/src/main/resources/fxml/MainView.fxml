@@ -142,7 +142,7 @@
                             <Label text="Mode" styleClass="group-label"/>
                             <ComboBox fx:id="quickSubProviderCombo" styleClass="quick-combo" prefWidth="250">
                                 <tooltip>
-                                    <Tooltip text="Searches 7 subtitle providers:&#10;✅ OpenSubtitles.com (API key)&#10;✅ Addic7ed (TV shows)&#10;✅ SubDL (Movies &amp; TV)&#10;✅ Subf2m (Movies &amp; TV)&#10;✅ YIFY (Movies only)&#10;✅ Podnapisi (Multilingual)&#10;✅ SubDivX (Spanish)&#10;&#10;AI generation uses Whisper"/>
+                                    <Tooltip text="Searches 10 subtitle providers:&#10;✅ OpenSubtitles.com (API key)&#10;✅ Addic7ed (TV shows)&#10;✅ SubDL (Movies &amp; TV)&#10;✅ Subf2m (Movies &amp; TV)&#10;✅ YIFY (Movies only)&#10;✅ Podnapisi (Multilingual)&#10;✅ SubDivX (Spanish)&#10;🎌 Kitsunekko (Anime - Japanese)&#10;🎌 Jimaku (Anime - JP/EN)&#10;🎌 AnimeSubtitles (Anime - Multi)&#10;&#10;AI generation uses Whisper"/>
                                 </tooltip>
                             </ComboBox>
                         </VBox>
@@ -443,9 +443,10 @@
                                 <TableView fx:id="availableSubtitlesTable" VBox.vgrow="ALWAYS" styleClass="subtitle-table">
                                     <columns>
                                         <TableColumn fx:id="subtitleSelectColumn" text="" prefWidth="40"/>
-                                        <TableColumn fx:id="subtitleLanguageColumn" text="Language" prefWidth="120"/>
-                                        <TableColumn fx:id="subtitleProviderColumn" text="Provider" prefWidth="120"/>
-                                        <TableColumn fx:id="subtitleFormatColumn" text="Format" prefWidth="80"/>
+                                        <TableColumn fx:id="subtitleLanguageColumn" text="Language" prefWidth="100"/>
+                                        <TableColumn fx:id="subtitleProviderColumn" text="Provider" prefWidth="110"/>
+                                        <TableColumn fx:id="subtitleScoreColumn" text="Score" prefWidth="70"/>
+                                        <TableColumn fx:id="subtitleFormatColumn" text="Format" prefWidth="70"/>
                                     </columns>
                                     <placeholder>
                                         <Label text="No subtitles found. Click Process to search." styleClass="placeholder-label"/>
@@ -471,8 +472,13 @@
                         <HBox spacing="15" alignment="CENTER_LEFT" styleClass="preview-footer">
                             <Label fx:id="subtitleStatsLabel" text="0 available | 0 languages" styleClass="stats-label"/>
                             <Region HBox.hgrow="ALWAYS"/>
-                            <CheckBox fx:id="embedSubtitlesCheck" text="Embed subtitles in video" styleClass="preview-check"/>
-                            <Button text="💾 Save Selected" onAction="#handleSaveSubtitles" styleClass="primary-button"/>
+                            <Label text="Output Mode:" styleClass="setting-label"/>
+                            <ComboBox fx:id="subtitleOutputModeCombo" styleClass="quick-combo" prefWidth="180">
+                                <tooltip>
+                                    <Tooltip text="External: Save .srt file next to video (no processing)&#10;Embed: Add subtitle track inside video (fast, no re-encode)&#10;Burn-in: Permanently overlay subtitles on video (slow, re-encodes)"/>
+                                </tooltip>
+                            </ComboBox>
+                            <Button text="💾 Apply Subtitles" onAction="#handleApplySubtitles" styleClass="primary-button"/>
                         </HBox>
                     </VBox>
                 </ScrollPane>

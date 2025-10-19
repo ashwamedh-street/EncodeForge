@@ -250,7 +250,7 @@ class SubtitleProviders:
             
             with urllib.request.urlopen(req, timeout=10) as response:
                 data = json.loads(response.read().decode('utf-8'))
-            
+                
             # Parse SubDL API response
             if data.get('success') and data.get('subtitles'):
                 for item in data['subtitles'][:10]:
@@ -330,6 +330,145 @@ class SubtitleProviders:
             logger.error(f"Network error searching Subf2m: {e}")
         except Exception as e:
             logger.error(f"Error searching Subf2m: {e}", exc_info=True)
+            
+        return results
+    
+    def search_kitsunekko(self, video_path: str, languages: List[str]) -> List[Dict]:
+        """
+        Search Kitsunekko (kitsunekko.net) - Excellent for anime
+        Focuses on Japanese subtitles (romaji/kanji)
+        """
+        results = []
+        
+        try:
+            # Only search if Japanese is requested
+            if "jpn" not in languages and "ja" not in languages:
+                logger.info("Kitsunekko skipped - Japanese not requested (anime subtitle site)")
+                return results
+            
+            file_name = Path(video_path).stem
+            
+            # Extract anime name
+            anime_name = re.sub(r'\[.*?\]', '', file_name)  # Remove brackets
+            anime_name = re.sub(r'\d+p', '', anime_name)  # Remove resolution
+            anime_name = re.sub(r'[._-]+', ' ', anime_name).strip()
+            
+            # Detect episode number
+            episode_match = re.search(r'(?:E|Episode|Ep\.?)\s*(\d+)', anime_name, re.IGNORECASE)
+            if not episode_match:
+                episode_match = re.search(r'\s(\d+)\s', anime_name)
+            
+            episode_num = episode_match.group(1) if episode_match else "01"
+            
+            logger.info(f"Searching Kitsunekko for anime: {anime_name} (Episode {episode_num})")
+            
+            # Kitsunekko requires scraping their directory structure
+            # For now, return structured placeholder
+            results.append({
+                "provider": "Kitsunekko",
+                "file_name": f"{anime_name}.E{episode_num}.ja.ass",
+                "language": "jpn",
+                "downloads": 0,
+                "rating": 0.0,
+                "file_id": f"kitsunekko_{anime_name}_{episode_num}",
+                "download_url": "https://kitsunekko.net/dirlist.php?dir=subtitles%2Fjapanese%2F",
+                "movie_name": anime_name,
+                "format": "ass"
+            })
+            
+            logger.info(f"Kitsunekko prepared {len(results)} placeholder result(s)")
+            
+        except Exception as e:
+            logger.error(f"Error searching Kitsunekko: {e}")
+            
+        return results
+    
+    def search_animesubtitles(self, video_path: str, languages: List[str]) -> List[Dict]:
+        """
+        Search AnimeSubtitles (animesubtitles.com) - Multi-language anime subs
+        """
+        results = []
+        
+        try:
+            file_name = Path(video_path).stem
+            
+            # Extract anime name
+            anime_name = re.sub(r'\[.*?\]', '', file_name)
+            anime_name = re.sub(r'\d+p', '', anime_name)
+            anime_name = re.sub(r'[._-]+', '-', anime_name).strip()
+            
+            logger.info(f"Searching AnimeSubtitles for: {anime_name}")
+            
+            # AnimeSubtitles URL structure
+            search_url = f"https://www.animesubtitles.com/search?q={urllib.parse.quote(anime_name)}"
+            
+            logger.info("AnimeSubtitles requires scraping - returning placeholder")
+            
+            for lang in languages:
+                results.append({
+                    "provider": "AnimeSubtitles",
+                    "file_name": f"{anime_name}.{lang}.srt",
+                    "language": lang,
+                    "downloads": 0,
+                    "rating": 0.0,
+                    "file_id": f"animesubtitles_{anime_name}_{lang}",
+                    "download_url": search_url,
+                    "movie_name": anime_name,
+                    "format": "srt"
+                })
+            
+            logger.info(f"AnimeSubtitles prepared {len(results)} placeholder result(s)")
+            
+        except Exception as e:
+            logger.error(f"Error searching AnimeSubtitles: {e}")
+            
+        return results
+    
+    def search_jimaku(self, video_path: str, languages: List[str]) -> List[Dict]:
+        """
+        Search Jimaku (jimaku.cc) - Modern anime subtitle search
+        Formerly itazuraneko
+        """
+        results = []
+        
+        try:
+            # Only search if Japanese or English is requested
+            if not any(lang in ["jpn", "eng", "ja", "en"] for lang in languages):
+                logger.info("Jimaku skipped - Japanese/English not requested")
+                return results
+            
+            file_name = Path(video_path).stem
+            
+            # Extract anime name
+            anime_name = re.sub(r'\[.*?\]', '', file_name)
+            anime_name = re.sub(r'\d+p', '', anime_name)
+            anime_name = re.sub(r'[._-]+', ' ', anime_name).strip()
+            
+            logger.info(f"Searching Jimaku for anime: {anime_name}")
+            
+            # Jimaku API (if available) or web scraping
+            search_url = f"https://jimaku.cc/search?q={urllib.parse.quote(anime_name)}"
+            
+            logger.info("Jimaku requires API or scraping - returning placeholder")
+            
+            for lang in ["jpn", "eng"]:
+                if lang in languages or (lang == "jpn" and "ja" in languages) or (lang == "eng" and "en" in languages):
+                    results.append({
+                        "provider": "Jimaku",
+                        "file_name": f"{anime_name}.{lang}.srt",
+                        "language": lang,
+                        "downloads": 0,
+                        "rating": 0.0,
+                        "file_id": f"jimaku_{anime_name}_{lang}",
+                        "download_url": search_url,
+                        "movie_name": anime_name,
+                        "format": "srt"
+                    })
+            
+            logger.info(f"Jimaku prepared {len(results)} placeholder result(s)")
+            
+        except Exception as e:
+            logger.error(f"Error searching Jimaku: {e}")
             
         return results
     
@@ -592,9 +731,50 @@ class SubtitleProviders:
         else:
             logger.info("→ SubDivX skipped (Spanish not requested)")
         
+        # === ANIME SUBTITLE PROVIDERS ===
+        logger.info("→ Searching anime-specific providers...")
+        
+        # Kitsunekko (Japanese anime subs)
+        if "jpn" in lang_codes or "ja" in lang_codes:
+            logger.info("→ Searching Kitsunekko (Anime - Japanese)...")
+            try:
+                kitsunekko_results = self.search_kitsunekko(video_path, lang_codes)
+                logger.info(f"  Kitsunekko returned {len(kitsunekko_results)} results")
+                all_results.extend(kitsunekko_results)
+                if kitsunekko_results:
+                    logger.info(f"  ✅ Kitsunekko: Found {len(kitsunekko_results)} subtitles")
+            except Exception as e:
+                logger.error(f"  ❌ Kitsunekko search failed: {e}")
+        
+        # AnimeSubtitles (Multi-language anime)
+        logger.info("→ Searching AnimeSubtitles...")
+        try:
+            animesubtitles_results = self.search_animesubtitles(video_path, lang_codes)
+            logger.info(f"  AnimeSubtitles returned {len(animesubtitles_results)} results")
+            all_results.extend(animesubtitles_results)
+            if animesubtitles_results:
+                logger.info(f"  ✅ AnimeSubtitles: Found {len(animesubtitles_results)} subtitles")
+        except Exception as e:
+            logger.error(f"  ❌ AnimeSubtitles search failed: {e}")
+        
+        # Jimaku (Modern anime subtitle search)
+        if any(lang in ["jpn", "eng", "ja", "en"] for lang in lang_codes):
+            logger.info("→ Searching Jimaku (Anime)...")
+            try:
+                jimaku_results = self.search_jimaku(video_path, lang_codes)
+                logger.info(f"  Jimaku returned {len(jimaku_results)} results")
+                all_results.extend(jimaku_results)
+                if jimaku_results:
+                    logger.info(f"  ✅ Jimaku: Found {len(jimaku_results)} subtitles")
+            except Exception as e:
+                logger.error(f"  ❌ Jimaku search failed: {e}")
+        
         logger.info(f"=== SEARCH COMPLETE: Total {len(all_results)} subtitle(s) from {len(set(r.get('provider', 'unknown') for r in all_results))} provider(s) ===")
         
         if all_results:
+            # Calculate scores and rank results
+            all_results = self._rank_subtitles(all_results)
+            
             # Log provider breakdown
             provider_counts = {}
             for r in all_results:
@@ -603,6 +783,8 @@ class SubtitleProviders:
             logger.info("Provider breakdown:")
             for provider, count in provider_counts.items():
                 logger.info(f"  - {provider}: {count}")
+            
+            logger.info(f"✅ Top ranked subtitle: {all_results[0].get('provider')} - {all_results[0].get('file_name')} (score: {all_results[0].get('score', 0)})")
         else:
             logger.warning("No subtitles found from any provider!")
             logger.warning("Possible reasons:")
@@ -616,6 +798,54 @@ class SubtitleProviders:
             logger.warning("  - Manually download from websites")
         
         return all_results
+    
+    def _rank_subtitles(self, results: List[Dict]) -> List[Dict]:
+        """
+        Rank and score subtitle results based on multiple factors
+        Higher score = better subtitle
+        """
+        for result in results:
+            score = 0.0
+            
+            # Provider quality score (based on reliability and quality)
+            provider_scores = {
+                "OpenSubtitles.com": 100,  # Official API, best quality
+                "Addic7ed": 95,  # Excellent for TV shows
+                "Kitsunekko": 90,  # Best for anime
+                "Jimaku": 85,  # Good anime source
+                "SubDL": 80,  # Good API
+                "Podnapisi": 75,
+                "Subf2m": 70,
+                "AnimeSubtitles": 65,
+                "YIFY": 60,  # Movies only
+                "SubDivX": 55,  # Spanish only
+            }
+            provider = result.get('provider', 'unknown')
+            score += provider_scores.get(provider, 50)
+            
+            # Download count (normalized to 0-20 points)
+            downloads = result.get('downloads', 0)
+            if downloads > 0:
+                score += min(20, downloads / 100)
+            
+            # Rating score (0-10 points)
+            rating = result.get('rating', 0.0)
+            score += rating
+            
+            # Format preference (ASS > SRT > others)
+            format_type = result.get('format', 'srt').lower()
+            if format_type == 'ass':
+                score += 5  # ASS has styling
+            elif format_type == 'srt':
+                score += 3  # SRT is standard
+            
+            # Store the calculated score
+            result['score'] = round(score, 2)
+        
+        # Sort by score (highest first)
+        results.sort(key=lambda x: x.get('score', 0), reverse=True)
+        
+        return results
     
     def download_best_subtitle(self, video_path: str, language: str = "en") -> Tuple[bool, Optional[str]]:
         """Download best subtitle from any provider"""

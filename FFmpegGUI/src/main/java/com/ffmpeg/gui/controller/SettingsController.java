@@ -728,13 +728,26 @@ public class SettingsController {
      */
     private void initializeIcons() {
         try {
-            // App icon (Settings gear)
+            // App icon
             if (appIconLabel != null) {
-                org.kordamp.ikonli.javafx.FontIcon appIcon = new org.kordamp.ikonli.javafx.FontIcon(
-                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.COG);
-                appIcon.setIconSize(16);
-                appIcon.setIconColor(javafx.scene.paint.Color.web("#0078d4"));
-                appIconLabel.setGraphic(appIcon);
+                try {
+                    javafx.scene.image.Image appIconImage = new javafx.scene.image.Image(
+                        getClass().getResourceAsStream("/icons/app-icon.png"));
+                    javafx.scene.image.ImageView appIconView = new javafx.scene.image.ImageView(appIconImage);
+                    appIconView.setFitWidth(16);
+                    appIconView.setFitHeight(16);
+                    appIconView.setPreserveRatio(true);
+                    appIconView.setSmooth(true);
+                    appIconLabel.setGraphic(appIconView);
+                } catch (Exception e) {
+                    logger.warn("Failed to load app icon, falling back to FontAwesome icon", e);
+                    // Fallback to FontAwesome icon
+                    org.kordamp.ikonli.javafx.FontIcon appIcon = new org.kordamp.ikonli.javafx.FontIcon(
+                        org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.COG);
+                    appIcon.setIconSize(16);
+                    appIcon.setIconColor(javafx.scene.paint.Color.web("#0078d4"));
+                    appIconLabel.setGraphic(appIcon);
+                }
             }
             
             // Minimize icon

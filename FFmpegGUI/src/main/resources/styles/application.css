@@ -41,11 +41,11 @@
 /* Main application background with window border and shadow */
 .root-pane {
     -fx-background-color: linear-gradient(to bottom, #121212 0%, #1e1e1e 100%);
-    -fx-border-color: #3a3a3a;
-    -fx-border-width: 1;
+    -fx-border-color: #2d2d2d;
+    -fx-border-width: 2;
     -fx-border-radius: 0;
     -fx-background-radius: 0;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.6), 20, 0, 0, 0);
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.8), 25, 0, 0, 0);
 }
 
 /* ========================================
@@ -1066,7 +1066,12 @@
    COMPACT SETTINGS DIALOG
    ======================================== */
 .dialog-pane {
-    -fx-background-color: #1e1e1e;
+    -fx-background-color: linear-gradient(to bottom, #1a1a1a 0%, #1e1e1e 100%);
+    -fx-border-color: #0078d4;
+    -fx-border-width: 3;
+    -fx-border-radius: 0;
+    -fx-background-radius: 0;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.9), 35, 0, 0, 0);
 }
 
 .category-list {

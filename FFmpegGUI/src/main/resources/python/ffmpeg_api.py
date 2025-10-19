@@ -157,6 +157,9 @@ except Exception as e:
         
         def convert_file(self, file_path, output_path=None, progress_callback=None):
             return {"status": "error", "message": "Conversion not available"}
+        
+        def apply_subtitles(self, video_path, subtitle_path, output_path=None, mode="external", language="eng"):
+            return {"status": "error", "message": "Subtitle application not available"}
 
 
 class FFmpegAPI:
@@ -261,6 +264,20 @@ class FFmpegAPI:
                     return {"status": "error", "message": "video_path required"}
                 
                 return self.core.download_subtitles(video_path, languages)
+            
+            elif action == "apply_subtitles":
+                video_path = request.get("video_path")
+                subtitle_path = request.get("subtitle_path")
+                output_path = request.get("output_path")
+                mode = request.get("mode", "external")  # 'burn-in', 'embed', or 'external'
+                language = request.get("language", "eng")
+                
+                if not video_path:
+                    return {"status": "error", "message": "video_path required"}
+                if not subtitle_path:
+                    return {"status": "error", "message": "subtitle_path required"}
+                
+                return self.core.apply_subtitles(video_path, subtitle_path, output_path, mode, language)
             
             elif action == "preview_rename":
                 file_paths = request.get("file_paths", [])

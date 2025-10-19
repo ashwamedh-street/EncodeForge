@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 """
 Whisper Manager - Handles Whisper AI model management and subtitle generation

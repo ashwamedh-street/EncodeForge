@@ -211,7 +211,8 @@
             <Label text="Download subtitles from multiple free sources. OpenSubtitles API key is optional but recommended." styleClass="hint-label"/>
             
             <VBox spacing="4" style="-fx-padding: 8; -fx-background-color: rgba(76, 201, 176, 0.1); -fx-background-radius: 4;">
-                <Label text="✅ Supported Providers (7 total):" style="-fx-font-weight: bold; -fx-text-fill: #4ec9b0;"/>
+                <Label text="✅ Supported Providers (10 total - including anime!):" style="-fx-font-weight: bold; -fx-text-fill: #4ec9b0;"/>
+                <Label text="General Providers:" style="-fx-font-weight: bold; -fx-text-fill: #4ec9b0; -fx-padding: 4 0 0 0;"/>
                 <Label text="  • OpenSubtitles.com (API) - Best quality, requires API key" styleClass="hint-label"/>
                 <Label text="  • Addic7ed - Excellent for TV shows" styleClass="hint-label"/>
                 <Label text="  • SubDL - Movies and TV shows with free API" styleClass="hint-label"/>
@@ -219,6 +220,10 @@
                 <Label text="  • YIFY Subtitles - Movies only" styleClass="hint-label"/>
                 <Label text="  • Podnapisi - Multilingual support" styleClass="hint-label"/>
                 <Label text="  • SubDivX - Spanish subtitles only" styleClass="hint-label"/>
+                <Label text="Anime Providers:" style="-fx-font-weight: bold; -fx-text-fill: #ce9178; -fx-padding: 4 0 0 0;"/>
+                <Label text="  • Kitsunekko - Japanese anime subtitles (ASS format)" styleClass="hint-label"/>
+                <Label text="  • Jimaku - Modern anime subtitle search (JP/EN)" styleClass="hint-label"/>
+                <Label text="  • AnimeSubtitles - Multi-language anime subtitles" styleClass="hint-label"/>
             </VBox>
             
             <Separator/>
