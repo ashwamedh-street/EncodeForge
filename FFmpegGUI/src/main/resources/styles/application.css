@@ -53,6 +53,7 @@
     -fx-background-radius: 3px;
     -fx-padding: 6 12;
     -fx-cursor: hand;
+    cursor: pointer;
 }
 
 .toolbar-button:hover {
@@ -150,6 +151,7 @@
     -fx-background-radius: 3px;
     -fx-padding: 7 15;
     -fx-cursor: hand;
+    cursor: pointer;
 }
 
 .button:hover {
@@ -178,15 +180,6 @@
     -fx-background-color: #3e3e42;
 }
 
-.danger-button {
-    -fx-background-color: #d32f2f;
-    -fx-text-fill: white;
-    -fx-border-color: #d32f2f;
-}
-
-.danger-button:hover {
-    -fx-background-color: #f44336;
-}
 
 .small-button {
     -fx-font-size: 11px;
@@ -198,6 +191,7 @@
 .small-button:hover {
     -fx-background-color: #3e3e42;
     -fx-cursor: hand;
+    cursor: pointer;
 }
 
 /* Danger Button (for Remove/Clear) */
@@ -217,11 +211,13 @@
     -fx-background-color: #7a2e2e;
     -fx-border-color: #ff6b6b;
     -fx-cursor: hand;
+    cursor: pointer;
 }
 
 .button:disabled {
     -fx-opacity: 0.4;
     -fx-cursor: default;
+    cursor: default;
 }
 
 /* Text Input Fields */
@@ -336,10 +332,12 @@
 
 .main-split-pane .split-pane-divider:vertical {
     -fx-cursor: h-resize;
+    cursor: ew-resize;
 }
 
 .main-split-pane .split-pane-divider:horizontal {
     -fx-cursor: v-resize;
+    cursor: ns-resize;
 }
 
 .left-panel-split .split-pane-divider {
@@ -350,6 +348,28 @@
 .left-panel-split .split-pane-divider:hover {
     -fx-background-color: #4ec9b0;
     -fx-padding: 3px;
+}
+
+/* Queue Split Pane (Resizable Queue/Processing/Completed sections) */
+.queue-split-pane {
+    -fx-background-color: #1e1e1e;
+}
+
+.queue-split-pane .split-pane-divider {
+    -fx-background-color: #2d2d30;
+    -fx-padding: 4px;
+    -fx-border-color: #3e3e42;
+    -fx-border-width: 1 0;
+}
+
+.queue-split-pane .split-pane-divider:hover {
+    -fx-background-color: #007acc;
+    -fx-padding: 5px;
+}
+
+.queue-split-pane .split-pane-divider:horizontal {
+    -fx-cursor: v-resize;
+    cursor: ns-resize;
 }
 
 /* Queue Section */
@@ -405,6 +425,7 @@
 
 .draggable-table .table-row-cell {
     -fx-cursor: hand;
+    cursor: pointer;
 }
 
 .draggable-table .table-row-cell:hover {

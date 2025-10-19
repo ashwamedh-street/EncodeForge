@@ -791,8 +791,8 @@ class FFmpegCore:
                 # Add subtitle conversion options for problematic subtitle types
                 if subtitle_codec != "copy":
                     cmd.extend(["-avoid_negative_ts", "make_zero"])  # Fix timestamp issues
-                    # Force subtitle format conversion even if it's complex
-                    cmd.extend(["-canvas_size", "1920x1080"])  # Standard canvas for subtitle rendering
+                    # Use source video resolution for subtitle canvas (dynamically detected)
+                    # Note: video_resolution will be set later when we get media info
                 
                 logger.info(f"Mapping subtitle streams with codec: {subtitle_codec} for {output_format} container")
             else:
@@ -863,13 +863,26 @@ class FFmpegCore:
                     "message": f"Failed to start FFmpeg: {e}"
                 }
             
-            # Get duration from file info first
+            # Get duration and resolution from file info first
             duration = 0
+            video_resolution = None
             logger.info(f"Getting media info for: {input_file}")
             info = self.get_media_info(str(input_file))
             if info.get("status") == "success":
                 duration = float(info.get("duration", 0))
                 logger.info(f"Input file duration: {duration} seconds")
+                
+                # Extract video resolution for subtitle canvas size
+                video_tracks = info.get("video_tracks", [])
+                if video_tracks and len(video_tracks) > 0:
+                    resolution_str = video_tracks[0].get("resolution", "")
+                    if resolution_str and "x" in resolution_str:
+                        try:
+                            width, height = resolution_str.split("x")
+                            video_resolution = f"{width}x{height}"
+                            logger.info(f"Input video resolution: {video_resolution}")
+                        except (ValueError, IndexError):
+                            pass
             else:
                 logger.warning(f"Could not get media info: {info.get('message', 'Unknown error')}")
                 # Don't fail conversion, just proceed without duration info

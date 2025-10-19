@@ -21,7 +21,7 @@ import java.io.IOException;
 public class MainApp extends Application {
     private static final Logger logger = LoggerFactory.getLogger(MainApp.class);
     private static final String APP_TITLE = "EncodeForge";
-    private static final String VERSION = "1.0.0";
+    private static final String VERSION = "0.0.2";
     
     private PythonBridge pythonBridge;
     private MainController controller;

@@ -1,3 +1,4 @@
+
 #!/bin/bash
 echo "FFmpeg Batch Transcoder - CLI Mode"
 echo ""

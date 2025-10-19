@@ -5,13 +5,13 @@ Supports three modes: Encoder, Subtitle, and Renamer
 """
 
 import argparse
-import sys
 import json
 import logging
+import sys
 from pathlib import Path
 from typing import Optional
 
-from ffmpeg_core import FFmpegCore, ConversionSettings
+from ffmpeg_core import ConversionSettings, FFmpegCore
 
 # Setup logging
 logging.basicConfig(
@@ -96,6 +96,17 @@ class FFmpegCLI:
         audio_group.add_argument("--audio-bitrate", help="Audio bitrate (e.g., 192k)")
         audio_group.add_argument("--normalize-audio", action="store_true", help="Normalize audio levels")
         
+        # Advanced options
+        advanced_group = parser.add_argument_group("Advanced Options")
+        advanced_group.add_argument("--nvenc-codec", default="h264_nvenc", choices=["h264_nvenc", "hevc_nvenc"], help="NVENC codec")
+        advanced_group.add_argument("--video-preset", default="medium", help="Software encoder preset")
+        advanced_group.add_argument("--video-crf", type=int, default=23, help="Software encoder CRF (0-51)")
+        advanced_group.add_argument("--use-faststart", action="store_true", default=True, help="Enable faststart for MP4")
+        advanced_group.add_argument("--output-suffix", help="Suffix to add to output filenames")
+        advanced_group.add_argument("--convert-subtitles", action="store_true", default=True, help="Convert subtitle tracks")
+        advanced_group.add_argument("--extract-forced-subs", action="store_true", default=True, help="Extract forced subtitles")
+        advanced_group.add_argument("--extract-sdh-subs", action="store_true", default=True, help="Extract SDH subtitles")
+        
         return parser
     
     def run_encoder_mode(self, args):
@@ -120,6 +131,16 @@ class FFmpegCLI:
         self.settings.audio_codec = args.audio_codec
         self.settings.audio_bitrate = args.audio_bitrate
         self.settings.normalize_audio = args.normalize_audio
+        
+        # Advanced settings
+        self.settings.nvenc_codec = args.nvenc_codec
+        self.settings.video_preset = args.video_preset
+        self.settings.video_crf = args.video_crf
+        self.settings.use_faststart = args.use_faststart
+        self.settings.output_suffix = args.output_suffix or ""
+        self.settings.convert_subtitles = args.convert_subtitles
+        self.settings.extract_forced_subs = args.extract_forced_subs
+        self.settings.extract_sdh_subs = args.extract_sdh_subs
         
         # Optional subtitle generation/download during encoding
         if args.enable_subtitle_generation:
@@ -161,10 +182,51 @@ class FFmpegCLI:
         
         logger.info(f"Found {len(files)} file(s) to process")
         
-        # TODO: Implement actual conversion logic
-        print("\n✅ Encoder mode configured. Conversion logic coming soon!")
-        print(f"Files to process: {len(files)}")
+        # Run conversion
+        print(f"\n🎬 Starting conversion of {len(files)} files...")
         print(f"Settings: NVENC={self.settings.use_nvenc}, Quality={self.settings.nvenc_cq}")
+        
+        def progress_callback(data):
+            if data.get("status") == "progress":
+                progress = data.get("progress", 0)
+                current_file = data.get("current_file", "")
+                print(f"\r  Converting {Path(current_file).name}: {progress:.1f}%", end="", flush=True)
+            elif data.get("status") == "complete":
+                print("\n  Conversion complete!")
+        
+        result = self.core.convert_files(files, progress_callback)
+        
+        # Display results
+        print("\n" + "=" * 80)
+        print("CONVERSION RESULTS")
+        print("=" * 80)
+        
+        if result["status"] == "success":
+            print(f"✅ Successfully converted {len(result['successful'])} files")
+            
+            for success in result["successful"]:
+                input_name = Path(success['input_file']).name
+                output_name = Path(success['output_file']).name
+                print(f"  ✅ {input_name} → {output_name}")
+                
+        elif result["status"] == "error":
+            print(f"❌ Conversion failed: {result.get('message', 'Unknown error')}")
+            
+        elif result["status"] == "partial":
+            print(f"⚠️  Partial success: {len(result['successful'])} succeeded, {len(result['failed'])} failed")
+            
+            print("\nSuccessful conversions:")
+            for success in result["successful"]:
+                input_name = Path(success['input_file']).name
+                output_name = Path(success['output_file']).name
+                print(f"  ✅ {input_name} → {output_name}")
+            
+            print("\nFailed conversions:")
+            for failure in result["failed"]:
+                input_name = Path(failure['input_file']).name
+                print(f"  ❌ {input_name}: {failure['error']}")
+        
+        print("\n✅ Encoding process complete!")
     
     def run_subtitle_mode(self, args):
         """Run subtitle mode"""
@@ -207,19 +269,37 @@ class FFmpegCLI:
         logger.info(f"Found {len(files)} file(s) to process")
         
         # Process each file
-        for file_path in files:
-            print(f"\nProcessing: {Path(file_path).name}")
+        total_files = len(files)
+        for i, file_path in enumerate(files, 1):
+            file_name = Path(file_path).name
+            print(f"\n[{i}/{total_files}] Processing: {file_name}")
             
-            for language in self.settings.subtitle_languages:
-                print(f"  Generating {language} subtitles...")
-                result = self.core.generate_subtitles(file_path, language)
+            # Generate subtitles if enabled
+            if self.settings.enable_subtitle_generation:
+                for language in self.settings.subtitle_languages:
+                    print(f"  🎙️  Generating {language} subtitles...")
+                    result = self.core.generate_subtitles(file_path, language)
+                    
+                    if result["status"] == "success":
+                        print(f"  ✅ {result.get('message', f'Generated {language} subtitles')}")
+                        if "subtitle_file" in result:
+                            print(f"     Saved to: {result['subtitle_file']}")
+                    else:
+                        print(f"  ❌ {result.get('message', f'Failed to generate {language} subtitles')}")
+            
+            # Download subtitles if enabled
+            if self.settings.enable_subtitle_download:
+                print(f"  📥 Downloading subtitles...")
+                result = self.core.download_subtitles(file_path, self.settings.subtitle_languages)
                 
                 if result["status"] == "success":
-                    print(f"  ✅ {result['message']}")
+                    print(f"  ✅ {result.get('message', 'Downloaded subtitles')}")
+                    for sub_file in result.get("downloaded_files", []):
+                        print(f"     Downloaded: {sub_file}")
                 else:
-                    print(f"  ❌ {result['message']}")
+                    print(f"  ❌ {result.get('message', 'Failed to download subtitles')}")
         
-        print("\n✅ Subtitle generation complete!")
+        print("\n✅ Subtitle processing complete!")
     
     def run_renamer_mode(self, args):
         """Run renamer mode"""

@@ -12,8 +12,14 @@ import sys
 from typing import Dict
 
 # Force unbuffered output for real-time streaming
-sys.stdout.reconfigure(line_buffering=True) if hasattr(sys.stdout, 'reconfigure') else None
-sys.stderr.reconfigure(line_buffering=True) if hasattr(sys.stderr, 'reconfigure') else None
+try:
+    sys.stdout.reconfigure(line_buffering=True)  # type: ignore
+except AttributeError:
+    pass
+try:
+    sys.stderr.reconfigure(line_buffering=True)  # type: ignore
+except AttributeError:
+    pass
 
 # Also set environment for maximum responsiveness
 os.environ['PYTHONUNBUFFERED'] = '1'

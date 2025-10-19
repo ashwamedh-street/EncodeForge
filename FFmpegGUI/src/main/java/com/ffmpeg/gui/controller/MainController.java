@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -37,7 +38,11 @@ public class MainController {
     private static final Logger logger = LoggerFactory.getLogger(MainController.class);
     
     private final PythonBridge pythonBridge;
-    private final ObservableList<ConversionJob> conversionQueue = FXCollections.observableArrayList();
+    // Separate queues for different states
+    private final ObservableList<ConversionJob> queuedFiles = FXCollections.observableArrayList();
+    private final ObservableList<ConversionJob> processingFiles = FXCollections.observableArrayList();
+    private final ObservableList<ConversionJob> completedFiles = FXCollections.observableArrayList();
+    
     private final ConversionSettings settings;
     private boolean isProcessing = false;
     private File lastDirectory;
@@ -61,6 +66,9 @@ public class MainController {
     @FXML private javafx.scene.control.SplitPane encoderModeLayout;
     @FXML private javafx.scene.control.SplitPane subtitleModeLayout;
     @FXML private javafx.scene.control.SplitPane renamerModeLayout;
+    
+    // Queue Split Pane (for resizable sections)
+    @FXML private javafx.scene.control.SplitPane queueSplitPane;
     
     // Encoder Quick Settings
     @FXML private ComboBox<String> quickFormatCombo;
@@ -121,25 +129,37 @@ public class MainController {
     private String currentMode = "encoder";
     
     // Queue Table
-    @FXML private TableView<ConversionJob> queueTable;
-    @FXML private TableColumn<ConversionJob, String> statusIconColumn;
-    @FXML private TableColumn<ConversionJob, String> fileNameColumn;
-    @FXML private TableColumn<ConversionJob, String> outputFormatColumn;
-    @FXML private TableColumn<ConversionJob, Double> progressColumn;
-    @FXML private TableColumn<ConversionJob, String> sizeColumn;
-    @FXML private TableColumn<ConversionJob, String> speedColumn;
-    @FXML private TableColumn<ConversionJob, String> etaColumn;
-    @FXML private Label queueCountLabel;
-    @FXML private Button removeSelectedButton;
-    @FXML private Button clearQueueButton;
+    // Queued Files Table
+    @FXML private TableView<ConversionJob> queuedTable;
+    @FXML private TableColumn<ConversionJob, String> queuedStatusColumn;
+    @FXML private TableColumn<ConversionJob, String> queuedFileColumn;
+    @FXML private TableColumn<ConversionJob, String> queuedOutputColumn;
+    @FXML private TableColumn<ConversionJob, String> queuedSizeColumn;
+    @FXML private Label queuedCountLabel;
+    @FXML private Button removeQueuedButton;
+    @FXML private Button clearQueuedButton;
     
-    // Current File Tab
-    @FXML private Label currentFileLabel;
-    @FXML private ProgressBar currentFileProgressBar;
-    @FXML private Label progressPercentLabel;
-    @FXML private Label speedLabel;
-    @FXML private Label etaLabel;
-    @FXML private Label frameLabel;
+    // Processing Files Table
+    @FXML private TableView<ConversionJob> processingTable;
+    @FXML private TableColumn<ConversionJob, String> procStatusColumn;
+    @FXML private TableColumn<ConversionJob, String> procFileColumn;
+    @FXML private TableColumn<ConversionJob, Double> procProgressColumn;
+    @FXML private TableColumn<ConversionJob, String> procFpsColumn;
+    @FXML private TableColumn<ConversionJob, String> procSpeedColumn;
+    @FXML private TableColumn<ConversionJob, String> procEtaColumn;
+    @FXML private Label processingCountLabel;
+    
+    // Completed Files Table
+    @FXML private TableView<ConversionJob> completedTable;
+    @FXML private TableColumn<ConversionJob, String> compStatusColumn;
+    @FXML private TableColumn<ConversionJob, String> compFileColumn;
+    @FXML private TableColumn<ConversionJob, String> compOutputColumn;
+    @FXML private TableColumn<ConversionJob, String> compSizeColumn;
+    @FXML private TableColumn<ConversionJob, String> compNewSizeColumn;
+    @FXML private TableColumn<ConversionJob, String> compTimeColumn;
+    @FXML private Label completedCountLabel;
+    @FXML private Button clearCompletedButton;
+    
     
     // Logs Tab
     @FXML private ComboBox<String> logLevelComboBox;
@@ -152,7 +172,6 @@ public class MainController {
     @FXML private ListView<String> audioTracksListView;
     @FXML private ListView<String> subtitleTracksListView;
     @FXML private TabPane rightPanelTabs;
-    @FXML private SplitPane leftPanelSplit;
     @FXML private Tab fileInfoTab;
     @FXML private Tab logsTab;
     
@@ -170,6 +189,7 @@ public class MainController {
         
         setupQueueTable();
         setupQueueDragAndDrop();
+        setupQueueSplitPane();
         setupUIBindings();
         setupQuickSettings();
         setupPreviewTabs();
@@ -207,7 +227,7 @@ public class MainController {
                 showModeLayout(renamerModeLayout);
                 
                 // Immediately load files and show original names
-                if (!conversionQueue.isEmpty()) {
+                if (!queuedFiles.isEmpty()) {
                     updateRenamePreview();
                 }
             }
@@ -263,17 +283,47 @@ public class MainController {
     
     
     private void setupQueueTable() {
+        setupQueuedTable();
+        setupProcessingTable();
+        setupCompletedTable();
+    }
+    
+    private void setupQueuedTable() {
         // Setup columns
-        statusIconColumn.setCellValueFactory(new PropertyValueFactory<>("statusIcon"));
-        fileNameColumn.setCellValueFactory(new PropertyValueFactory<>("fileName"));
-        outputFormatColumn.setCellValueFactory(new PropertyValueFactory<>("outputFormat"));
-        progressColumn.setCellValueFactory(new PropertyValueFactory<>("progress"));
-        sizeColumn.setCellValueFactory(new PropertyValueFactory<>("sizeString"));
-        speedColumn.setCellValueFactory(new PropertyValueFactory<>("speed"));
-        etaColumn.setCellValueFactory(new PropertyValueFactory<>("eta"));
+        queuedStatusColumn.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty("⏳"));
+        queuedFileColumn.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(new File(cd.getValue().getInputPath()).getName()));
+        queuedOutputColumn.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(settings.getOutputFormat().toUpperCase()));
+        queuedSizeColumn.setCellValueFactory(cd -> {
+            try {
+                long size = java.nio.file.Files.size(java.nio.file.Paths.get(cd.getValue().getInputPath()));
+                return new javafx.beans.property.SimpleStringProperty(formatFileSize(size));
+            } catch (java.io.IOException e) {
+                return new javafx.beans.property.SimpleStringProperty("N/A");
+            }
+        });
+        
+        // Set items
+        queuedTable.setItems(queuedFiles);
+        
+        // Selection listener
+        queuedTable.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            if (newVal != null) {
+                updateFileInfo(newVal);
+            }
+        });
+    }
+    
+    private void setupProcessingTable() {
+        // Setup columns
+        procStatusColumn.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty("⚡"));
+        procFileColumn.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(new File(cd.getValue().getInputPath()).getName()));
+        procProgressColumn.setCellValueFactory(new PropertyValueFactory<>("progress"));
+        procFpsColumn.setCellValueFactory(new PropertyValueFactory<>("fps"));
+        procSpeedColumn.setCellValueFactory(new PropertyValueFactory<>("speed"));
+        procEtaColumn.setCellValueFactory(new PropertyValueFactory<>("eta"));
         
         // Custom progress bar column
-        progressColumn.setCellFactory(col -> new TableCell<ConversionJob, Double>() {
+        procProgressColumn.setCellFactory(col -> new TableCell<ConversionJob, Double>() {
             private final ProgressBar progressBar = new ProgressBar();
             private final Label label = new Label();
             
@@ -286,22 +336,66 @@ public class MainController {
                     progressBar.setProgress(progress / 100.0);
                     progressBar.setPrefWidth(80);
                     label.setText(String.format("%.1f%%", progress));
-                    setGraphic(progressBar);
+                    VBox box = new VBox(2, progressBar, label);
+                    box.setAlignment(javafx.geometry.Pos.CENTER);
+                    setGraphic(box);
                 }
             }
         });
         
         // Set items
-        queueTable.setItems(conversionQueue);
+        processingTable.setItems(processingFiles);
+    }
+    
+    private void setupCompletedTable() {
+        // Setup columns
+        compStatusColumn.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty("✅"));
+        compFileColumn.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(new File(cd.getValue().getInputPath()).getName()));
+        compOutputColumn.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(settings.getOutputFormat().toUpperCase()));
+        compSizeColumn.setCellValueFactory(cd -> {
+            try {
+                long size = java.nio.file.Files.size(java.nio.file.Paths.get(cd.getValue().getInputPath()));
+                return new javafx.beans.property.SimpleStringProperty(formatFileSize(size));
+            } catch (java.io.IOException e) {
+                return new javafx.beans.property.SimpleStringProperty("N/A");
+            }
+        });
+        compNewSizeColumn.setCellValueFactory(new PropertyValueFactory<>("outputSizeString"));
+        compTimeColumn.setCellValueFactory(new PropertyValueFactory<>("timeTaken"));
         
-        // Selection listener for file info
-        queueTable.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+        // Set items
+        completedTable.setItems(completedFiles);
+        
+        // Selection listener
+        completedTable.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal != null) {
                 updateFileInfo(newVal);
             }
         });
+    }
+    
+    private void updateQueueCounts() {
+        if (queuedCountLabel != null) {
+            queuedCountLabel.setText(queuedFiles.size() + " file" + (queuedFiles.size() != 1 ? "s" : ""));
+        }
+        if (processingCountLabel != null) {
+            processingCountLabel.setText(processingFiles.size() + " file" + (processingFiles.size() != 1 ? "s" : ""));
+        }
+        if (completedCountLabel != null) {
+            completedCountLabel.setText(completedFiles.size() + " file" + (completedFiles.size() != 1 ? "s" : ""));
+        }
         
-        updateQueueCount();
+        // Update start button state
+        if (startButton != null) {
+            startButton.setDisable(queuedFiles.isEmpty() || isProcessing);
+        }
+    }
+    
+    private String formatFileSize(long size) {
+        if (size < 1024) return size + " B";
+        int exp = (int) (Math.log(size) / Math.log(1024));
+        String pre = "KMGTPE".charAt(exp - 1) + "";
+        return String.format("%.1f %sB", size / Math.pow(1024, exp), pre);
     }
     
     private void setupUIBindings() {
@@ -311,11 +405,9 @@ public class MainController {
             logLevelComboBox.setValue("All");
         }
         
-        // Update start button based on queue state (don't bind, manually control)
-        conversionQueue.addListener((javafx.collections.ListChangeListener<ConversionJob>) c -> {
-            if (!isProcessing) {
-                startButton.setDisable(conversionQueue.isEmpty());
-            }
+        // Update start button based on queue state
+        queuedFiles.addListener((javafx.collections.ListChangeListener<ConversionJob>) c -> {
+            updateQueueCounts();
         });
         startButton.setDisable(true);
     }
@@ -360,19 +452,24 @@ public class MainController {
     private void addFilesToQueue(List<File> files) {
         int added = 0;
         for (File file : files) {
-            boolean alreadyInQueue = conversionQueue.stream()
+            // Check if already in any queue
+            boolean alreadyInQueue = queuedFiles.stream()
+                .anyMatch(job -> job.getInputPath().equals(file.getAbsolutePath())) ||
+                processingFiles.stream()
+                .anyMatch(job -> job.getInputPath().equals(file.getAbsolutePath())) ||
+                completedFiles.stream()
                 .anyMatch(job -> job.getInputPath().equals(file.getAbsolutePath()));
             
             if (!alreadyInQueue) {
                 ConversionJob job = new ConversionJob(file.getAbsolutePath());
                 job.setOutputFormat("MP4"); // Default
                 job.setStatus("⏳ Queued");
-                conversionQueue.add(job);
+                queuedFiles.add(job);
                 added++;
             }
         }
         
-        updateQueueCount();
+        updateQueueCounts();
         updateSelectedFilesLabel();
         log("Added " + added + " file(s) to queue");
     }
@@ -414,7 +511,7 @@ public class MainController {
     
     @FXML
     private void handleStartProcessing() {
-        if (conversionQueue.isEmpty() || isProcessing) {
+        if (queuedFiles.isEmpty() || isProcessing) {
             return;
         }
         
@@ -439,15 +536,19 @@ public class MainController {
         stopButton.setDisable(false);
         statusLabel.setText("Encoding...");
         
-        // Get queued or failed files (allow retry)
+        // Get files from queued list
         List<String> filePaths = new ArrayList<>();
-        for (ConversionJob job : conversionQueue) {
-            String status = job.getStatus();
-            if (status.contains("Queued") || status.contains("pending") || status.contains("failed") || status.contains("error")) {
-                filePaths.add(job.getInputPath());
-                job.setStatus("⏳ Queued");
-                job.setProgress(0.0); // Reset progress for retry
-            }
+        List<ConversionJob> jobsToProcess = new ArrayList<>();
+        
+        for (ConversionJob job : queuedFiles) {
+            filePaths.add(job.getInputPath());
+            job.setStatus("⚡ Processing");
+            job.setProgress(0.0);
+            job.setStartTime(System.currentTimeMillis());
+            job.setFps("0");
+            job.setSpeed("0x");
+            job.setEta("Calculating...");
+            jobsToProcess.add(job);
         }
         
         if (filePaths.isEmpty()) {
@@ -455,10 +556,15 @@ public class MainController {
             startButton.setDisable(false);
             pauseButton.setDisable(true);
             stopButton.setDisable(true);
-            log("No files to encode. All files may already be completed.");
-            showWarning("No Files", "No files available to encode. All files are either completed or currently processing.");
+            log("No files to encode.");
+            showWarning("No Files", "No files available to encode.");
             return;
         }
+        
+        // Move files from queued to processing
+        processingFiles.addAll(jobsToProcess);
+        queuedFiles.clear();
+        updateQueueCounts();
         
         log("Starting encoding of " + filePaths.size() + " file(s)");
         
@@ -486,11 +592,9 @@ public class MainController {
         
         // Get files from queue
         List<String> filePaths = new ArrayList<>();
-        for (ConversionJob job : conversionQueue) {
-            if (job.getStatus().contains("pending") || job.getStatus().contains("Queued")) {
-                filePaths.add(job.getInputPath());
-                job.setStatus("⏳ Queued");
-            }
+        for (ConversionJob job : queuedFiles) {
+            filePaths.add(job.getInputPath());
+            job.setStatus("⏳ Queued");
         }
         
         log("Starting subtitle processing for " + filePaths.size() + " file(s)");
@@ -499,7 +603,7 @@ public class MainController {
         new Thread(() -> {
             try {
                 for (String filePath : filePaths) {
-                    Platform.runLater(() -> currentFileLabel.setText(new File(filePath).getName()));
+                    Platform.runLater(() -> log("Generating subtitles for: " + new File(filePath).getName()));
                     
                     // Try to generate subtitles with Whisper first
                     if (settings.isEnableWhisper()) {
@@ -513,10 +617,10 @@ public class MainController {
                             if (response.get("status").getAsString().equals("success")) {
                                 log("Generated subtitles for: " + new File(filePath).getName());
                                 Platform.runLater(() -> {
-                                    conversionQueue.stream()
+                                    queuedFiles.stream()
                                         .filter(job -> job.getInputPath().equals(filePath))
                                         .findFirst()
-                                        .ifPresent(job -> job.setStatus("completed"));
+                                        .ifPresent(job -> job.setStatus("✅ Completed"));
                                 });
                             } else {
                                 log("Failed to generate subtitles: " + response.get("message").getAsString());
@@ -537,10 +641,10 @@ public class MainController {
                             if (response.get("status").getAsString().equals("success")) {
                                 log("Downloaded subtitles for: " + new File(filePath).getName());
                                 Platform.runLater(() -> {
-                                    conversionQueue.stream()
+                                    queuedFiles.stream()
                                         .filter(job -> job.getInputPath().equals(filePath))
                                         .findFirst()
-                                        .ifPresent(job -> job.setStatus("completed"));
+                                        .ifPresent(job -> job.setStatus("✅ Completed"));
                                 });
                             } else {
                                 log("No subtitles found for: " + new File(filePath).getName());
@@ -571,11 +675,8 @@ public class MainController {
     private void handleStartRenaming() {
         // Get files from queue
         List<String> filePaths = new ArrayList<>();
-        for (ConversionJob job : conversionQueue) {
-            String status = job.getStatus();
-            if (status.contains("Queued") || status.contains("pending")) {
-                filePaths.add(job.getInputPath());
-            }
+        for (ConversionJob job : queuedFiles) {
+            filePaths.add(job.getInputPath());
         }
         
         if (filePaths.isEmpty()) {
@@ -684,12 +785,12 @@ public class MainController {
                         log(String.format("Renamed %d file(s), %d failed", successCount, failedCount));
                         
                         // Update queue
-                        for (ConversionJob job : conversionQueue) {
+                        for (ConversionJob job : queuedFiles) {
                             if (filePaths.contains(job.getInputPath())) {
-                                job.setStatus("completed");
+                                job.setStatus("✅ Completed");
                             }
                         }
-                        queueTable.refresh();
+                        queuedTable.refresh();
                         
                         showInfo("Rename Complete", 
                             String.format("Successfully renamed %d file(s).\n%d file(s) could not be renamed.", 
@@ -724,10 +825,8 @@ public class MainController {
                 pythonBridge.sendCommand(command);
                 
                 // Update UI to show paused state
-                for (ConversionJob job : conversionQueue) {
-                    if (job.getStatus().equals("processing")) {
-                        job.setStatus("paused");
-                    }
+                for (ConversionJob job : processingFiles) {
+                    job.setStatus("⏸️ Paused");
                 }
                 
                 pauseButton.setText("Resume");
@@ -768,24 +867,18 @@ public class MainController {
                 logger.warn("Stop command failed: {}", e.getMessage());
             }
 
-            // Update local queue states
-            for (ConversionJob job : conversionQueue) {
-                if (job.getStatus().equals("processing") || job.getStatus().equals("queued")) {
-                    job.setStatus("cancelled");
-                    job.setProgress(0.0);
-                }
-            }
+            // Already updated in the earlier cancel logic
             
             resetProcessingState();
-            queueTable.refresh();
+            queuedTable.refresh();
             
             showInfo("Stopped", "All operations have been cancelled.");
         }
     }
     
     @FXML
-    private void handleRemoveSelected() {
-        ObservableList<ConversionJob> selectedJobs = queueTable.getSelectionModel().getSelectedItems();
+    private void handleRemoveQueued() {
+        ObservableList<ConversionJob> selectedJobs = queuedTable.getSelectionModel().getSelectedItems();
         
         if (selectedJobs.isEmpty()) {
             showWarning("No Selection", "Please select one or more files to remove.");
@@ -793,10 +886,20 @@ public class MainController {
         }
         
         List<ConversionJob> jobsToRemove = new ArrayList<>(selectedJobs);
-        conversionQueue.removeAll(jobsToRemove);
-        updateQueueCount();
+        queuedFiles.removeAll(jobsToRemove);
+        updateQueueCounts();
         
         log("Removed " + jobsToRemove.size() + " file(s) from queue");
+    }
+    
+    @FXML
+    private void handleRemoveCompleted() {
+        ConversionJob selected = completedTable.getSelectionModel().getSelectedItem();
+        if (selected != null) {
+            completedFiles.remove(selected);
+            updateQueueCounts();
+            log("Removed completed file from list");
+        }
     }
     
     @FXML
@@ -847,53 +950,99 @@ public class MainController {
     }
     
     @FXML
-    private void handleClearQueue() {
-        if (!isProcessing && !conversionQueue.isEmpty()) {
+    private void handleClearQueued() {
+        if (!isProcessing && !queuedFiles.isEmpty()) {
             Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-            alert.setTitle("Clear Queue");
-            alert.setHeaderText("Clear all files from queue?");
-            alert.setContentText("This will remove all files from the queue.");
+            alert.setTitle("Clear Queued");
+            alert.setHeaderText("Clear all queued files?");
+            alert.setContentText("This will remove all queued files.");
             
             Optional<ButtonType> result = alert.showAndWait();
             if (result.isPresent() && result.get() == ButtonType.OK) {
-                conversionQueue.clear();
-                updateQueueCount();
-                log("Queue cleared");
+                queuedFiles.clear();
+                updateQueueCounts();
+                log("Queued files cleared");
             }
         }
     }
     
     @FXML
-    private void handleMoveUp() {
-        int index = queueTable.getSelectionModel().getSelectedIndex();
+    private void handleClearCompleted() {
+        if (!completedFiles.isEmpty()) {
+            Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+            alert.setTitle("Clear Completed");
+            alert.setHeaderText("Clear all completed files?");
+            alert.setContentText("This will remove all completed files from the list.");
+            
+            Optional<ButtonType> result = alert.showAndWait();
+            if (result.isPresent() && result.get() == ButtonType.OK) {
+                completedFiles.clear();
+                updateQueueCounts();
+                log("Completed files cleared");
+            }
+        }
+    }
+    
+    @FXML
+    private void handleMoveUpQueued() {
+        int index = queuedTable.getSelectionModel().getSelectedIndex();
         if (index > 0) {
-            ConversionJob job = conversionQueue.remove(index);
-            conversionQueue.add(index - 1, job);
-            queueTable.getSelectionModel().select(index - 1);
+            ConversionJob job = queuedFiles.remove(index);
+            queuedFiles.add(index - 1, job);
+            queuedTable.getSelectionModel().select(index - 1);
         }
     }
     
     @FXML
-    private void handleMoveDown() {
-        int index = queueTable.getSelectionModel().getSelectedIndex();
-        if (index >= 0 && index < conversionQueue.size() - 1) {
-            ConversionJob job = conversionQueue.remove(index);
-            conversionQueue.add(index + 1, job);
-            queueTable.getSelectionModel().select(index + 1);
+    private void handleMoveDownQueued() {
+        int index = queuedTable.getSelectionModel().getSelectedIndex();
+        if (index >= 0 && index < queuedFiles.size() - 1) {
+            ConversionJob job = queuedFiles.remove(index);
+            queuedFiles.add(index + 1, job);
+            queuedTable.getSelectionModel().select(index + 1);
         }
     }
     
     @FXML
-    private void handleOpenFileLocation() {
-        ConversionJob selected = queueTable.getSelectionModel().getSelectedItem();
-        if (selected != null) {
+    private void handleOpenFileLocationQueued() {
+        ConversionJob selected = queuedTable.getSelectionModel().getSelectedItem();
+        openFileLocation(selected);
+    }
+    
+    @FXML
+    private void handleOpenFileLocationCompleted() {
+        ConversionJob selected = completedTable.getSelectionModel().getSelectedItem();
+        openFileLocation(selected);
+    }
+    
+    @FXML
+    private void handleOpenOutputFile() {
+        ConversionJob selected = completedTable.getSelectionModel().getSelectedItem();
+        if (selected != null && selected.getOutputPath() != null) {
             try {
-                File file = new File(selected.getInputPath());
+                File file = new File(selected.getOutputPath());
+                if (file.exists()) {
+                    java.awt.Desktop.getDesktop().open(file);
+                } else {
+                    showWarning("File Not Found", "Output file does not exist: " + file.getName());
+                }
+            } catch (IOException e) {
+                logger.error("Error opening output file", e);
+                showError("Error", "Could not open output file: " + e.getMessage());
+            }
+        }
+    }
+    
+    private void openFileLocation(ConversionJob job) {
+        if (job != null) {
+            try {
+                File file = new File(job.getInputPath());
                 if (file.exists()) {
                     java.awt.Desktop.getDesktop().open(file.getParentFile());
                 }
             } catch (IOException e) {
                 logger.error("Error opening file location", e);
+                showError("Error", "Could not open file location: " + e.getMessage());
             }
         }
     }
@@ -992,17 +1141,7 @@ public class MainController {
                 String fileName = update.get("file").getAsString();
                 String status = update.has("status") ? update.get("status").getAsString() : "processing";
                 
-                // Handle negative progress (indicates indeterminate state)
-                if (progress < 0) {
-                    currentFileProgressBar.setProgress(-1);  // Indeterminate progress
-                    progressPercentLabel.setText("Processing...");
-                } else {
-                    currentFileProgressBar.setProgress(progress / 100.0);
-                    progressPercentLabel.setText(String.format("%.1f%%", progress));
-                }
-                
-                // Update current file display
-                currentFileLabel.setText(new File(fileName).getName());
+                // Progress is now displayed in the table, not separate UI elements
                 
                 // Build detailed status text with all metrics
                 StringBuilder statusText = new StringBuilder();
@@ -1069,46 +1208,64 @@ public class MainController {
                 
                 statusLabel.setText(statusText.toString());
                 
-                // Update job in queue
-                conversionQueue.stream()
-                    .filter(job -> job.getInputPath().equals(fileName))
+                // Update job in processing list
+                ConversionJob job = processingFiles.stream()
+                    .filter(j -> j.getInputPath().equals(fileName))
                     .findFirst()
-                    .ifPresent(job -> {
-                        if (progress >= 0) {
-                            job.setProgress(progress);
+                    .orElse(null);
+                
+                if (job != null) {
+                    if (progress >= 0) {
+                        job.setProgress(progress);
+                    }
+                    
+                    // Update real-time metrics
+                    if (update.has("fps")) {
+                        job.setFps(String.format("%.1f", update.get("fps").getAsDouble()));
+                    }
+                    if (update.has("speed")) {
+                        job.setSpeed(update.get("speed").getAsString());
+                    }
+                    if (update.has("eta")) {
+                        job.setEta(update.get("eta").getAsString());
+                    }
+                    
+                    // Handle completion - move to completed list
+                    if (status.equals("completed")) {
+                        job.setStatus("✅ Completed");
+                        job.setProgress(100.0);
+                        
+                        // Calculate time taken
+                        long elapsedMs = System.currentTimeMillis() - job.getStartTime();
+                        long minutes = elapsedMs / 60000;
+                        long seconds = (elapsedMs % 60000) / 1000;
+                        job.setTimeTaken(String.format("%dm %ds", minutes, seconds));
+                        
+                        // Get output file size
+                        try {
+                            // Construct output path (same directory, new extension)
+                            Path inputPath = java.nio.file.Paths.get(job.getInputPath());
+                            String baseName = inputPath.getFileName().toString();
+                            baseName = baseName.substring(0, baseName.lastIndexOf('.'));
+                            Path outputPath = inputPath.getParent().resolve(baseName + "." + settings.getOutputFormat());
+                            
+                            if (java.nio.file.Files.exists(outputPath)) {
+                                long outputSize = java.nio.file.Files.size(outputPath);
+                                job.setOutputSizeString(formatFileSize(outputSize));
+                                job.setOutputPath(outputPath.toString());
+                            }
+                        } catch (Exception e) {
+                            job.setOutputSizeString("N/A");
                         }
                         
-                        // Update status based on state
-                        switch (status.toLowerCase()) {
-                            case "completed":
-                                job.setStatus("✅ Completed");
-                                job.setProgress(100.0);
-                                break;
-                            case "starting":
-                                job.setStatus("🔄 Starting");
-                                break;
-                            case "finalizing":
-                                job.setStatus("🔧 Finalizing");
-                                break;
-                            case "encoding":
-                                job.setStatus("⚡ Encoding");
-                                break;
-                            case "cancelled":
-                                job.setStatus("❌ Cancelled");
-                                break;
-                            case "failed":
-                            case "error":
-                                job.setStatus("⚠️ Failed");
-                                break;
-                            case "paused":
-                                job.setStatus("⏸️ Paused");
-                                break;
-                            default:
-                                job.setStatus("🔄 Processing");
-                        }
-                    });
-                
-                queueTable.refresh();
+                        // Move from processing to completed
+                        processingFiles.remove(job);
+                        completedFiles.add(job);
+                        updateQueueCounts();
+                    }
+                    
+                    processingTable.refresh();
+                }
                 
             } else if (update.has("status")) {
                 String status = update.get("status").getAsString();
@@ -1116,16 +1273,24 @@ public class MainController {
                 if (status.equals("complete")) {
                     log("All conversions completed successfully");
                     
-                    // Mark remaining jobs as completed
-                    for (ConversionJob job : conversionQueue) {
-                        String jobStatus = job.getStatus().toLowerCase();
-                        if (jobStatus.contains("processing") || jobStatus.contains("queued") || 
-                            jobStatus.contains("encoding") || jobStatus.contains("starting")) {
-                            job.setStatus("✅ Completed");
-                            job.setProgress(100.0);
+                    // Move any remaining processing files to completed
+                    for (ConversionJob job : new ArrayList<>(processingFiles)) {
+                        job.setStatus("✅ Completed");
+                        job.setProgress(100.0);
+                        
+                        // Calculate time taken if not already set
+                        if (job.getTimeTaken() == null || job.getTimeTaken().equals("N/A")) {
+                            long elapsedMs = System.currentTimeMillis() - job.getStartTime();
+                            long minutes = elapsedMs / 60000;
+                            long seconds = (elapsedMs % 60000) / 1000;
+                            job.setTimeTaken(String.format("%dm %ds", minutes, seconds));
                         }
+                        
+                        processingFiles.remove(job);
+                        completedFiles.add(job);
                     }
                     
+                    updateQueueCounts();
                     resetProcessingState();
                     statusLabel.setText("✅ All files completed!");
                     
@@ -1133,15 +1298,15 @@ public class MainController {
                     String message = update.has("message") ? update.get("message").getAsString() : "Conversion cancelled";
                     log("CANCELLED: " + message);
                     
-                    // Mark processing jobs as cancelled
-                    for (ConversionJob job : conversionQueue) {
-                        String jobStatus = job.getStatus().toLowerCase();
-                        if (jobStatus.contains("processing") || jobStatus.contains("encoding") || 
-                            jobStatus.contains("starting") || jobStatus.contains("queued")) {
-                            job.setStatus("❌ Cancelled");
-                        }
+                    // Move processing jobs back to queued with cancelled status
+                    for (ConversionJob job : new ArrayList<>(processingFiles)) {
+                        job.setStatus("❌ Cancelled");
+                        job.setProgress(0.0);
+                        processingFiles.remove(job);
+                        queuedFiles.add(job);
                     }
                     
+                    updateQueueCounts();
                     resetProcessingState();
                     statusLabel.setText("❌ Cancelled");
                     
@@ -1149,27 +1314,25 @@ public class MainController {
                     String message = update.has("message") ? update.get("message").getAsString() : "Unknown error";
                     log("ERROR: " + message);
                     
-                    // Mark processing jobs as failed
-                    for (ConversionJob job : conversionQueue) {
-                        String jobStatus = job.getStatus().toLowerCase();
-                        if (jobStatus.contains("processing") || jobStatus.contains("encoding") || 
-                            jobStatus.contains("starting") || jobStatus.contains("queued")) {
-                            job.setStatus("⚠️ Failed");
-                        }
+                    // Move processing jobs back to queued with failed status
+                    for (ConversionJob job : new ArrayList<>(processingFiles)) {
+                        job.setStatus("⚠️ Failed");
+                        job.setProgress(0.0);
+                        processingFiles.remove(job);
+                        queuedFiles.add(job);
                     }
                     
+                    updateQueueCounts();
                     showError("Conversion Error", message);
                     resetProcessingState();
                 }
-                
-                queueTable.refresh();
             }
         });
     }
     
     private void resetProcessingState() {
         isProcessing = false;
-        startButton.setDisable(conversionQueue.isEmpty());
+        updateQueueCounts();
         pauseButton.setDisable(true);
         stopButton.setDisable(true);
         statusLabel.setText("Ready");
@@ -1391,10 +1554,6 @@ public class MainController {
                     settings.getVideoCodec(), settings.getOutputFormat(), settings.isHardwareDecoding());
     }
     
-    private void updateQueueCount() {
-        queueCountLabel.setText(conversionQueue.size() + " file" + (conversionQueue.size() != 1 ? "s" : ""));
-    }
-    
     private void updateFileInfo(ConversionJob job) {
         if (job == null) {
             fileInfoLabel.setText("Select a file to view details");
@@ -1542,7 +1701,7 @@ public class MainController {
         suggestedNamesListView.getItems().clear();
         
         // Show original filenames immediately
-        for (ConversionJob job : conversionQueue) {
+        for (ConversionJob job : queuedFiles) {
             originalNamesListView.getItems().add(job.getFileName());
             suggestedNamesListView.getItems().add("Searching...");
         }
@@ -1551,7 +1710,7 @@ public class MainController {
         new Thread(() -> {
             try {
                 List<String> filePaths = new ArrayList<>();
-                for (ConversionJob job : conversionQueue) {
+                for (ConversionJob job : queuedFiles) {
                     filePaths.add(job.getInputPath());
                 }
                 
@@ -1655,14 +1814,8 @@ public class MainController {
                 logger.error("Error during shutdown", e);
             }
             
-            // Update all jobs to cancelled state
-            for (ConversionJob job : conversionQueue) {
-                String status = job.getStatus();
-                if (status.contains("processing") || status.contains("queued") || status.contains("Starting")) {
-                    job.setStatus("❌ Cancelled");
-                    job.setProgress(0.0);
-                }
-            }
+            // Update all jobs to cancelled state (already handled earlier)
+            // Processing files are moved back to queued with cancelled status
             
             isProcessing = false;
         }
@@ -1681,11 +1834,11 @@ public class MainController {
     // ========== Queue Drag and Drop ==========
     
     private void setupQueueDragAndDrop() {
-        if (queueTable == null) {
+        if (queuedTable == null) {
             return;
         }
         
-        queueTable.setRowFactory(tv -> {
+        queuedTable.setRowFactory(tv -> {
             TableRow<ConversionJob> row = new TableRow<>();
             
             // Drag detected
@@ -1728,24 +1881,24 @@ public class MainController {
                 Dragboard db = event.getDragboard();
                 if (db.hasString()) {
                     int draggedIndex = Integer.parseInt(db.getString());
-                    ConversionJob draggedJob = conversionQueue.get(draggedIndex);
+                    ConversionJob draggedJob = queuedFiles.get(draggedIndex);
                     
                     int dropIndex;
                     if (row.isEmpty()) {
-                        dropIndex = conversionQueue.size() - 1;
+                        dropIndex = queuedFiles.size() - 1;
                     } else {
                         dropIndex = row.getIndex();
                     }
                     
-                    conversionQueue.remove(draggedIndex);
+                    queuedFiles.remove(draggedIndex);
                     if (dropIndex > draggedIndex) {
-                        conversionQueue.add(dropIndex - 1, draggedJob);
+                        queuedFiles.add(dropIndex - 1, draggedJob);
                     } else {
-                        conversionQueue.add(dropIndex, draggedJob);
+                        queuedFiles.add(dropIndex, draggedJob);
                     }
                     
-                    queueTable.getSelectionModel().clearSelection();
-                    queueTable.getSelectionModel().select(dropIndex);
+                    queuedTable.getSelectionModel().clearSelection();
+                    queuedTable.getSelectionModel().select(dropIndex);
                     
                     log("Reordered: moved item from position " + (draggedIndex + 1) + " to " + (dropIndex + 1));
                     
@@ -1762,6 +1915,30 @@ public class MainController {
             
             return row;
         });
+    }
+    
+    // ========== Queue Split Pane Setup ==========
+    
+    private void setupQueueSplitPane() {
+        if (queueSplitPane == null) {
+            logger.warn("Queue split pane not found");
+            return;
+        }
+        
+        // Set initial divider positions (40% for Queued, 20% for Processing, 40% for Completed)
+        Platform.runLater(() -> {
+            queueSplitPane.setDividerPositions(0.4, 0.6);
+        });
+        
+        // Add listener to save divider positions when changed
+        queueSplitPane.getDividers().forEach(divider -> {
+            divider.positionProperty().addListener((obs, oldPos, newPos) -> {
+                // Save divider positions for persistence (optional)
+                logger.debug("Queue split pane divider moved to: {}", newPos);
+            });
+        });
+        
+        logger.info("Queue split pane configured with resizable sections");
     }
     
     // ========== Quick Settings Setup ==========
@@ -2042,9 +2219,9 @@ public class MainController {
     }
     
     private void updateSubtitleFileList() {
-        if (subtitleFileCombo != null && !conversionQueue.isEmpty()) {
+        if (subtitleFileCombo != null && !queuedFiles.isEmpty()) {
             ObservableList<String> fileNames = FXCollections.observableArrayList();
-            for (ConversionJob job : conversionQueue) {
+            for (ConversionJob job : queuedFiles) {
                 fileNames.add(job.getFileName());
             }
             subtitleFileCombo.setItems(fileNames);
@@ -2055,7 +2232,7 @@ public class MainController {
     }
     
     private void updateSelectedFilesLabel() {
-        int fileCount = conversionQueue.size();
+        int fileCount = queuedFiles.size();
         String text = fileCount == 0 ? "No files selected" : fileCount + " file(s) selected";
         
         if (subtitleSelectedFilesLabel != null) {
@@ -2085,7 +2262,7 @@ public class MainController {
     
     @FXML
     private void handlePreviewRename() {
-        if (conversionQueue.isEmpty()) {
+        if (queuedFiles.isEmpty()) {
             showWarning("No Files", "Please add files to the queue first.");
             return;
         }
@@ -2094,19 +2271,19 @@ public class MainController {
         
         // Populate original names
         ObservableList<String> originalNames = FXCollections.observableArrayList();
-        for (ConversionJob job : conversionQueue) {
+        for (ConversionJob job : queuedFiles) {
             originalNames.add(job.getFileName());
         }
         originalNamesListView.setItems(originalNames);
         
         // TODO: Fetch suggestions from Python backend
         ObservableList<String> suggestedNames = FXCollections.observableArrayList();
-        for (ConversionJob job : conversionQueue) {
+        for (ConversionJob job : queuedFiles) {
             suggestedNames.add(job.getFileName() + " [Suggested]");
         }
         suggestedNamesListView.setItems(suggestedNames);
         
-        renameStatsLabel.setText(conversionQueue.size() + " files | " + suggestedNames.size() + " changes");
+        renameStatsLabel.setText(queuedFiles.size() + " files | " + suggestedNames.size() + " changes");
         
         log("Preview generated. Switch to 'Rename Preview' tab to review.");
     }
@@ -2140,7 +2317,7 @@ public class MainController {
     
     @FXML
     private void handleSearchSubtitles() {
-        if (conversionQueue.isEmpty()) {
+        if (queuedFiles.isEmpty()) {
             showWarning("No Files", "Please add files to the queue first.");
             return;
         }
@@ -2164,7 +2341,7 @@ public class MainController {
     
     @FXML
     private void handleGenerateAI() {
-        if (conversionQueue.isEmpty()) {
+        if (queuedFiles.isEmpty()) {
             showWarning("No Files", "Please add files to the queue first.");
             return;
         }

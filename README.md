@@ -1,6 +1,8 @@
-# 🎬 EncodeForge Alpha v0.1
+# 🎬 EncodeForge
 
-> A comprehensive, all-in-one media processing tool with three powerful modes and three interfaces.
+**The media processing tool that actually works the way you want it to.**
+
+> ⚠️ **Work in Progress** - This project is actively being developed. Not all features are fully implemented yet, but the core functionality works. Check the issues page for current status and roadmap.
 
 [![Python 3.7+](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/)
 [![Java 17+](https://img.shields.io/badge/java-17+-orange.svg)](https://openjdk.org/)
@@ -9,362 +11,234 @@
 
 ---
 
-## 🎯 Three Modes, Three Interfaces
+## Why EncodeForge Exists
 
-### 🎬 **Encoder Mode**
-Convert videos with hardware acceleration (NVIDIA/AMD/Intel), smart codec selection, and batch processing.
+I got tired of the existing tools:
+- **FileBot** - Too finicky, costs money, and half the time doesn't work right
+- **FFmpeg commands** - Powerful but honestly, who has time to memorize all those flags?
+- **HandBrake** - Slow as molasses and limited options
+- **Subtitle tools** (SubGen, Bazarr, etc.) - Either overcomplicated, unreliable, or just don't work
 
-### 💬 **Subtitle Mode**  
-Generate AI subtitles with Whisper or download from OpenSubtitles.com in multiple languages.
-
-### 📝 **Renamer Mode**
-FileBot-style intelligent renaming using TMDB metadata with before/after preview.
+I wanted something that **actually works** for what I need, how I want it, all in one place. So I built it and made it open source - because why should good tools cost money or suck to use?
 
 ---
 
-## 🚀 Choose Your Interface
+## What It Does
 
-### 1. 🖥️ **Java GUI** (Recommended)
-Modern desktop application with tabbed modes, real-time progress, and professional dark theme.
+**🎬 Video Encoding** - Convert videos fast with hardware acceleration. No more waiting hours for HandBrake.
 
+**💬 Subtitle Generation** - AI-powered subtitles with Whisper, or download from OpenSubtitles. Actually works.
+
+**📝 Smart Renaming** - FileBot-style renaming that doesn't make you want to throw your computer out the window.
+
+---
+
+## How To Use It
+
+Pick your style - they all do the same thing:
+
+**🖥️ Desktop App (Recommended)** - Clean GUI with tabs, progress bars, dark theme. Just works.
 ```bash
-cd FFmpegGUI
-./mvnw javafx:run
+cd FFmpegGUI && ./mvnw javafx:run
 ```
 
-### 2. 💻 **Command Line Interface**
-Perfect for automation, scripts, and power users.
-
+**💻 Command Line** - For automation and power users who like typing.
 ```bash
-# Encoder mode
 python ffmpeg_cli.py encoder /path/to/videos --use-nvenc
-
-# Subtitle mode
-python ffmpeg_cli.py subtitle /path/to/videos --enable-subtitle-generation
-
-# Renamer mode
+python ffmpeg_cli.py subtitle /path/to/videos --enable-subtitle-generation  
 python ffmpeg_cli.py renamer /path/to/videos --tmdb-api-key YOUR_KEY --preview-only
 ```
 
-### 3. 🌐 **Web UI**
-Browser-based interface powered by Streamlit - great for remote access.
-
+**🌐 Web Interface** - Run it on a server, access from anywhere.
 ```bash
-# Windows
-start_web_ui.bat
-
-# Linux/Mac
-./start_web_ui.sh
+./start_web_ui.sh  # or start_web_ui.bat on Windows
 ```
 
 ---
 
-## ✨ Key Features
+## Why It's Better
 
-### 🚀 **Smart & Fast**
-- **Stream copying by default** - No re-encoding = no quality loss + blazing speed
-- **Multi-GPU support** - NVIDIA NVENC, AMD AMF, Intel Quick Sync, Apple VideoToolbox
-- **Batch processing** - Process entire libraries automatically
-- **Auto-fallback** - Intelligent codec selection when hardware unavailable
+**🚀 Actually Fast**
+- Stream copying by default (no quality loss, no waiting)
+- Hardware acceleration that actually works (NVIDIA/AMD/Intel/Apple)
+- Batch processing for entire libraries
+- Smart fallbacks when hardware isn't available
 
-### 🤖 **AI-Powered**
-- **Whisper AI** - Generate accurate subtitles in 90+ languages
-- **OpenSubtitles** - Automatic subtitle download and matching
-- **TMDB Integration** - Intelligent file renaming with metadata lookup
-- **Smart detection** - Automatically detect TV shows vs movies
+**🧠 Actually Smart**  
+- Auto-detects FFmpeg (no more "command not found" nonsense)
+- Preserves ALL audio/subtitle tracks (doesn't randomly drop stuff)
+- Proper metadata labeling ("Japanese Audio", "English Subtitles (SDH)")
+- Hardware detection that works
 
-### 📊 **Professional Interface**
-- **Three operation modes** - Encoder, Subtitle, Renamer (all interfaces)
-- **Real-time progress** - See exactly what's happening
-- **Preview before action** - Preview renames and subtitle changes
-- **Queue management** - Add, remove, reorder files easily
-- **Comprehensive logging** - Export logs, filter by level
+**🤖 AI That Works**
+- Whisper AI for subtitles in 90+ languages
+- OpenSubtitles integration that actually finds matches
+- TMDB movie/TV show detection and renaming
+- Preview everything before it happens
 
-### 🧠 **Actually Intelligent**
-- **Auto-detects FFmpeg** - No more "command not found" errors
-- **Proper metadata** - Clear track names like "Japanese Audio", "English Subtitles (SDH)"
-- **All streams preserved** - Never randomly drops audio or subtitle tracks
-- **Hardware detection** - Automatically detects available GPU acceleration
+**📊 Interface That Makes Sense**
+- Real-time progress (see what's actually happening)
+- Queue management (add, remove, reorder)
+- Preview mode (see changes before applying)
+- Proper logging (export, filter, actually useful)
 
 ---
 
-## 📦 Installation
+## Getting Started
 
-### Prerequisites
-- **Python 3.7+** - [Download](https://www.python.org/downloads/)
-- **FFmpeg & FFprobe** - [Download](https://ffmpeg.org/download.html) (or auto-install via app)
-- **Java 17+** (only for Java GUI) - [Download](https://adoptium.net/)
+**What you need:**
+- Python 3.7+ ([download here](https://www.python.org/downloads/))
+- FFmpeg ([download here](https://ffmpeg.org/download.html) or let the app install it)
+- Java 17+ for the desktop app ([download here](https://adoptium.net/))
 
-### Quick Start
-
+**Install it:**
 ```bash
-# Clone the repository
 git clone https://github.com/yourusername/encodeforge.git
 cd encodeforge
-
-# Install Python dependencies
 pip install -r requirements.txt
 
-# Optional: AI subtitle generation
+# For AI subtitles (optional):
 pip install openai-whisper
 
-# Choose your interface:
-# 1. Java GUI
-cd FFmpegGUI && ./mvnw javafx:run
-
-# 2. Web UI
-python -m streamlit run ffmpeg_webui.py
-
-# 3. CLI
-python ffmpeg_cli.py --help
+# Pick your interface:
+cd FFmpegGUI && ./mvnw javafx:run          # Desktop app
+python -m streamlit run ffmpeg_webui.py    # Web interface  
+python ffmpeg_cli.py --help                # Command line
 ```
 
 ---
 
-## 📖 Usage Guide
+## How To Use Each Mode
 
-### Mode 1: 🎬 Encoder
+### 🎬 Video Encoding
+Convert videos with hardware acceleration. Way faster than HandBrake.
 
-Convert video files with optimal settings.
-
-**CLI Example:**
 ```bash
-python ffmpeg_cli.py encoder /path/to/videos \
-  --use-nvenc \
-  --nvenc-cq 23 \
-  --output-format mp4 \
-  --delete-original
+python ffmpeg_cli.py encoder /path/to/videos --use-nvenc --output-format mp4
 ```
 
-**Features:**
-- Hardware acceleration (NVIDIA/AMD/Intel/Apple)
+- Uses your GPU (NVIDIA/AMD/Intel/Apple) 
 - Smart codec selection
-- Optional subtitle generation during encoding
-- Optional renaming after encoding
-- Batch processing with progress tracking
+- Can generate subtitles during encoding
+- Can rename files after encoding
+- Batch processing with real progress
 
-### Mode 2: 💬 Subtitle
+### 💬 Subtitle Generation  
+Generate AI subtitles or download existing ones. Actually works reliably.
 
-Generate or download subtitles for your videos.
-
-**CLI Example:**
 ```bash
-# Generate with Whisper AI
-python ffmpeg_cli.py subtitle /path/to/videos \
-  --enable-subtitle-generation \
-  --whisper-model base \
-  --subtitle-languages eng,spa,jpn
+# Generate with AI (offline)
+python ffmpeg_cli.py subtitle /path/to/videos --enable-subtitle-generation --whisper-model base
 
 # Download from OpenSubtitles
-python ffmpeg_cli.py subtitle /path/to/videos \
-  --enable-subtitle-download \
-  --opensubtitles-username your_username \
-  --opensubtitles-password your_password \
-  --subtitle-languages eng,spa
+python ffmpeg_cli.py subtitle /path/to/videos --enable-subtitle-download --opensubtitles-username user
 ```
 
-**Features:**
-- Whisper AI generation (offline)
-- OpenSubtitles.com download
-- Multi-language support
-- Subtitle preview and customization
-- Replace or add to existing subtitles
+- Whisper AI for 90+ languages
+- OpenSubtitles.com integration
+- Preview before applying
+- Multiple language support
 
-### Mode 3: 📝 Renamer
+### 📝 Smart Renaming
+Rename files intelligently using movie/TV databases. Like FileBot but free and reliable.
 
-Intelligently rename media files using online databases.
-
-**CLI Example:**
 ```bash
-# Preview renames first
-python ffmpeg_cli.py renamer /path/to/videos \
-  --tmdb-api-key YOUR_KEY \
-  --preview-only
+# Preview first (always do this)
+python ffmpeg_cli.py renamer /path/to/videos --tmdb-api-key YOUR_KEY --preview-only
 
-# Apply renames
-python ffmpeg_cli.py renamer /path/to/videos \
-  --tmdb-api-key YOUR_KEY \
-  --pattern-tv "{title} - S{season}E{episode} - {episodeTitle}" \
-  --pattern-movie "{title} ({year})"
+# Apply renames  
+python ffmpeg_cli.py renamer /path/to/videos --tmdb-api-key YOUR_KEY
 ```
 
-**Features:**
-- TMDB (The Movie Database) integration
-- TV show and movie detection
-- Before/after comparison
-- Customizable naming patterns
-- Batch renaming with preview
+- TMDB database integration
+- Auto-detects TV shows vs movies
+- Before/after preview
+- Custom naming patterns
 
 ---
 
-## ⚙️ Configuration
+## Setup & Configuration
 
-### API Keys
+**Free API Keys (optional but recommended):**
 
-Some features require free API keys:
+| Service | What it's for | Get it here |
+|---------|---------------|-------------|
+| TMDB | File renaming | [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api) |
+| OpenSubtitles | Subtitle downloads | [opensubtitles.com/users/sign_up](https://www.opensubtitles.com/en/users/sign_up) |
 
-| Service | Purpose | Get Key |
-|---------|---------|---------|
-| **TMDB** | File renaming | [themoviedb.org](https://www.themoviedb.org/settings/api) |
-| **OpenSubtitles** | Subtitle download | [opensubtitles.com](https://www.opensubtitles.com/en/users/sign_up) |
+**Hardware Acceleration:**
+The app automatically detects what you have:
+- **NVIDIA** - NVENC (Windows/Linux, GTX 600+)
+- **AMD** - AMF (Windows only, recent cards)  
+- **Intel** - Quick Sync (Windows/Linux, 6th gen+)
+- **Apple** - VideoToolbox (macOS, all modern Macs)
 
-### Hardware Acceleration
-
-The application automatically detects available hardware encoders:
-
-| GPU | Encoder | Platforms |
-|-----|---------|-----------|
-| NVIDIA | NVENC (h264_nvenc, hevc_nvenc) | Windows, Linux |
-| AMD | AMF (h264_amf, hevc_amf) | Windows |
-| Intel | Quick Sync (h264_qsv, hevc_qsv) | Windows, Linux |
-| Apple | VideoToolbox (h264_videotoolbox) | macOS |
-
-### Naming Patterns
-
-Customize how files are renamed:
-
-**TV Shows:**
-- `{title}` - Show title
-- `{season}` - Season number (01, 02, ...)
-- `{episode}` - Episode number (01, 02, ...)
-- `{episodeTitle}` - Episode title
-- `{S}` - Season with S prefix (S01)
-- `{E}` - Episode with E prefix (E01)
-
-**Movies:**
-- `{title}` - Movie title
-- `{year}` - Release year
-
-**Examples:**
-- TV: `Breaking Bad - S01E01 - Pilot.mkv`
-- Movie: `Inception (2010).mp4`
+**File Naming:**
+Customize how renamed files look:
+- TV Shows: `{title} - S{season}E{episode} - {episodeTitle}`
+- Movies: `{title} ({year})`
+- Examples: `Breaking Bad - S01E01 - Pilot.mkv`, `Inception (2010).mp4`
 
 ---
 
-## 🏗️ Architecture
+## Common Issues & Fixes
 
-```
-EncodeForge v1.0
-│
-├── 🐍 Python Backend (Modular)
-│   ├── ffmpeg_core.py          # Core functionality
-│   ├── ffmpeg_manager.py        # FFmpeg detection & download
-│   ├── whisper_manager.py       # Whisper AI integration
-│   ├── media_renamer.py         # TMDB-based renaming
-│   └── opensubtitles_manager.py # Subtitle downloads
-│
-├── 🖥️ Interfaces
-│   ├── ffmpeg_cli.py            # Command-line interface
-│   ├── ffmpeg_webui.py          # Streamlit web interface
-│   ├── ffmpeg_api.py            # JSON API for Java
-│   └── FFmpegGUI/               # JavaFX desktop app
-│       ├── MainController.java
-│       ├── SettingsController.java
-│       └── PythonBridge.java
-│
-└── 📁 Helper Modules
-    ├── start_web_ui.bat/sh      # Launch web UI
-    ├── start_cli.bat/sh         # Launch CLI with examples
-    └── requirements.txt         # Python dependencies
-```
+**"FFmpeg not found"**
+- The app can auto-download it, or install manually:
+- Windows: Download from [gyan.dev/ffmpeg](https://gyan.dev/ffmpeg)
+- Mac: `brew install ffmpeg`  
+- Linux: `sudo apt install ffmpeg` (Ubuntu) or `sudo dnf install ffmpeg` (Fedora)
 
----
+**Hardware acceleration not working**
+- **NVIDIA**: Need GTX 600+ and recent drivers
+- **AMD**: Windows only, need recent drivers
+- **Intel**: Need 6th gen CPU or newer with Quick Sync
+- **Apple**: Works on all modern Macs
+- App falls back to software encoding automatically
 
-## 🎨 Screenshots
-
-### Java GUI
-- **Encoder Tab**: Queue management, real-time progress, hardware acceleration settings
-- **Subtitle Tab**: Generate/download subtitles with preview
-- **Renamer Tab**: Side-by-side before/after comparison
-
-### Web UI
-- **Modern Interface**: Streamlit-powered responsive design
-- **Mode Switching**: Easy mode selection in sidebar
-- **Settings Panel**: All options organized by category
-
-### CLI
-- **Color Output**: Clear progress indicators and status messages
-- **Preview Mode**: See changes before applying
-- **Batch Operations**: Process hundreds of files automatically
-
----
-
-## 🐛 Troubleshooting
-
-### FFmpeg Not Found
+**Whisper won't install**
 ```bash
-# The app can auto-download FFmpeg, or:
-# Windows: Download from gyan.dev/ffmpeg
-# Mac: brew install ffmpeg
-# Linux: sudo apt install ffmpeg (Ubuntu) or sudo dnf install ffmpeg (Fedora)
-```
-
-### Hardware Acceleration Not Working
-- **NVIDIA**: Requires GTX 600 series or newer + recent drivers
-- **AMD**: Windows only, requires recent drivers
-- **Intel**: Requires CPU with Quick Sync (6th gen or newer)
-- **Apple**: macOS only, works on all modern Macs
-
-The app automatically falls back to software encoding if hardware unavailable.
-
-### Whisper Installation Fails
-```bash
-# Install manually:
 pip install --upgrade pip
 pip install openai-whisper
-
-# Or use the app's built-in installer (Java GUI / Web UI)
+# Or use the built-in installer in the GUI/Web UI
 ```
 
-### TMDB API Limit
-- Free tier: 40 requests per 10 seconds
-- Get a free API key - no credit card required
-- Caches results to minimize requests
+**TMDB API limits**
+- Free tier: 40 requests per 10 seconds (plenty for normal use)
+- Get a free API key - no credit card needed
+- App caches results to minimize requests
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
-Contributions are very welcome!
+Want to make it better? Awesome! Here's how:
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Test thoroughly (all three interfaces if possible)
-5. Commit (`git commit -m 'Add amazing feature'`)
-6. Push (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
+1. Fork it
+2. Make your changes  
+3. Test it (try all three interfaces if you can)
+4. Submit a pull request
 
-**Areas for contribution:**
-- Additional subtitle sources
-- More hardware acceleration options
-- Additional naming patterns
-- Translations/internationalization
-- Bug fixes and improvements
+**Good areas to contribute:**
+- More subtitle sources
+- Additional hardware acceleration  
+- Better naming patterns
+- Bug fixes
+- Making the UI even nicer
 
 ---
 
----
+## License & Support
 
-## 📜 License
+**License:** MIT - Use it, modify it, share it, sell it, whatever.
 
-MIT License - Use it, modify it, share it!
-See [LICENSE](LICENSE) for details.
-
----
-
----
-
-## 📬 Support
-
-- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/yourusername/encodeforge/issues)
-- 💡 **Feature Requests**: [GitHub Discussions](https://github.com/yourusername/encodeforge/discussions)
-- 📧 **Email**: your.email@example.com
-- 💬 **Discord**: [Join our server](https://discord.gg/yourserver)
+**Support:**
+- 🐛 Bug reports: [GitHub Issues](https://github.com/yourusername/encodeforge/issues)
+- 💡 Feature requests: [GitHub Discussions](https://github.com/yourusername/encodeforge/discussions)
 
 ---
 
 <p align="center">
-  <sub>If this saved you time, consider ⭐ starring the repo or contributing!</sub>
+  <sub>If this saved you time and frustration, consider ⭐ starring the repo!</sub>
 </p>
 

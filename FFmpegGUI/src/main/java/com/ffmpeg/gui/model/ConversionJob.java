@@ -18,6 +18,11 @@ public class ConversionJob {
     private final StringProperty outputFormat;
     private final StringProperty speed;
     private final StringProperty eta;
+    private final StringProperty fps;
+    private final StringProperty outputSizeString;
+    private final StringProperty timeTaken;
+    private String outputPath;
+    private long startTime;
     
     public ConversionJob(String inputPath) {
         this.inputPath = new SimpleStringProperty(inputPath);
@@ -32,6 +37,11 @@ public class ConversionJob {
         this.outputFormat = new SimpleStringProperty("MP4");
         this.speed = new SimpleStringProperty("-");
         this.eta = new SimpleStringProperty("-");
+        this.fps = new SimpleStringProperty("0");
+        this.outputSizeString = new SimpleStringProperty("N/A");
+        this.timeTaken = new SimpleStringProperty("N/A");
+        this.outputPath = null;
+        this.startTime = 0;
     }
     
     private String formatSize(long bytes) {
@@ -52,6 +62,9 @@ public class ConversionJob {
     public StringProperty outputFormatProperty() { return outputFormat; }
     public StringProperty speedProperty() { return speed; }
     public StringProperty etaProperty() { return eta; }
+    public StringProperty fpsProperty() { return fps; }
+    public StringProperty outputSizeStringProperty() { return outputSizeString; }
+    public StringProperty timeTakenProperty() { return timeTaken; }
     
     // Value getters
     public String getInputPath() { return inputPath.get(); }
@@ -64,6 +77,11 @@ public class ConversionJob {
     public String getOutputFormat() { return outputFormat.get(); }
     public String getSpeed() { return speed.get(); }
     public String getEta() { return eta.get(); }
+    public String getFps() { return fps.get(); }
+    public String getOutputSizeString() { return outputSizeString.get(); }
+    public String getTimeTaken() { return timeTaken.get(); }
+    public String getOutputPath() { return outputPath; }
+    public long getStartTime() { return startTime; }
     
     // Setters
     public void setStatus(String status) { 
@@ -78,6 +96,16 @@ public class ConversionJob {
     public void setSpeed(String speed) { this.speed.set(speed); }
     
     public void setEta(String eta) { this.eta.set(eta); }
+    
+    public void setFps(String fps) { this.fps.set(fps); }
+    
+    public void setOutputSizeString(String size) { this.outputSizeString.set(size); }
+    
+    public void setTimeTaken(String time) { this.timeTaken.set(time); }
+    
+    public void setOutputPath(String path) { this.outputPath = path; }
+    
+    public void setStartTime(long time) { this.startTime = time; }
     
     private void updateStatusIcon() {
         String currentStatus = status.get();

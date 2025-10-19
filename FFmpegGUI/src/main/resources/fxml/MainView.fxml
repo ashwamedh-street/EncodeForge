@@ -227,87 +227,112 @@
             <!-- Encoder Mode Layout -->
             <SplitPane fx:id="encoderModeLayout" dividerPositions="0.60" orientation="HORIZONTAL" styleClass="main-split-pane" managed="true" visible="true">
                 
-                <!-- Left Panel: Queue and Progress -->
-                <SplitPane fx:id="leftPanelSplit" dividerPositions="0.70" orientation="VERTICAL" styleClass="left-panel-split">
-                
-                <!-- File Queue -->
-                <VBox spacing="0" styleClass="queue-section">
-                    <HBox alignment="CENTER_LEFT" styleClass="section-header">
-                        <Label text="📋 Queue" styleClass="section-title"/>
-                        <Label text="(Drag to reorder)" styleClass="hint-label" style="-fx-padding: 0 0 0 8;"/>
-                        <Region HBox.hgrow="ALWAYS"/>
-                        <Label fx:id="queueCountLabel" text="0 files" styleClass="queue-count"/>
-                        <Separator orientation="VERTICAL" style="-fx-padding: 0 10;"/>
-                        <Button fx:id="removeSelectedButton" text="➖ Remove" onAction="#handleRemoveSelected" styleClass="toolbar-button" style="-fx-padding: 6 16;"/>
-                        <Separator orientation="VERTICAL" style="-fx-padding: 0 8;"/>
-                        <Button fx:id="clearQueueButton" text="🗑️ Clear All" onAction="#handleClearQueue" styleClass="toolbar-button" style="-fx-padding: 6 16;"/>
-                        <padding>
-                            <Insets top="10" right="15" bottom="10" left="15"/>
-                        </padding>
-                    </HBox>
-                
-                <TableView fx:id="queueTable" VBox.vgrow="ALWAYS" styleClass="queue-table, draggable-table">
-                    <columns>
-                        <TableColumn fx:id="statusIconColumn" text="" prefWidth="40" minWidth="40" maxWidth="40"/>
-                        <TableColumn fx:id="fileNameColumn" text="File Name" prefWidth="300"/>
-                        <TableColumn fx:id="outputFormatColumn" text="Output" prefWidth="80"/>
-                        <TableColumn fx:id="progressColumn" text="Progress" prefWidth="120"/>
-                        <TableColumn fx:id="sizeColumn" text="Size" prefWidth="80"/>
-                        <TableColumn fx:id="speedColumn" text="Speed" prefWidth="80"/>
-                        <TableColumn fx:id="etaColumn" text="ETA" prefWidth="80"/>
-                    </columns>
-                    <contextMenu>
-                        <ContextMenu>
-                            <items>
-                                <MenuItem text="Remove" onAction="#handleRemoveSelected"/>
-                                <MenuItem text="Move Up" onAction="#handleMoveUp"/>
-                                <MenuItem text="Move Down" onAction="#handleMoveDown"/>
-                                <SeparatorMenuItem/>
-                                <MenuItem text="Open File Location" onAction="#handleOpenFileLocation"/>
-                            </items>
-                        </ContextMenu>
-                    </contextMenu>
-                </TableView>
-            </VBox>
-                
-                <!-- Current Progress -->
-                <VBox spacing="0" styleClass="progress-section">
-                    <HBox alignment="CENTER_LEFT" styleClass="section-header">
-                        <Label text="📊 Current Progress" styleClass="section-title"/>
-                        <padding>
-                            <Insets top="10" right="15" bottom="10" left="15"/>
-                        </padding>
-                    </HBox>
+                <!-- Left Panel: Multi-Section Queue with Resizable Sections -->
+                <SplitPane fx:id="queueSplitPane" orientation="VERTICAL" dividerPositions="0.4, 0.6" styleClass="queue-split-pane">
                     
-                    <VBox spacing="15" styleClass="progress-content">
-                        <padding>
-                            <Insets top="15" right="15" bottom="15" left="15"/>
-                        </padding>
-                        
-                        <Label fx:id="currentFileLabel" text="No file processing" styleClass="current-file-label"/>
-                        <ProgressBar fx:id="currentFileProgressBar" progress="0" maxWidth="Infinity" styleClass="large-progress"/>
-                        
-                        <HBox spacing="20">
-                            <VBox spacing="5" HBox.hgrow="ALWAYS">
-                                <Label text="Progress:" styleClass="info-title"/>
-                                <Label fx:id="progressPercentLabel" text="0%" styleClass="info-value"/>
-                            </VBox>
-                            <VBox spacing="5" HBox.hgrow="ALWAYS">
-                                <Label text="Speed:" styleClass="info-title"/>
-                                <Label fx:id="speedLabel" text="-" styleClass="info-value"/>
-                            </VBox>
-                            <VBox spacing="5" HBox.hgrow="ALWAYS">
-                                <Label text="Time Remaining:" styleClass="info-title"/>
-                                <Label fx:id="etaLabel" text="-" styleClass="info-value"/>
-                            </VBox>
-                            <VBox spacing="5" HBox.hgrow="ALWAYS">
-                                <Label text="Frame:" styleClass="info-title"/>
-                                <Label fx:id="frameLabel" text="-" styleClass="info-value"/>
-                            </VBox>
+                    <!-- Queued Files Section -->
+                    <VBox spacing="0" styleClass="queue-section" minHeight="100">
+                        <HBox alignment="CENTER_LEFT" styleClass="section-header, queued-header">
+                            <Label text="⏳ Queued" styleClass="section-title"/>
+                            <Label text="(Drag to reorder)" styleClass="hint-label" style="-fx-padding: 0 0 0 8;"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <Label fx:id="queuedCountLabel" text="0 files" styleClass="queue-count"/>
+                            <Separator orientation="VERTICAL" style="-fx-padding: 0 10;"/>
+                            <Button fx:id="removeQueuedButton" text="➖ Remove" onAction="#handleRemoveQueued" styleClass="toolbar-button" style="-fx-padding: 4 12;"/>
+                            <Button fx:id="clearQueuedButton" text="🗑️ Clear" onAction="#handleClearQueued" styleClass="toolbar-button" style="-fx-padding: 4 12;"/>
+                            <padding>
+                                <Insets top="8" right="12" bottom="8" left="12"/>
+                            </padding>
                         </HBox>
+                        
+                        <TableView fx:id="queuedTable" VBox.vgrow="ALWAYS" styleClass="queue-table, draggable-table">
+                            <columns>
+                                <TableColumn fx:id="queuedStatusColumn" text="" prefWidth="35" minWidth="35" maxWidth="35"/>
+                                <TableColumn fx:id="queuedFileColumn" text="File Name" prefWidth="300"/>
+                                <TableColumn fx:id="queuedOutputColumn" text="Output" prefWidth="70"/>
+                                <TableColumn fx:id="queuedSizeColumn" text="Size" prefWidth="80"/>
+                            </columns>
+                            <contextMenu>
+                                <ContextMenu>
+                                    <items>
+                                        <MenuItem text="Remove" onAction="#handleRemoveQueued"/>
+                                        <MenuItem text="Move Up" onAction="#handleMoveUpQueued"/>
+                                        <MenuItem text="Move Down" onAction="#handleMoveDownQueued"/>
+                                        <SeparatorMenuItem/>
+                                        <MenuItem text="Open File Location" onAction="#handleOpenFileLocationQueued"/>
+                                    </items>
+                                </ContextMenu>
+                            </contextMenu>
+                            <placeholder>
+                                <Label text="No files queued. Add files to begin encoding." styleClass="placeholder-label"/>
+                            </placeholder>
+                        </TableView>
                     </VBox>
-                </VBox>
-            </SplitPane>
+                    
+                    <!-- Processing Files Section -->
+                    <VBox spacing="0" styleClass="queue-section" minHeight="80">
+                        <HBox alignment="CENTER_LEFT" styleClass="section-header, processing-header">
+                            <Label text="⚡ Processing" styleClass="section-title"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <Label fx:id="processingCountLabel" text="0 files" styleClass="queue-count"/>
+                            <padding>
+                                <Insets top="8" right="12" bottom="8" left="12"/>
+                            </padding>
+                        </HBox>
+                        
+                        <TableView fx:id="processingTable" VBox.vgrow="ALWAYS" styleClass="queue-table, processing-table">
+                            <columns>
+                                <TableColumn fx:id="procStatusColumn" text="" prefWidth="35" minWidth="35" maxWidth="35"/>
+                                <TableColumn fx:id="procFileColumn" text="File Name" prefWidth="250"/>
+                                <TableColumn fx:id="procProgressColumn" text="Progress" prefWidth="110"/>
+                                <TableColumn fx:id="procFpsColumn" text="FPS" prefWidth="60"/>
+                                <TableColumn fx:id="procSpeedColumn" text="Speed" prefWidth="70"/>
+                                <TableColumn fx:id="procEtaColumn" text="ETA" prefWidth="80"/>
+                            </columns>
+                            <placeholder>
+                                <Label text="No files currently processing." styleClass="placeholder-label"/>
+                            </placeholder>
+                        </TableView>
+                    </VBox>
+                    
+                    <!-- Completed Files Section -->
+                    <VBox spacing="0" styleClass="queue-section" minHeight="100">
+                        <HBox alignment="CENTER_LEFT" styleClass="section-header, completed-header">
+                            <Label text="✅ Completed" styleClass="section-title"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <Label fx:id="completedCountLabel" text="0 files" styleClass="queue-count"/>
+                            <Separator orientation="VERTICAL" style="-fx-padding: 0 10;"/>
+                            <Button fx:id="clearCompletedButton" text="🗑️ Clear" onAction="#handleClearCompleted" styleClass="toolbar-button" style="-fx-padding: 4 12;"/>
+                            <padding>
+                                <Insets top="8" right="12" bottom="8" left="12"/>
+                            </padding>
+                        </HBox>
+                        
+                        <TableView fx:id="completedTable" VBox.vgrow="ALWAYS" styleClass="queue-table, completed-table">
+                            <columns>
+                                <TableColumn fx:id="compStatusColumn" text="" prefWidth="35" minWidth="35" maxWidth="35"/>
+                                <TableColumn fx:id="compFileColumn" text="File Name" prefWidth="250"/>
+                                <TableColumn fx:id="compOutputColumn" text="Output" prefWidth="70"/>
+                                <TableColumn fx:id="compSizeColumn" text="Original" prefWidth="80"/>
+                                <TableColumn fx:id="compNewSizeColumn" text="New Size" prefWidth="80"/>
+                                <TableColumn fx:id="compTimeColumn" text="Time Taken" prefWidth="90"/>
+                            </columns>
+                            <contextMenu>
+                                <ContextMenu>
+                                    <items>
+                                        <MenuItem text="Open Output File" onAction="#handleOpenOutputFile"/>
+                                        <MenuItem text="Open File Location" onAction="#handleOpenFileLocationCompleted"/>
+                                        <SeparatorMenuItem/>
+                                        <MenuItem text="Remove from List" onAction="#handleRemoveCompleted"/>
+                                    </items>
+                                </ContextMenu>
+                            </contextMenu>
+                            <placeholder>
+                                <Label text="No files completed yet." styleClass="placeholder-label"/>
+                            </placeholder>
+                        </TableView>
+                    </VBox>
+                </SplitPane>
             
             <!-- Right Panel: File Info and Preview -->
             <TabPane fx:id="rightPanelTabs" tabClosingPolicy="UNAVAILABLE" styleClass="info-tab-pane">
