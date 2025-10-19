@@ -11,27 +11,46 @@
     <!-- Top: Menu Bar and Toolbar -->
     <top>
         <VBox spacing="0">
-            <!-- Menu Bar -->
-            <MenuBar styleClass="main-menu-bar">
-                <Menu text="File">
-                    <MenuItem text="Add Files..." onAction="#handleAddFiles"/>
-                    <MenuItem text="Add Folder..." onAction="#handleAddFolder"/>
-                    <SeparatorMenuItem/>
-                    <MenuItem text="Exit" onAction="#handleExit"/>
-                </Menu>
-                <Menu text="Edit">
-                    <MenuItem text="Settings..." onAction="#handleSettings"/>
-                </Menu>
-                <Menu text="Tools">
-                    <MenuItem text="Rename Files..." onAction="#handleBatchRename"/>
-                    <MenuItem text="Check FFmpeg..." onAction="#handleCheckFFmpeg"/>
-                    <MenuItem text="Download FFmpeg..." onAction="#handleDownloadFFmpeg"/>
-                </Menu>
-                <Menu text="Help">
-                    <MenuItem text="Documentation" onAction="#handleDocumentation"/>
-                    <MenuItem text="About" onAction="#handleAbout"/>
-                </Menu>
-            </MenuBar>
+            <!-- Custom Title Bar with Menu and Window Controls -->
+            <HBox styleClass="custom-title-bar" alignment="CENTER_LEFT">
+                <!-- App Icon and Title -->
+                <HBox alignment="CENTER_LEFT" spacing="8" styleClass="title-section" onMousePressed="#handleTitleBarPressed" onMouseDragged="#handleTitleBarDragged">
+                    <Label fx:id="appIconLabel" styleClass="app-icon"/>
+                    <Label text="EncodeForge" styleClass="app-title"/>
+                </HBox>
+                
+                <!-- Menu Bar -->
+                <MenuBar styleClass="main-menu-bar" HBox.hgrow="ALWAYS" onMousePressed="#handleTitleBarPressed" onMouseDragged="#handleTitleBarDragged">
+                    <Menu text="File">
+                        <MenuItem text="Add Files..." onAction="#handleAddFiles"/>
+                        <MenuItem text="Add Folder..." onAction="#handleAddFolder"/>
+                        <SeparatorMenuItem/>
+                        <MenuItem text="Exit" onAction="#handleExit"/>
+                    </Menu>
+                    <Menu text="Edit">
+                        <MenuItem text="Settings..." onAction="#handleSettings"/>
+                    </Menu>
+                    <Menu text="Tools">
+                        <MenuItem text="Rename Files..." onAction="#handleBatchRename"/>
+                        <MenuItem text="Check FFmpeg..." onAction="#handleCheckFFmpeg"/>
+                        <MenuItem text="Download FFmpeg..." onAction="#handleDownloadFFmpeg"/>
+                    </Menu>
+                    <Menu text="Help">
+                        <MenuItem text="Documentation" onAction="#handleDocumentation"/>
+                        <MenuItem text="About" onAction="#handleAbout"/>
+                    </Menu>
+                </MenuBar>
+                
+                <!-- Draggable spacer area -->
+                <Region HBox.hgrow="ALWAYS" onMousePressed="#handleTitleBarPressed" onMouseDragged="#handleTitleBarDragged" styleClass="draggable-spacer"/>
+                
+                <!-- Window Controls -->
+                <HBox spacing="0" styleClass="window-controls">
+                    <Button fx:id="minimizeButton" onAction="#handleMinimize" styleClass="window-control-button, minimize-button"/>
+                    <Button fx:id="maximizeButton" onAction="#handleMaximize" styleClass="window-control-button, maximize-button"/>
+                    <Button fx:id="closeButton" onAction="#handleClose" styleClass="window-control-button, close-button"/>
+                </HBox>
+            </HBox>
             
             <!-- Toolbar -->
             <ToolBar styleClass="main-toolbar">
@@ -39,17 +58,17 @@
                 <ComboBox fx:id="modeComboBox" onAction="#handleModeChange" styleClass="mode-combo">
                     <items>
                         <FXCollections fx:factory="observableArrayList">
-                            <String fx:value="🎬 Encoder"/>
-                            <String fx:value="💬 Subtitle"/>
-                            <String fx:value="📝 Renamer"/>
+                            <String fx:value="Encoder"/>
+                            <String fx:value="Subtitle"/>
+                            <String fx:value="Renamer"/>
                         </FXCollections>
                     </items>
                 </ComboBox>
                 <Separator orientation="VERTICAL"/>
-                <Button fx:id="addFilesButton" text="➕ Add Files" onAction="#handleAddFiles" styleClass="toolbar-button"/>
-                <Button fx:id="addFolderButton" text="📁 Add Folder" onAction="#handleAddFolder" styleClass="toolbar-button"/>
+                <Button fx:id="addFilesButton" onAction="#handleAddFiles" styleClass="toolbar-button"/>
+                <Button fx:id="addFolderButton" onAction="#handleAddFolder" styleClass="toolbar-button"/>
                 <Separator orientation="VERTICAL"/>
-                <Button fx:id="settingsButton" text="⚙️ Settings" onAction="#handleSettings" styleClass="toolbar-button"/>
+                <Button fx:id="settingsButton" onAction="#handleSettings" styleClass="toolbar-button"/>
                 <Region HBox.hgrow="ALWAYS"/>
                 <Label fx:id="statusLabel" text="Ready" styleClass="status-label"/>
             </ToolBar>
@@ -82,9 +101,9 @@
                         
                         <!-- Control Buttons -->
                         <HBox spacing="10">
-                            <Button fx:id="startButton" text="▶️ Start Encoding" onAction="#handleStartProcessing" styleClass="toolbar-button, primary-button" disable="true" prefWidth="160"/>
-                            <Button fx:id="pauseButton" text="⏸️ Pause" onAction="#handlePause" styleClass="toolbar-button" disable="true" prefWidth="110"/>
-                            <Button fx:id="stopButton" text="⏹️ Stop" onAction="#handleStop" styleClass="toolbar-button" disable="true" prefWidth="110"/>
+                            <Button fx:id="startButton" onAction="#handleStartProcessing" styleClass="toolbar-button, primary-button" disable="true" prefWidth="160"/>
+                            <Button fx:id="pauseButton" onAction="#handlePause" styleClass="toolbar-button" disable="true" prefWidth="110"/>
+                            <Button fx:id="stopButton" onAction="#handleStop" styleClass="toolbar-button" disable="true" prefWidth="110"/>
                         </HBox>
                     </HBox>
                     
@@ -104,8 +123,8 @@
                         <VBox spacing="4" styleClass="settings-group">
                             <Label text="Configure" styleClass="group-label"/>
                             <HBox spacing="10">
-                                <Button fx:id="configSubtitlesButton" text="💬 Subtitles" onAction="#handleConfigureSubtitles" styleClass="small-button" prefWidth="110"/>
-                                <Button fx:id="configRenamerButton" text="📝 Renamer" onAction="#handleConfigureRenamer" styleClass="small-button" prefWidth="110"/>
+                                <Button fx:id="configSubtitlesButton" onAction="#handleConfigureSubtitles" styleClass="small-button" prefWidth="110"/>
+                                <Button fx:id="configRenamerButton" onAction="#handleConfigureRenamer" styleClass="small-button" prefWidth="110"/>
                             </HBox>
                         </VBox>
                     </HBox>
@@ -144,9 +163,9 @@
                         
                         <!-- Control Buttons -->
                         <HBox spacing="10">
-                            <Button fx:id="subtitleSearchButton" text="🔍 Search" onAction="#handleSearchSubtitles" styleClass="toolbar-button" prefWidth="110"/>
-                            <Button fx:id="subtitleDownloadButton" text="⬇️ Download" onAction="#handleDownloadSubtitles" styleClass="toolbar-button" prefWidth="120"/>
-                            <Button fx:id="subtitleGenerateButton" text="🎙️ Generate" onAction="#handleGenerateAI" styleClass="toolbar-button, primary-button" prefWidth="120"/>
+                            <Button fx:id="subtitleSearchButton" onAction="#handleSearchSubtitles" styleClass="toolbar-button" prefWidth="110"/>
+                            <Button fx:id="subtitleDownloadButton" onAction="#handleDownloadSubtitles" styleClass="toolbar-button" prefWidth="120"/>
+                            <Button fx:id="subtitleGenerateButton" onAction="#handleGenerateAI" styleClass="toolbar-button, primary-button" prefWidth="120"/>
                         </HBox>
                     </HBox>
                     
@@ -184,7 +203,7 @@
                                 <ComboBox fx:id="quickRenameProviderCombo" styleClass="quick-combo" prefWidth="150"/>
                                 <Label text="Type:" styleClass="setting-label"/>
                                 <ComboBox fx:id="quickRenameTypeCombo" styleClass="quick-combo" prefWidth="140"/>
-                                <Button text="📝 Format Pattern" onAction="#handleOpenFormatter" styleClass="small-button" prefWidth="160"/>
+                                <Button fx:id="formatPatternButton" onAction="#handleOpenFormatter" styleClass="small-button" prefWidth="160"/>
                             </HBox>
                         </VBox>
                         
@@ -192,8 +211,8 @@
                         
                         <!-- Control Buttons -->
                         <HBox spacing="10">
-                            <Button fx:id="refreshMetadataButton" text="🔄 Refresh" onAction="#handleRefreshMetadata" styleClass="toolbar-button" prefWidth="110"/>
-                            <Button fx:id="applyRenameButton" text="✅ Apply Selected" onAction="#handleApplyRename" styleClass="toolbar-button, primary-button" prefWidth="160"/>
+                            <Button fx:id="refreshMetadataButton" onAction="#handleRefreshMetadata" styleClass="toolbar-button" prefWidth="110"/>
+                            <Button fx:id="applyRenameButton" onAction="#handleApplyRename" styleClass="toolbar-button, primary-button" prefWidth="160"/>
                         </HBox>
                     </HBox>
                     
@@ -202,9 +221,9 @@
                         <VBox spacing="4" styleClass="settings-group">
                             <Label text="Providers" styleClass="group-label"/>
                             <HBox spacing="10">
-                                <Button fx:id="tmdbStatusButton" text="🎬 TMDB: Not Setup" onAction="#handleConfigureTMDB" styleClass="provider-status-button" prefWidth="170"/>
-                                <Button fx:id="tvdbStatusButton" text="📺 TVDB: Not Setup" onAction="#handleConfigureTVDB" styleClass="provider-status-button" prefWidth="170"/>
-                                <Button fx:id="anilistStatusButton" text="🎌 AniList: Available" onAction="#handleConfigureAniList" styleClass="provider-status-button" prefWidth="170"/>
+                                <Button fx:id="tmdbStatusButton" onAction="#handleConfigureTMDB" styleClass="provider-status-button" prefWidth="170"/>
+                                <Button fx:id="tvdbStatusButton" onAction="#handleConfigureTVDB" styleClass="provider-status-button" prefWidth="170"/>
+                                <Button fx:id="anilistStatusButton" onAction="#handleConfigureAniList" styleClass="provider-status-button" prefWidth="170"/>
                             </HBox>
                         </VBox>
                         
@@ -233,13 +252,13 @@
                     <!-- Queued Files Section -->
                     <VBox spacing="0" styleClass="queue-section" minHeight="100">
                         <HBox alignment="CENTER_LEFT" styleClass="section-header, queued-header">
-                            <Label text="⏳ Queued" styleClass="section-title"/>
+                            <Label text="Queued" styleClass="section-title"/>
                             <Label text="(Drag to reorder)" styleClass="hint-label" style="-fx-padding: 0 0 0 8;"/>
                             <Region HBox.hgrow="ALWAYS"/>
                             <Label fx:id="queuedCountLabel" text="0 files" styleClass="queue-count"/>
                             <Separator orientation="VERTICAL" style="-fx-padding: 0 10;"/>
-                            <Button fx:id="removeQueuedButton" text="➖ Remove" onAction="#handleRemoveQueued" styleClass="toolbar-button" style="-fx-padding: 4 12;"/>
-                            <Button fx:id="clearQueuedButton" text="🗑️ Clear" onAction="#handleClearQueued" styleClass="toolbar-button" style="-fx-padding: 4 12;"/>
+                            <Button fx:id="removeQueuedButton" onAction="#handleRemoveQueued" styleClass="toolbar-button" style="-fx-padding: 4 12;"/>
+                            <Button fx:id="clearQueuedButton" onAction="#handleClearQueued" styleClass="toolbar-button" style="-fx-padding: 4 12;"/>
                             <padding>
                                 <Insets top="8" right="12" bottom="8" left="12"/>
                             </padding>
@@ -298,11 +317,11 @@
                     <!-- Completed Files Section -->
                     <VBox spacing="0" styleClass="queue-section" minHeight="100">
                         <HBox alignment="CENTER_LEFT" styleClass="section-header, completed-header">
-                            <Label text="✅ Completed" styleClass="section-title"/>
+                            <Label text="Completed" styleClass="section-title"/>
                             <Region HBox.hgrow="ALWAYS"/>
                             <Label fx:id="completedCountLabel" text="0 files" styleClass="queue-count"/>
                             <Separator orientation="VERTICAL" style="-fx-padding: 0 10;"/>
-                            <Button fx:id="clearCompletedButton" text="🗑️ Clear" onAction="#handleClearCompleted" styleClass="toolbar-button" style="-fx-padding: 4 12;"/>
+                            <Button fx:id="clearCompletedButton" onAction="#handleClearCompleted" styleClass="toolbar-button" style="-fx-padding: 4 12;"/>
                             <padding>
                                 <Insets top="8" right="12" bottom="8" left="12"/>
                             </padding>
@@ -338,7 +357,7 @@
             <TabPane fx:id="rightPanelTabs" tabClosingPolicy="UNAVAILABLE" styleClass="info-tab-pane">
                 
                 <!-- File Info Tab -->
-                <Tab fx:id="fileInfoTab" text="ℹ️ File Info" closable="false">
+                <Tab fx:id="fileInfoTab" text="File Info" closable="false">
                     <ScrollPane fitToWidth="true" styleClass="info-scroll">
                         <VBox spacing="15" styleClass="tab-content">
                             <padding>
@@ -404,7 +423,7 @@
                             <Insets top="15" right="15" bottom="15" left="15"/>
                         </padding>
                         
-                        <Label text="💬 Subtitle Preview" styleClass="preview-title"/>
+                        <Label text="Subtitle Preview" styleClass="preview-title"/>
                         
                         <!-- File Selector -->
                         <HBox spacing="10" alignment="CENTER_LEFT">
@@ -421,7 +440,7 @@
                                 <Label text="Available Subtitles" styleClass="comparison-title"/>
                                 <TableView fx:id="availableSubtitlesTable" VBox.vgrow="ALWAYS" styleClass="subtitle-table">
                                     <columns>
-                                        <TableColumn text="✓" prefWidth="40"/>
+                                        <TableColumn text="" prefWidth="40"/>
                                         <TableColumn text="Language" prefWidth="120"/>
                                         <TableColumn text="Provider" prefWidth="120"/>
                                         <TableColumn text="Format" prefWidth="80"/>
@@ -487,7 +506,7 @@
                             <Insets top="15" right="15" bottom="15" left="15"/>
                         </padding>
                         
-                        <Label text="📝 Rename Preview" styleClass="preview-title"/>
+                        <Label text="Rename Preview" styleClass="preview-title"/>
                         
                         <!-- Provider Selection -->
                         <HBox spacing="10" alignment="CENTER_LEFT">
@@ -552,4 +571,4 @@
         </StackPane>
     </center>
     
-</BorderPane>
+    </BorderPane>

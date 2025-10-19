@@ -20,16 +20,32 @@ public class PythonBridge {
     private static final Logger logger = LoggerFactory.getLogger(PythonBridge.class);
     private static final Gson gson = new Gson();
     private static final long TIMEOUT_SECONDS = 300; // 5 minutes for long operations
+    private static final int THREAD_POOL_SIZE = Runtime.getRuntime().availableProcessors() + 2; // CPU cores + 2 for I/O
     
     private Process pythonProcess;
     private BufferedReader reader;
     private BufferedWriter writer;
     private ExecutorService executorService;
+    private ExecutorService ioExecutorService; // Separate executor for I/O operations
     private boolean isRunning = false;
     private final Object ioLock = new Object();
     
     public PythonBridge() {
-        this.executorService = Executors.newFixedThreadPool(2);
+        // Main executor for CPU-bound tasks
+        this.executorService = Executors.newFixedThreadPool(THREAD_POOL_SIZE, r -> {
+            Thread t = new Thread(r, "PythonBridge-Worker");
+            t.setDaemon(true);
+            return t;
+        });
+        
+        // Separate executor for I/O operations to prevent blocking
+        this.ioExecutorService = Executors.newCachedThreadPool(r -> {
+            Thread t = new Thread(r, "PythonBridge-IO");
+            t.setDaemon(true);
+            return t;
+        });
+        
+        logger.info("PythonBridge initialized with {} worker threads", THREAD_POOL_SIZE);
     }
     
     /**
@@ -70,9 +86,9 @@ public class PythonBridge {
         
         isRunning = true;
         
-        // Wait for the "ready" message from Python
+        // Wait for the "ready" message from Python (use I/O executor)
         try {
-            Future<String> readyFuture = executorService.submit(() -> reader.readLine());
+            Future<String> readyFuture = ioExecutorService.submit(() -> reader.readLine());
             String readyLine = readyFuture.get(10, TimeUnit.SECONDS);
             logger.debug("Received startup message: {}", readyLine);
             
@@ -103,12 +119,15 @@ public class PythonBridge {
             writer.newLine();
             writer.flush();
 
-            // Read response with timeout
-            Future<String> future = executorService.submit(() -> reader.readLine());
+            // Read response with timeout (use I/O executor for non-blocking I/O)
+            Future<String> future = ioExecutorService.submit(() -> reader.readLine());
 
             try {
                 String responseLine = future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
-                logger.debug("Received response: {}", responseLine);
+                if (responseLine == null) {
+                    throw new IOException("Python process closed connection");
+                }
+                logger.debug("Received response: {} chars", responseLine.length());
                 return gson.fromJson(responseLine, JsonObject.class);
             } catch (InterruptedException | ExecutionException e) {
                 logger.error("Error reading response from Python", e);
@@ -123,13 +142,14 @@ public class PythonBridge {
     
     /**
      * Send a command with streaming response (for progress updates)
+     * Uses I/O executor for non-blocking stream reading
      */
     public void sendStreamingCommand(JsonObject command, Consumer<JsonObject> progressCallback) throws IOException {
         if (!isRunning) {
             throw new IllegalStateException("Python bridge not running");
         }
         
-        executorService.submit(() -> {
+        ioExecutorService.submit(() -> {
             try {
                 // Write command (hold lock only for write)
                 synchronized (ioLock) {
@@ -304,13 +324,20 @@ public class PythonBridge {
             }
         }
         
+        // Shutdown both executors
         executorService.shutdown();
+        ioExecutorService.shutdown();
+        
         try {
             if (!executorService.awaitTermination(5, TimeUnit.SECONDS)) {
                 executorService.shutdownNow();
             }
+            if (!ioExecutorService.awaitTermination(5, TimeUnit.SECONDS)) {
+                ioExecutorService.shutdownNow();
+            }
         } catch (InterruptedException e) {
             executorService.shutdownNow();
+            ioExecutorService.shutdownNow();
             Thread.currentThread().interrupt();
         }
         

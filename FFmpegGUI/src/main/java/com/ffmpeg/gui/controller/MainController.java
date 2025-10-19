@@ -3,6 +3,7 @@ package com.ffmpeg.gui.controller;
 import com.ffmpeg.gui.model.ConversionJob;
 import com.ffmpeg.gui.model.ConversionSettings;
 import com.ffmpeg.gui.service.PythonBridge;
+import com.ffmpeg.gui.util.HardwareDetector;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import javafx.application.Platform;
@@ -20,6 +21,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.scene.input.MouseEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,6 +31,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 
 /**
@@ -46,6 +49,44 @@ public class MainController {
     private final ConversionSettings settings;
     private boolean isProcessing = false;
     private File lastDirectory;
+    private Stage primaryStage;
+    
+    // Window dragging variables
+    private double xOffset = 0;
+    private double yOffset = 0;
+    
+    // Window resizing variables
+    private double resizeStartX = 0;
+    private double resizeStartY = 0;
+    private double resizeStartWidth = 0;
+    private double resizeStartHeight = 0;
+    private double resizeStartStageX = 0;
+    private double resizeStartStageY = 0;
+    private ResizeDirection resizeDirection = ResizeDirection.NONE;
+    private boolean isResizing = false;
+    
+    // Minimum window size
+    private static final double MIN_WIDTH = 1000;
+    private static final double MIN_HEIGHT = 700;
+    
+    // Resize border thickness
+    private static final double RESIZE_BORDER = 8;
+    
+    // Resize direction enum
+    private enum ResizeDirection {
+        NONE, N, S, E, W, NE, NW, SE, SW
+    }
+    
+    // Window Controls
+    @FXML private Label appIconLabel;
+    @FXML private Button minimizeButton;
+    @FXML private Button maximizeButton;
+    @FXML private Button closeButton;
+    
+    // Icon sizes
+    private static final int WINDOW_CONTROL_ICON_SIZE = 14;
+    private static final int TOOLBAR_ICON_SIZE = 14;
+    private static final int SMALL_ICON_SIZE = 12;
     
     // Top Toolbar
     @FXML private ComboBox<String> modeComboBox;
@@ -108,6 +149,7 @@ public class MainController {
     @FXML private Button anilistStatusButton;
     @FXML private Button refreshMetadataButton;
     @FXML private Button applyRenameButton;
+    @FXML private Button formatPatternButton;
     @FXML private Label renamerSelectedFilesLabel;
     @FXML private Label renameProgressLabel;
     @FXML private ComboBox<String> renamerLogLevelCombo;
@@ -187,6 +229,10 @@ public class MainController {
     public void initialize() {
         logger.info("Initializing Main Controller");
         
+        // Initialize all icons
+        initializeWindowControlIcons();
+        initializeToolbarIcons();
+        
         setupQueueTable();
         setupQueueDragAndDrop();
         setupQueueSplitPane();
@@ -199,10 +245,11 @@ public class MainController {
             modeComboBox.getSelectionModel().selectFirst();
         }
         
-        checkFFmpegAvailability();
-        checkProviderStatus();
+        // Run checks in parallel for faster startup
+        CompletableFuture.runAsync(this::checkFFmpegAvailability);
+        CompletableFuture.runAsync(this::checkProviderStatus);
         
-        logger.info("Main Controller initialized");
+        logger.info("Main Controller initialized (async checks running)");
     }
     
     @FXML
@@ -917,6 +964,7 @@ public class MainController {
             scene.getStylesheets().add(getClass().getResource("/styles/application.css").toExternalForm());
             
             Stage dialogStage = new Stage();
+            dialogStage.initStyle(javafx.stage.StageStyle.UNDECORATED);
             dialogStage.setTitle("Settings - EncodeForge");
             dialogStage.initModality(Modality.WINDOW_MODAL);
             dialogStage.initOwner(settingsButton.getScene().getWindow());
@@ -1362,8 +1410,8 @@ public class MainController {
                             }
                         }
                         
-                        // Update encoder options based on hardware detection
-                        updateAvailableEncoders();
+                        // Note: Encoder detection is now handled by Java HardwareDetector
+                        // No need to update encoder list from Python backend
                     } else {
                         log("WARNING: FFmpeg not detected");
                         statusLabel.setText("FFmpeg not found");
@@ -1400,6 +1448,9 @@ public class MainController {
                     if (response.has("status") && response.get("status").getAsString().equals("success")) {
                         JsonObject encoderSupport = response.getAsJsonObject("encoder_support");
                         
+                        // Store current selection to preserve it
+                        String currentSelection = quickCodecCombo != null ? quickCodecCombo.getValue() : null;
+                        
                         // Build list of available encoders
                         List<String> availableEncoders = new ArrayList<>();
                         
@@ -1408,11 +1459,16 @@ public class MainController {
                         availableEncoders.add("Software H.265");
                         
                         // Add hardware encoders if available
+                        boolean hasNvidiaH264 = false;
+                        boolean hasNvidiaH265 = false;
+                        
                         if (encoderSupport.has("nvidia_h264") && encoderSupport.get("nvidia_h264").getAsBoolean()) {
                             availableEncoders.add("H.264 NVENC (GPU)");
+                            hasNvidiaH264 = true;
                         }
                         if (encoderSupport.has("nvidia_h265") && encoderSupport.get("nvidia_h265").getAsBoolean()) {
                             availableEncoders.add("H.265 NVENC (GPU)");
+                            hasNvidiaH265 = true;
                         }
                         if (encoderSupport.has("amd_h264") && encoderSupport.get("amd_h264").getAsBoolean()) {
                             availableEncoders.add("H.264 AMF (GPU)");
@@ -1436,19 +1492,23 @@ public class MainController {
                         // Always add copy option
                         availableEncoders.add("Copy");
                         
-                        // Update the ComboBox
+                        // Update the ComboBox only if hardware options are different
                         if (quickCodecCombo != null) {
-                            String currentSelection = quickCodecCombo.getValue();
                             quickCodecCombo.setItems(FXCollections.observableArrayList(availableEncoders));
                             
-                            // Try to keep current selection if still available
-                            if (availableEncoders.contains(currentSelection)) {
+                            // If current selection is still valid, keep it
+                            if (currentSelection != null && availableEncoders.contains(currentSelection)) {
                                 quickCodecCombo.setValue(currentSelection);
-                            } else {
-                                // Set to recommended encoder or fallback to software
+                            } else if (!hasNvidiaH264 && !hasNvidiaH265 && currentSelection != null && 
+                                       (currentSelection.contains("NVENC") || currentSelection.contains("AMF"))) {
+                                // GPU was not detected but user had GPU selected - fallback to software
+                                quickCodecCombo.setValue("Software H.264");
+                                log("GPU encoder not available - using software encoding");
+                            } else if (currentSelection == null) {
+                                // First time setup - use recommended
                                 if (response.has("recommended_encoder")) {
                                     String recommended = response.get("recommended_encoder").getAsString();
-                                    if (recommended.equals("h264_nvenc") && availableEncoders.contains("H.264 NVENC (GPU)")) {
+                                    if (recommended.equals("h264_nvenc") && hasNvidiaH264) {
                                         quickCodecCombo.setValue("H.264 NVENC (GPU)");
                                     } else if (recommended.equals("h264_amf") && availableEncoders.contains("H.264 AMF (GPU)")) {
                                         quickCodecCombo.setValue("H.264 AMF (GPU)");
@@ -1457,6 +1517,8 @@ public class MainController {
                                     } else {
                                         quickCodecCombo.setValue("Software H.264");
                                     }
+                                } else if (hasNvidiaH264) {
+                                    quickCodecCombo.setValue("H.264 NVENC (GPU)");
                                 } else {
                                     quickCodecCombo.setValue("Software H.264");
                                 }
@@ -1930,11 +1992,10 @@ public class MainController {
             queueSplitPane.setDividerPositions(0.4, 0.6);
         });
         
-        // Add listener to save divider positions when changed
+        // Add listener to save divider positions when changed (for future persistence)
         queueSplitPane.getDividers().forEach(divider -> {
             divider.positionProperty().addListener((obs, oldPos, newPos) -> {
-                // Save divider positions for persistence (optional)
-                logger.debug("Queue split pane divider moved to: {}", newPos);
+                // Positions could be saved to settings here if needed
             });
         });
         
@@ -1952,30 +2013,76 @@ public class MainController {
             quickFormatCombo.setValue("MP4");
         }
         
-        // Initialize codec combo with default values, will be updated after hardware detection
+        // Initialize codec combo with INSTANT hardware detection via Java
         if (quickCodecCombo != null) {
-            quickCodecCombo.setItems(FXCollections.observableArrayList(
-                "Software H.264", "Software H.265", "Copy"
-            ));
-            quickCodecCombo.setValue("Software H.264");
+            List<String> availableEncoders = HardwareDetector.getAvailableEncoderList();
+            
+            // Add "Auto (Best Available)" option at the top
+            availableEncoders.add(0, "Auto (Best Available)");
+            
+            quickCodecCombo.setItems(FXCollections.observableArrayList(availableEncoders));
+            
+            // Try to load saved codec preference, otherwise use Auto
+            String savedCodec = settings.getVideoCodec();
+            if (savedCodec != null && availableEncoders.contains(savedCodec)) {
+                quickCodecCombo.setValue(savedCodec);
+                logger.info("Loaded saved codec preference: {}", savedCodec);
+            } else {
+                quickCodecCombo.setValue("Auto (Best Available)");
+                logger.info("Using Auto codec selection");
+            }
+            
+            logger.info("Codec options initialized instantly with {} encoders", availableEncoders.size());
+        }
+        
+        if (quickFormatCombo != null) {
+            String savedFormat = settings.getOutputFormat();
+            if (savedFormat != null && !savedFormat.isEmpty()) {
+                quickFormatCombo.setValue(savedFormat.toUpperCase());
+                logger.debug("Loaded saved format: {}", savedFormat);
+            }
         }
         
         if (quickQualityCombo != null) {
             quickQualityCombo.setItems(FXCollections.observableArrayList(
                 "Highest (CQ 15)", "High (CQ 18)", "Medium (CQ 23)", "Low (CQ 28)", "Very Low (CQ 32)"
             ));
-            quickQualityCombo.setValue("Medium (CQ 23)");
+            // Load saved CRF value
+            int savedCrf = settings.getCrfValue();
+            String qualityLabel = "Medium (CQ 23)";
+            if (savedCrf <= 15) qualityLabel = "Highest (CQ 15)";
+            else if (savedCrf <= 18) qualityLabel = "High (CQ 18)";
+            else if (savedCrf <= 23) qualityLabel = "Medium (CQ 23)";
+            else if (savedCrf <= 28) qualityLabel = "Low (CQ 28)";
+            else qualityLabel = "Very Low (CQ 32)";
+            quickQualityCombo.setValue(qualityLabel);
+            logger.debug("Loaded saved quality: {} (CRF {})", qualityLabel, savedCrf);
         }
         
         if (quickPresetCombo != null) {
             quickPresetCombo.setItems(FXCollections.observableArrayList(
                 "Fast", "Medium", "Slow", "Quality", "Balanced"
             ));
-            quickPresetCombo.setValue("Medium");
+            String savedPreset = settings.getQualityPreset();
+            if (savedPreset != null && !savedPreset.isEmpty()) {
+                // Normalize saved preset to match combo box options
+                String normalizedPreset = savedPreset.substring(0, 1).toUpperCase() + savedPreset.substring(1).toLowerCase();
+                if ("Fast".equals(normalizedPreset) || "Medium".equals(normalizedPreset) || 
+                    "Slow".equals(normalizedPreset) || "Quality".equals(normalizedPreset) || 
+                    "Balanced".equals(normalizedPreset)) {
+                    quickPresetCombo.setValue(normalizedPreset);
+                } else {
+                    quickPresetCombo.setValue("Medium");
+                }
+                logger.debug("Loaded saved preset: {}", normalizedPreset);
+            } else {
+                quickPresetCombo.setValue("Medium");
+            }
         }
         
         if (quickHwAccelCheck != null) {
-            quickHwAccelCheck.setSelected(true);
+            quickHwAccelCheck.setSelected(settings.isHardwareDecoding());
+            logger.debug("Loaded saved hardware acceleration: {}", settings.isHardwareDecoding());
         }
         
         if (quickDownloadSubsCheck != null) {
@@ -2383,4 +2490,522 @@ public class MainController {
         public String getFormat() { return format; }
         public void setFormat(String format) { this.format = format; }
     }
+    
+    // ========================================
+    // WINDOW CONTROL METHODS
+    // ========================================
+    
+    /**
+     * Initialize window control icons using Ikonli FontAwesome
+     */
+    private void initializeWindowControlIcons() {
+        try {
+            // App icon
+            if (appIconLabel != null) {
+                org.kordamp.ikonli.javafx.FontIcon appIcon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.FILM);
+                appIcon.setIconSize(16);
+                appIcon.setIconColor(javafx.scene.paint.Color.web("#0078d4"));
+                appIconLabel.setGraphic(appIcon);
+            }
+            
+            // Minimize icon
+            org.kordamp.ikonli.javafx.FontIcon minimizeIcon = new org.kordamp.ikonli.javafx.FontIcon(
+                org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.WINDOW_MINIMIZE);
+            minimizeIcon.setIconSize(WINDOW_CONTROL_ICON_SIZE);
+            minimizeIcon.setIconColor(javafx.scene.paint.Color.WHITE);
+            minimizeButton.setGraphic(minimizeIcon);
+            minimizeButton.setText("");
+            
+            // Maximize icon
+            org.kordamp.ikonli.javafx.FontIcon maximizeIcon = new org.kordamp.ikonli.javafx.FontIcon(
+                org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.WINDOW_MAXIMIZE);
+            maximizeIcon.setIconSize(WINDOW_CONTROL_ICON_SIZE);
+            maximizeIcon.setIconColor(javafx.scene.paint.Color.WHITE);
+            maximizeButton.setGraphic(maximizeIcon);
+            maximizeButton.setText("");
+            
+            // Close icon
+            org.kordamp.ikonli.javafx.FontIcon closeIcon = new org.kordamp.ikonli.javafx.FontIcon(
+                org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.TIMES);
+            closeIcon.setIconSize(WINDOW_CONTROL_ICON_SIZE);
+            closeIcon.setIconColor(javafx.scene.paint.Color.WHITE);
+            closeButton.setGraphic(closeIcon);
+            closeButton.setText("");
+            
+            logger.info("Window control icons initialized successfully");
+        } catch (Exception e) {
+            logger.error("Failed to initialize window control icons", e);
+        }
+    }
+    
+    /**
+     * Initialize toolbar and button icons using Ikonli FontAwesome
+     */
+    private void initializeToolbarIcons() {
+        try {
+            // Add Files button
+            if (addFilesButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.FILE_MEDICAL);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                addFilesButton.setGraphic(icon);
+                addFilesButton.setText("Add Files");
+            }
+            
+            // Add Folder button
+            if (addFolderButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.FOLDER_OPEN);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                addFolderButton.setGraphic(icon);
+                addFolderButton.setText("Add Folder");
+            }
+            
+            // Settings button
+            if (settingsButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.COG);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                settingsButton.setGraphic(icon);
+                settingsButton.setText("Settings");
+            }
+            
+            // Start button
+            if (startButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.PLAY);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                startButton.setGraphic(icon);
+                startButton.setText("Start Encoding");
+            }
+            
+            // Pause button
+            if (pauseButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.PAUSE);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                pauseButton.setGraphic(icon);
+                pauseButton.setText("Pause");
+            }
+            
+            // Stop button
+            if (stopButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.STOP);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                stopButton.setGraphic(icon);
+                stopButton.setText("Stop");
+            }
+            
+            // Refresh Metadata button
+            if (refreshMetadataButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.SYNC_ALT);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                refreshMetadataButton.setGraphic(icon);
+                refreshMetadataButton.setText("Refresh");
+            }
+            
+            // TMDB Status button
+            if (tmdbStatusButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.FILM);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.web("#a0a0a0"));
+                tmdbStatusButton.setGraphic(icon);
+                tmdbStatusButton.setText("TMDB: Not Setup");
+            }
+            
+            // Remove Queued button
+            if (removeQueuedButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.MINUS);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                removeQueuedButton.setGraphic(icon);
+                removeQueuedButton.setText("Remove");
+            }
+            
+            // Clear Queued button
+            if (clearQueuedButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.TRASH);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                clearQueuedButton.setGraphic(icon);
+                clearQueuedButton.setText("Clear");
+            }
+            
+            // Clear Completed button
+            if (clearCompletedButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.TRASH);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                clearCompletedButton.setGraphic(icon);
+                clearCompletedButton.setText("Clear");
+            }
+            
+            // Config Subtitles button
+            if (configSubtitlesButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.CLOSED_CAPTIONING);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                configSubtitlesButton.setGraphic(icon);
+                configSubtitlesButton.setText("Subtitles");
+            }
+            
+            // Config Renamer button
+            if (configRenamerButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.EDIT);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                configRenamerButton.setGraphic(icon);
+                configRenamerButton.setText("Renamer");
+            }
+            
+            // Apply Rename button
+            if (applyRenameButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.CHECK);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                applyRenameButton.setGraphic(icon);
+                applyRenameButton.setText("Apply Selected");
+            }
+            
+            // TVDB Status button
+            if (tvdbStatusButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.TV);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.web("#a0a0a0"));
+                tvdbStatusButton.setGraphic(icon);
+                tvdbStatusButton.setText("TVDB: Not Setup");
+            }
+            
+            // AniList Status button
+            if (anilistStatusButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.BOOK);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.web("#a0a0a0"));
+                anilistStatusButton.setGraphic(icon);
+                anilistStatusButton.setText("AniList: Available");
+            }
+            
+            // Format Pattern button
+            if (formatPatternButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.EDIT);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                formatPatternButton.setGraphic(icon);
+                formatPatternButton.setText("Format Pattern");
+            }
+            
+            // Subtitle Search button
+            if (subtitleSearchButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.SEARCH);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                subtitleSearchButton.setGraphic(icon);
+                subtitleSearchButton.setText("Search");
+            }
+            
+            // Subtitle Download button
+            if (subtitleDownloadButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.DOWNLOAD);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                subtitleDownloadButton.setGraphic(icon);
+                subtitleDownloadButton.setText("Download");
+            }
+            
+            // Subtitle Generate button
+            if (subtitleGenerateButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.MICROPHONE);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                subtitleGenerateButton.setGraphic(icon);
+                subtitleGenerateButton.setText("Generate");
+            }
+            
+            logger.info("Toolbar icons initialized successfully");
+        } catch (Exception e) {
+            logger.error("Failed to initialize toolbar icons", e);
+        }
+    }
+    
+    /**
+     * Set the primary stage reference for window controls and resize functionality
+     */
+    public void setStage(Stage stage) {
+        this.primaryStage = stage;
+        if (stage != null) {
+            // Set minimum size
+            stage.setMinWidth(MIN_WIDTH);
+            stage.setMinHeight(MIN_HEIGHT);
+            
+            // Add resize functionality via scene mouse events
+            javafx.scene.Scene scene = stage.getScene();
+            if (scene != null) {
+                setupResizeHandlers(scene);
+                logger.info("Window resize handlers installed successfully");
+            }
+        }
+    }
+    
+    /**
+     * Setup mouse event handlers for window resizing using event filters
+     */
+    private void setupResizeHandlers(javafx.scene.Scene scene) {
+        // Mouse moved - update cursor based on position (use filter to capture before children)
+        scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_MOVED, event -> {
+            if (!isResizing && !primaryStage.isMaximized()) {
+                ResizeDirection direction = getResizeDirection(event.getSceneX(), event.getSceneY());
+                updateCursor(direction);
+            }
+        });
+        
+        // Mouse pressed - start resize if on border (use filter to capture before children)
+        scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_PRESSED, event -> {
+            if (!primaryStage.isMaximized()) {
+                resizeDirection = getResizeDirection(event.getSceneX(), event.getSceneY());
+                if (resizeDirection != ResizeDirection.NONE) {
+                    isResizing = true;
+                    resizeStartX = event.getScreenX();
+                    resizeStartY = event.getScreenY();
+                    resizeStartWidth = primaryStage.getWidth();
+                    resizeStartHeight = primaryStage.getHeight();
+                    resizeStartStageX = primaryStage.getX();
+                    resizeStartStageY = primaryStage.getY();
+                    event.consume(); // Consume the event to prevent it from reaching children
+                    logger.info("Started resizing: direction={}, startSize={}x{}", 
+                               resizeDirection, resizeStartWidth, resizeStartHeight);
+                }
+            }
+        });
+        
+        // Mouse dragged - perform resize (use filter to capture before children)
+        scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_DRAGGED, event -> {
+            if (isResizing && resizeDirection != ResizeDirection.NONE) {
+                performResize(event.getScreenX(), event.getScreenY());
+                event.consume(); // Consume the event to prevent it from reaching children
+            }
+        });
+        
+        // Mouse released - end resize (use filter to capture before children)
+        scene.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_RELEASED, event -> {
+            if (isResizing) {
+                logger.info("Finished resizing: finalSize={}x{}", primaryStage.getWidth(), primaryStage.getHeight());
+                isResizing = false;
+                resizeDirection = ResizeDirection.NONE;
+                event.consume(); // Consume the event
+            }
+        });
+    }
+    
+    /**
+     * Determine resize direction based on mouse position
+     */
+    private ResizeDirection getResizeDirection(double sceneX, double sceneY) {
+        double width = primaryStage.getScene().getWidth();
+        double height = primaryStage.getScene().getHeight();
+        
+        boolean left = sceneX < RESIZE_BORDER;
+        boolean right = sceneX > width - RESIZE_BORDER;
+        boolean top = sceneY < RESIZE_BORDER;
+        boolean bottom = sceneY > height - RESIZE_BORDER;
+        
+        if (top && left) return ResizeDirection.NW;
+        if (top && right) return ResizeDirection.NE;
+        if (bottom && left) return ResizeDirection.SW;
+        if (bottom && right) return ResizeDirection.SE;
+        if (top) return ResizeDirection.N;
+        if (bottom) return ResizeDirection.S;
+        if (left) return ResizeDirection.W;
+        if (right) return ResizeDirection.E;
+        
+        return ResizeDirection.NONE;
+    }
+    
+    /**
+     * Update cursor based on resize direction
+     */
+    private void updateCursor(ResizeDirection direction) {
+        javafx.scene.Cursor cursor = javafx.scene.Cursor.DEFAULT;
+        
+        switch (direction) {
+            case N:
+            case S:
+                cursor = javafx.scene.Cursor.N_RESIZE;
+                break;
+            case E:
+            case W:
+                cursor = javafx.scene.Cursor.E_RESIZE;
+                break;
+            case NE:
+            case SW:
+                cursor = javafx.scene.Cursor.NE_RESIZE;
+                break;
+            case NW:
+            case SE:
+                cursor = javafx.scene.Cursor.NW_RESIZE;
+                break;
+        }
+        
+        primaryStage.getScene().setCursor(cursor);
+    }
+    
+    /**
+     * Perform window resize based on mouse drag
+     */
+    private void performResize(double screenX, double screenY) {
+        double deltaX = screenX - resizeStartX;
+        double deltaY = screenY - resizeStartY;
+        
+        double newX = resizeStartStageX;
+        double newY = resizeStartStageY;
+        double newWidth = resizeStartWidth;
+        double newHeight = resizeStartHeight;
+        
+        switch (resizeDirection) {
+            case N:
+                newY = resizeStartStageY + deltaY;
+                newHeight = resizeStartHeight - deltaY;
+                break;
+            case S:
+                newHeight = resizeStartHeight + deltaY;
+                break;
+            case E:
+                newWidth = resizeStartWidth + deltaX;
+                break;
+            case W:
+                newX = resizeStartStageX + deltaX;
+                newWidth = resizeStartWidth - deltaX;
+                break;
+            case NE:
+                newY = resizeStartStageY + deltaY;
+                newWidth = resizeStartWidth + deltaX;
+                newHeight = resizeStartHeight - deltaY;
+                break;
+            case NW:
+                newX = resizeStartStageX + deltaX;
+                newY = resizeStartStageY + deltaY;
+                newWidth = resizeStartWidth - deltaX;
+                newHeight = resizeStartHeight - deltaY;
+                break;
+            case SE:
+                newWidth = resizeStartWidth + deltaX;
+                newHeight = resizeStartHeight + deltaY;
+                break;
+            case SW:
+                newX = resizeStartStageX + deltaX;
+                newWidth = resizeStartWidth - deltaX;
+                newHeight = resizeStartHeight + deltaY;
+                break;
+        }
+        
+        // Enforce minimum size
+        if (newWidth < MIN_WIDTH) {
+            if (resizeDirection == ResizeDirection.W || resizeDirection == ResizeDirection.NW || resizeDirection == ResizeDirection.SW) {
+                newX = resizeStartStageX + (resizeStartWidth - MIN_WIDTH);
+            }
+            newWidth = MIN_WIDTH;
+        }
+        
+        if (newHeight < MIN_HEIGHT) {
+            if (resizeDirection == ResizeDirection.N || resizeDirection == ResizeDirection.NE || resizeDirection == ResizeDirection.NW) {
+                newY = resizeStartStageY + (resizeStartHeight - MIN_HEIGHT);
+            }
+            newHeight = MIN_HEIGHT;
+        }
+        
+        // Apply new size and position
+        primaryStage.setX(newX);
+        primaryStage.setY(newY);
+        primaryStage.setWidth(newWidth);
+        primaryStage.setHeight(newHeight);
+    }
+    
+    /**
+     * Handle title bar mouse press for window dragging
+     */
+    @FXML
+    private void handleTitleBarPressed(MouseEvent event) {
+        xOffset = event.getSceneX();
+        yOffset = event.getSceneY();
+    }
+    
+    /**
+     * Handle title bar mouse drag for window dragging
+     */
+    @FXML
+    private void handleTitleBarDragged(MouseEvent event) {
+        if (primaryStage != null) {
+            primaryStage.setX(event.getScreenX() - xOffset);
+            primaryStage.setY(event.getScreenY() - yOffset);
+        }
+    }
+    
+    /**
+     * Handle minimize button click
+     */
+    @FXML
+    private void handleMinimize() {
+        if (primaryStage != null) {
+            primaryStage.setIconified(true);
+        }
+    }
+    
+    /**
+     * Handle maximize/restore button click
+     */
+    @FXML
+    private void handleMaximize() {
+        if (primaryStage != null) {
+            if (primaryStage.isMaximized()) {
+                primaryStage.setMaximized(false);
+                // Update icon to maximize
+                org.kordamp.ikonli.javafx.FontIcon maximizeIcon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.WINDOW_MAXIMIZE);
+                maximizeIcon.setIconSize(WINDOW_CONTROL_ICON_SIZE);
+                maximizeIcon.setIconColor(javafx.scene.paint.Color.WHITE);
+                maximizeButton.setGraphic(maximizeIcon);
+            } else {
+                primaryStage.setMaximized(true);
+                // Update icon to restore
+                org.kordamp.ikonli.javafx.FontIcon restoreIcon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.WINDOW_RESTORE);
+                restoreIcon.setIconSize(WINDOW_CONTROL_ICON_SIZE);
+                restoreIcon.setIconColor(javafx.scene.paint.Color.WHITE);
+                maximizeButton.setGraphic(restoreIcon);
+            }
+        }
+    }
+    
+    /**
+     * Handle close button click
+     */
+    @FXML
+    private void handleClose() {
+        if (primaryStage != null) {
+            primaryStage.fireEvent(new javafx.stage.WindowEvent(primaryStage, javafx.stage.WindowEvent.WINDOW_CLOSE_REQUEST));
+        }
+    }
+    
 }

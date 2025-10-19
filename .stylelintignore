@@ -1,0 +1,3 @@
+# Ignore JavaFX CSS files - they use -fx- prefixed properties that are not web CSS
+FFmpegGUI/src/main/resources/styles/application.css
+FFmpegGUI/src/main/resources/styles/

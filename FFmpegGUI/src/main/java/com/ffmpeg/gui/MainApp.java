@@ -9,6 +9,7 @@ import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.stage.Stage;
+import javafx.stage.StageStyle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,11 +62,15 @@ public class MainApp extends Application {
             // Load CSS styles
             scene.getStylesheets().add(getClass().getResource("/styles/application.css").toExternalForm());
             
-            // Set up stage
+            // Set up stage with custom decorations
+            primaryStage.initStyle(StageStyle.UNDECORATED);
             primaryStage.setTitle(APP_TITLE + " v" + VERSION);
             primaryStage.setScene(scene);
             primaryStage.setMinWidth(1200);
             primaryStage.setMinHeight(800);
+            
+            // Pass stage reference to controller for window controls
+            controller.setStage(primaryStage);
             
             // Load application icon
             try {

@@ -2,6 +2,7 @@ package com.ffmpeg.gui.controller;
 
 import com.ffmpeg.gui.model.ConversionSettings;
 import com.ffmpeg.gui.service.PythonBridge;
+import java.util.List;
 import com.google.gson.JsonObject;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
@@ -10,6 +11,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.scene.input.MouseEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,6 +30,22 @@ public class SettingsController {
     private PythonBridge pythonBridge;
     private boolean applied = false;
     
+    // Window dragging variables
+    private double xOffset = 0;
+    private double yOffset = 0;
+    
+    // Settings dialog doesn't need resizing - it's a fixed size modal
+    
+    // Window Controls
+    @FXML private Label appIconLabel;
+    @FXML private Button minimizeButton;
+    @FXML private Button maximizeButton;
+    @FXML private Button closeButton;
+    
+    // Icon sizes
+    private static final int WINDOW_CONTROL_ICON_SIZE = 14;
+    private static final int TOOLBAR_ICON_SIZE = 14;
+    
     // Category List
     @FXML private ListView<String> categoryList;
     
@@ -43,6 +61,7 @@ public class SettingsController {
     
     // General Settings
     @FXML private Label settingsLocationLabel;
+    @FXML private Button openSettingsFolderButton;
     @FXML private TextField outputDirField;
     @FXML private CheckBox deleteOriginalCheck;
     @FXML private CheckBox overwriteCheck;
@@ -52,6 +71,8 @@ public class SettingsController {
     // FFmpeg Settings
     @FXML private TextField ffmpegPathField;
     @FXML private TextField ffprobePathField;
+    @FXML private Button autoDetectButton;
+    @FXML private Button downloadFFmpegButton;
     @FXML private Label ffmpegVersionLabel;
     
     // Video Settings
@@ -82,13 +103,16 @@ public class SettingsController {
     @FXML private TextField opensubtitlesApiKeyField;
     @FXML private TextField opensubtitlesUsernameField;
     @FXML private PasswordField opensubtitlesPasswordField;
+    @FXML private Button validateOpenSubsButton;
     @FXML private Label openSubsValidationLabel;
     
     // Metadata Settings
     @FXML private TextField namingPatternField;
     @FXML private CheckBox createSubfoldersCheck;
     @FXML private TextField tmdbApiKeyField;
+    @FXML private Button validateTMDBButton;
     @FXML private TextField tvdbApiKeyField;
+    @FXML private Button validateTVDBButton;
     @FXML private Label tmdbValidationLabel;
     @FXML private Label tvdbValidationLabel;
     
@@ -104,6 +128,9 @@ public class SettingsController {
     
     @FXML
     public void initialize() {
+        // Initialize icons
+        initializeIcons();
+        
         // Initialize category list
         categoryList.setItems(javafx.collections.FXCollections.observableArrayList(
             "General", "FFmpeg", "Video", "Audio", "Subtitles", "Metadata", "Output", "Advanced"
@@ -164,11 +191,13 @@ public class SettingsController {
             outputFormatCombo.setValue("MP4");
         }
         
-        // Video codec - will be updated after hardware detection
+        // Video codec - use instant hardware detection
         if (videoCodecCombo != null) {
-            videoCodecCombo.setItems(javafx.collections.FXCollections.observableArrayList(
-                "Copy (no re-encode)", "Software H.264", "Software H.265"));
-            videoCodecCombo.setValue("Software H.264");
+            List<String> availableEncoders = com.ffmpeg.gui.util.HardwareDetector.getAvailableEncoderList();
+            availableEncoders.add(0, "Auto (Best Available)");
+            videoCodecCombo.setItems(javafx.collections.FXCollections.observableArrayList(availableEncoders));
+            videoCodecCombo.setValue("Auto (Best Available)");
+            logger.info("Settings dialog: Codec options initialized instantly with {} encoders", availableEncoders.size());
         }
         
         // Quality preset
@@ -210,6 +239,10 @@ public class SettingsController {
     
     public void setDialogStage(Stage dialogStage) {
         this.dialogStage = dialogStage;
+        // Settings dialog is not resizable - fixed size
+        if (dialogStage != null) {
+            dialogStage.setResizable(false);
+        }
     }
     
     public void setSettings(ConversionSettings settings) {
@@ -221,15 +254,9 @@ public class SettingsController {
         this.pythonBridge = pythonBridge;
         checkFFmpegStatus();
         
-        // Update encoders after a short delay to ensure FFmpeg check completes
-        new Thread(() -> {
-            try {
-                Thread.sleep(1000);  // Wait 1 second for FFmpeg detection to complete
-                Platform.runLater(() -> updateAvailableEncoders());
-            } catch (InterruptedException e) {
-                logger.error("Interrupted while waiting to update encoders", e);
-            }
-        }).start();
+        // Encoder detection is now handled instantly by Java HardwareDetector
+        // No need for delayed backend checks
+        logger.info("Settings dialog initialized with hardware-detected encoders");
     }
     
     public void navigateToCategory(String category) {
@@ -610,95 +637,179 @@ public class SettingsController {
     }
     
     private void updateAvailableEncoders() {
-        if (pythonBridge == null) {
-            logger.warn("Python bridge not available for encoder detection in settings");
-            return;
+        // Encoder detection is now handled by Java's HardwareDetector
+        // No backend Python check needed - encoders are already correctly populated
+        logger.debug("Encoder detection already completed by HardwareDetector - skipping backend check");
+    }
+    
+    // ========================================
+    // WINDOW CONTROL METHODS
+    // ========================================
+    
+    /**
+     * Handle title bar mouse press for window dragging
+     */
+    @FXML
+    private void handleTitleBarPressed(MouseEvent event) {
+        xOffset = event.getSceneX();
+        yOffset = event.getSceneY();
+    }
+    
+    /**
+     * Handle title bar mouse drag for window dragging
+     */
+    @FXML
+    private void handleTitleBarDragged(MouseEvent event) {
+        if (dialogStage != null) {
+            dialogStage.setX(event.getScreenX() - xOffset);
+            dialogStage.setY(event.getScreenY() - yOffset);
         }
-        
-        new Thread(() -> {
-            try {
-                // Create request for available encoders
-                JsonObject request = new JsonObject();
-                request.addProperty("action", "get_available_encoders");
-                
-                JsonObject response = pythonBridge.sendCommand(request);
-                
-                Platform.runLater(() -> {
-                    if (response.has("status") && response.get("status").getAsString().equals("success")) {
-                        JsonObject encoderSupport = response.getAsJsonObject("encoder_support");
-                        
-                        // Build list of available encoders
-                        java.util.List<String> availableEncoders = new java.util.ArrayList<>();
-                        
-                        // Always add copy and software encoders
-                        availableEncoders.add("Copy (no re-encode)");
-                        availableEncoders.add("Software H.264");
-                        availableEncoders.add("Software H.265");
-                        
-                        // Add hardware encoders if available
-                        if (encoderSupport.has("nvidia_h264") && encoderSupport.get("nvidia_h264").getAsBoolean()) {
-                            availableEncoders.add("H.264 NVENC (GPU)");
-                        }
-                        if (encoderSupport.has("nvidia_h265") && encoderSupport.get("nvidia_h265").getAsBoolean()) {
-                            availableEncoders.add("H.265 NVENC (GPU)");
-                        }
-                        if (encoderSupport.has("amd_h264") && encoderSupport.get("amd_h264").getAsBoolean()) {
-                            availableEncoders.add("H.264 AMF (GPU)");
-                        }
-                        if (encoderSupport.has("amd_h265") && encoderSupport.get("amd_h265").getAsBoolean()) {
-                            availableEncoders.add("H.265 AMF (GPU)");
-                        }
-                        if (encoderSupport.has("intel_h264") && encoderSupport.get("intel_h264").getAsBoolean()) {
-                            availableEncoders.add("H.264 Intel QSV (CPU)");
-                        }
-                        if (encoderSupport.has("intel_h265") && encoderSupport.get("intel_h265").getAsBoolean()) {
-                            availableEncoders.add("H.265 Intel QSV (CPU)");
-                        }
-                        if (encoderSupport.has("apple_h264") && encoderSupport.get("apple_h264").getAsBoolean()) {
-                            availableEncoders.add("H.264 VideoToolbox (GPU)");
-                        }
-                        if (encoderSupport.has("apple_h265") && encoderSupport.get("apple_h265").getAsBoolean()) {
-                            availableEncoders.add("H.265 VideoToolbox (GPU)");
-                        }
-                        
-                        // Update the ComboBox
-                        if (videoCodecCombo != null) {
-                            String currentSelection = videoCodecCombo.getValue();
-                            videoCodecCombo.setItems(javafx.collections.FXCollections.observableArrayList(availableEncoders));
-                            
-                            // Try to keep current selection if still available
-                            if (availableEncoders.contains(currentSelection)) {
-                                videoCodecCombo.setValue(currentSelection);
-                            } else {
-                                // Set to recommended encoder or fallback to software
-                                if (response.has("recommended_encoder")) {
-                                    String recommended = response.get("recommended_encoder").getAsString();
-                                    if (recommended.equals("h264_nvenc") && availableEncoders.contains("H.264 NVENC (GPU)")) {
-                                        videoCodecCombo.setValue("H.264 NVENC (GPU)");
-                                    } else if (recommended.equals("h264_amf") && availableEncoders.contains("H.264 AMF (GPU)")) {
-                                        videoCodecCombo.setValue("H.264 AMF (GPU)");
-                                    } else if (recommended.equals("h264_qsv") && availableEncoders.contains("H.264 Intel QSV (CPU)")) {
-                                        videoCodecCombo.setValue("H.264 Intel QSV (CPU)");
-                                    } else {
-                                        videoCodecCombo.setValue("Software H.264");
-                                    }
-                                } else {
-                                    videoCodecCombo.setValue("Software H.264");
-                                }
-                            }
-                        }
-                        
-                        logger.info("Settings dialog: Available encoders updated with {} options", availableEncoders.size());
-                        
-                    } else {
-                        logger.warn("Failed to get available encoders for settings dialog");
-                    }
-                });
-                
-            } catch (Exception e) {
-                logger.error("Error updating available encoders in settings dialog", e);
+    }
+    
+    /**
+     * Handle minimize button click
+     */
+    @FXML
+    private void handleMinimize() {
+        if (dialogStage != null) {
+            dialogStage.setIconified(true);
+        }
+    }
+    
+    /**
+     * Handle maximize/restore button click
+     */
+    @FXML
+    private void handleMaximize() {
+        if (dialogStage != null) {
+            if (dialogStage.isMaximized()) {
+                dialogStage.setMaximized(false);
+                maximizeButton.setText("□"); // Maximize icon
+            } else {
+                dialogStage.setMaximized(true);
+                maximizeButton.setText("❐"); // Restore icon
             }
-        }).start();
+        }
+    }
+    
+    /**
+     * Handle close button click
+     */
+    @FXML
+    private void handleClose() {
+        handleCancel(); // Use existing cancel logic
+    }
+    
+    // Settings dialog is not resizable, so no resize methods needed
+    
+    /**
+     * Initialize all icons using Ikonli FontAwesome
+     */
+    private void initializeIcons() {
+        try {
+            // App icon (Settings gear)
+            if (appIconLabel != null) {
+                org.kordamp.ikonli.javafx.FontIcon appIcon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.COG);
+                appIcon.setIconSize(16);
+                appIcon.setIconColor(javafx.scene.paint.Color.web("#0078d4"));
+                appIconLabel.setGraphic(appIcon);
+            }
+            
+            // Minimize icon
+            if (minimizeButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon minimizeIcon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.WINDOW_MINIMIZE);
+                minimizeIcon.setIconSize(WINDOW_CONTROL_ICON_SIZE);
+                minimizeIcon.setIconColor(javafx.scene.paint.Color.WHITE);
+                minimizeButton.setGraphic(minimizeIcon);
+                minimizeButton.setText("");
+            }
+            
+            // Maximize icon
+            if (maximizeButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon maximizeIcon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.WINDOW_MAXIMIZE);
+                maximizeIcon.setIconSize(WINDOW_CONTROL_ICON_SIZE);
+                maximizeIcon.setIconColor(javafx.scene.paint.Color.WHITE);
+                maximizeButton.setGraphic(maximizeIcon);
+                maximizeButton.setText("");
+            }
+            
+            // Close icon
+            if (closeButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon closeIcon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.TIMES);
+                closeIcon.setIconSize(WINDOW_CONTROL_ICON_SIZE);
+                closeIcon.setIconColor(javafx.scene.paint.Color.WHITE);
+                closeButton.setGraphic(closeIcon);
+                closeButton.setText("");
+            }
+            
+            // Open Settings Folder button
+            if (openSettingsFolderButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.FOLDER_OPEN);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                openSettingsFolderButton.setGraphic(icon);
+                openSettingsFolderButton.setText("Open Folder");
+            }
+            
+            // Validate OpenSubtitles button
+            if (validateOpenSubsButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.CHECK);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                validateOpenSubsButton.setGraphic(icon);
+                validateOpenSubsButton.setText("Validate Login");
+            }
+            
+            // Validate TMDB button
+            if (validateTMDBButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.CHECK);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                validateTMDBButton.setGraphic(icon);
+                validateTMDBButton.setText("Validate Key");
+            }
+            
+            // Validate TVDB button
+            if (validateTVDBButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.CHECK);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                validateTVDBButton.setGraphic(icon);
+                validateTVDBButton.setText("Validate Key");
+            }
+            
+            // Auto-Detect button
+            if (autoDetectButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.SEARCH);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                autoDetectButton.setGraphic(icon);
+                autoDetectButton.setText("Auto-Detect");
+            }
+            
+            // Download FFmpeg button
+            if (downloadFFmpegButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.DOWNLOAD);
+                icon.setIconSize(TOOLBAR_ICON_SIZE);
+                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                downloadFFmpegButton.setGraphic(icon);
+                downloadFFmpegButton.setText("Download FFmpeg");
+            }
+            
+            logger.info("Settings dialog icons initialized successfully");
+        } catch (Exception e) {
+            logger.error("Failed to initialize settings dialog icons", e);
+        }
     }
 }
 

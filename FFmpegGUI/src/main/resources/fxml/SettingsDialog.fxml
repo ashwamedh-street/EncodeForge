@@ -4,7 +4,30 @@
 <?import javafx.scene.control.*?>
 <?import javafx.scene.layout.*?>
 
-<BorderPane xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1" styleClass="dialog-pane" prefWidth="700" prefHeight="600">
+<StackPane xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1">
+    <!-- Main Content -->
+    <BorderPane styleClass="dialog-pane" prefWidth="700" prefHeight="600">
+        
+        <!-- Custom Title Bar -->
+        <top>
+            <HBox styleClass="custom-title-bar" alignment="CENTER_LEFT">
+                <!-- App Icon and Title -->
+                <HBox alignment="CENTER_LEFT" spacing="8" styleClass="title-section" onMousePressed="#handleTitleBarPressed" onMouseDragged="#handleTitleBarDragged">
+                    <Label fx:id="appIconLabel" styleClass="app-icon"/>
+                    <Label text="Settings" styleClass="app-title"/>
+                </HBox>
+                
+                <!-- Draggable spacer area -->
+                <Region HBox.hgrow="ALWAYS" onMousePressed="#handleTitleBarPressed" onMouseDragged="#handleTitleBarDragged" styleClass="draggable-spacer"/>
+                
+                <!-- Window Controls -->
+                <HBox spacing="0" styleClass="window-controls">
+                    <Button fx:id="minimizeButton" onAction="#handleMinimize" styleClass="window-control-button, minimize-button"/>
+                    <Button fx:id="maximizeButton" onAction="#handleMaximize" styleClass="window-control-button, maximize-button"/>
+                    <Button fx:id="closeButton" onAction="#handleClose" styleClass="window-control-button, close-button"/>
+                </HBox>
+            </HBox>
+        </top>
     
     <!-- Left: Settings Categories -->
     <left>
@@ -27,7 +50,7 @@
                         <Label text="Settings Location:" styleClass="setting-label"/>
                         <HBox spacing="10" alignment="CENTER_LEFT">
                             <Label fx:id="settingsLocationLabel" text="~/.encodeforge/settings.json" styleClass="hint-label" HBox.hgrow="ALWAYS"/>
-                            <Button text="📁 Open Folder" onAction="#handleOpenSettingsFolder" styleClass="small-button"/>
+                            <Button fx:id="openSettingsFolderButton" onAction="#handleOpenSettingsFolder" styleClass="small-button"/>
                         </HBox>
                     </VBox>
                     
@@ -90,8 +113,8 @@
                     <Separator/>
                     
                     <HBox spacing="12">
-                        <Button text="🔍 Auto-Detect" onAction="#handleAutoDetect" styleClass="primary-button"/>
-                        <Button text="📥 Download FFmpeg" onAction="#handleDownloadFFmpeg" styleClass="secondary-button"/>
+                        <Button fx:id="autoDetectButton" onAction="#handleAutoDetect" styleClass="primary-button"/>
+                        <Button fx:id="downloadFFmpegButton" onAction="#handleDownloadFFmpeg" styleClass="secondary-button"/>
                     </HBox>
                 </VBox>
                 
@@ -210,7 +233,7 @@
                         </VBox>
                         
                         <HBox spacing="10">
-                            <Button text="✓ Validate Login" onAction="#handleValidateOpenSubtitles" styleClass="small-button"/>
+                            <Button fx:id="validateOpenSubsButton" onAction="#handleValidateOpenSubtitles" styleClass="small-button"/>
                             <Label fx:id="openSubsValidationLabel" text="" styleClass="hint-label"/>
                         </HBox>
                     </VBox>
@@ -229,7 +252,7 @@
                             <TextField fx:id="tmdbApiKeyField" promptText="Required for movie/TV metadata"/>
                             <Label text="Get free API key from https://www.themoviedb.org/settings/api" styleClass="hint-label"/>
                             <HBox spacing="10">
-                                <Button text="✓ Validate Key" onAction="#handleValidateTMDB" styleClass="small-button"/>
+                                <Button fx:id="validateTMDBButton" onAction="#handleValidateTMDB" styleClass="small-button"/>
                                 <Label fx:id="tmdbValidationLabel" text="" styleClass="hint-label"/>
                             </HBox>
                         </VBox>
@@ -239,7 +262,7 @@
                             <TextField fx:id="tvdbApiKeyField" promptText="Optional - for TV show metadata"/>
                             <Label text="Get free API key from https://thetvdb.com/api-information" styleClass="hint-label"/>
                             <HBox spacing="10">
-                                <Button text="✓ Validate Key" onAction="#handleValidateTVDB" styleClass="small-button"/>
+                                <Button fx:id="validateTVDBButton" onAction="#handleValidateTVDB" styleClass="small-button"/>
                                 <Label fx:id="tvdbValidationLabel" text="" styleClass="hint-label"/>
                             </HBox>
                         </VBox>
@@ -299,5 +322,6 @@
         </HBox>
     </bottom>
     
-</BorderPane>
+    </BorderPane>
+</StackPane>
 
