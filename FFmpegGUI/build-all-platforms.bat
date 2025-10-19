@@ -111,7 +111,7 @@ exit /b 0
 echo.
 echo Building Java application...
 cd "%PROJECT_DIR%"
-call mvnw.cmd clean package -DskipTests
+call mvnw.cmd package -DskipTests
 if errorlevel 1 (
     echo ERROR: Java application build failed
     pause

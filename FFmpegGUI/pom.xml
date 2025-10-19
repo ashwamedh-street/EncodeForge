@@ -157,6 +157,8 @@
             </plugin>
 
             <!-- Exec Maven Plugin - Run Python bundle creation -->
+            <!-- Note: Python bundle should be created by build script before Maven runs -->
+            <!--
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
@@ -175,6 +177,7 @@
                     </execution>
                 </executions>
             </plugin>
+            -->
 
             <!-- JPackage Plugin - Creates native installers -->
             <plugin>
@@ -194,6 +197,7 @@
                             <appVersion>${project.version}</appVersion>
                             <vendor>Encode Forge</vendor>
                             <destination>target/dist/windows</destination>
+                            <input>target</input>
                             <mainJar>encodeforge-${project.version}.jar</mainJar>
                             <mainClass>com.ffmpeg.gui.MainApp</mainClass>
                             <type>EXE</type>
@@ -224,6 +228,7 @@
                             <appVersion>${project.version}</appVersion>
                             <vendor>Encode Forge</vendor>
                             <destination>target/dist/linux</destination>
+                            <input>target</input>
                             <mainJar>encodeforge-${project.version}.jar</mainJar>
                             <mainClass>com.ffmpeg.gui.MainApp</mainClass>
                             <type>APP_IMAGE</type>
@@ -252,6 +257,7 @@
                             <appVersion>${project.version}</appVersion>
                             <vendor>Encode Forge</vendor>
                             <destination>target/dist/mac</destination>
+                            <input>target</input>
                             <mainJar>encodeforge-${project.version}.jar</mainJar>
                             <mainClass>com.ffmpeg.gui.MainApp</mainClass>
                             <type>DMG</type>

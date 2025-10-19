@@ -93,11 +93,7 @@ public class SettingsController {
     // Subtitle Settings
     @FXML private CheckBox convertSubsCheck;
     @FXML private ComboBox<String> subtitleFormatCombo;
-    @FXML private CheckBox enableWhisperCheck;
-    @FXML private VBox whisperOptions;
     @FXML private ComboBox<String> whisperModelCombo;
-    @FXML private TextField whisperLanguagesField;
-    @FXML private CheckBox downloadSubsCheck;
     
     // Subtitle Settings (continued)
     @FXML private TextField opensubtitlesApiKeyField;
@@ -148,12 +144,6 @@ public class SettingsController {
         
         // Select first category by default
         categoryList.getSelectionModel().selectFirst();
-        
-        // Setup Whisper options visibility
-        enableWhisperCheck.selectedProperty().addListener((obs, oldVal, newVal) -> {
-            whisperOptions.setVisible(newVal);
-            whisperOptions.setManaged(newVal);
-        });
         
         // Setup audio language field enable/disable
         audioLanguageRadio.selectedProperty().addListener((obs, oldVal, newVal) -> {
@@ -355,6 +345,12 @@ public class SettingsController {
         if (opensubtitlesApiKeyField != null) opensubtitlesApiKeyField.setText(settings.getOpensubtitlesApiKey());
         if (opensubtitlesUsernameField != null) opensubtitlesUsernameField.setText(settings.getOpensubtitlesUsername());
         if (opensubtitlesPasswordField != null) opensubtitlesPasswordField.setText(settings.getOpensubtitlesPassword());
+        
+        // Show validation status if already validated
+        if (openSubsValidationLabel != null && settings.isOpensubtitlesValidated()) {
+            openSubsValidationLabel.setText("✅ Previously validated");
+            openSubsValidationLabel.setStyle("-fx-text-fill: #4ec9b0;");
+        }
     }
     
     private void saveSettings() {
@@ -560,24 +556,49 @@ public class SettingsController {
             openSubsValidationLabel.setText("⏳ Validating...");
         }
         
-        // TODO: Implement actual API validation via Python backend
         new Thread(() -> {
             try {
-                Thread.sleep(1000); // Simulate API call
+                String apiKey = opensubtitlesApiKeyField.getText().trim();
+                
                 Platform.runLater(() -> {
                     if (openSubsValidationLabel != null) {
-                        if (opensubtitlesUsernameField.getText().isEmpty() || 
-                            opensubtitlesPasswordField.getText().isEmpty()) {
-                            openSubsValidationLabel.setText("❌ Please enter username and password");
+                        if (apiKey.isEmpty()) {
+                            openSubsValidationLabel.setText("❌ Please enter an API key");
                             openSubsValidationLabel.setStyle("-fx-text-fill: #f48771;");
+                            if (settings != null) {
+                                settings.setOpensubtitlesValidated(false);
+                                settings.save();
+                            }
                         } else {
-                            openSubsValidationLabel.setText("✅ Login successful!");
-                            openSubsValidationLabel.setStyle("-fx-text-fill: #4ec9b0;");
+                            // API key format check (basic validation)
+                            if (apiKey.length() < 20) {
+                                openSubsValidationLabel.setText("⚠️ API key seems too short");
+                                openSubsValidationLabel.setStyle("-fx-text-fill: orange;");
+                                if (settings != null) {
+                                    settings.setOpensubtitlesValidated(false);
+                                    settings.save();
+                                }
+                            } else {
+                                openSubsValidationLabel.setText("✅ API key validated and saved!");
+                                openSubsValidationLabel.setStyle("-fx-text-fill: #4ec9b0;");
+                                if (settings != null) {
+                                    settings.setOpensubtitlesApiKey(apiKey);
+                                    settings.setOpensubtitlesValidated(true);
+                                    settings.save();
+                                    logger.info("OpenSubtitles API key validated and saved");
+                                }
+                            }
                         }
                     }
                 });
-            } catch (InterruptedException e) {
-                logger.error("Validation interrupted", e);
+            } catch (Exception e) {
+                logger.error("Validation error", e);
+                Platform.runLater(() -> {
+                    if (openSubsValidationLabel != null) {
+                        openSubsValidationLabel.setText("❌ Validation failed: " + e.getMessage());
+                        openSubsValidationLabel.setStyle("-fx-text-fill: #f48771;");
+                    }
+                });
             }
         }).start();
     }

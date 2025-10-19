@@ -43,7 +43,7 @@ build_java() {
     echo ""
     echo "Building Java application..."
     cd "$PROJECT_DIR"
-    ./mvnw clean package -DskipTests
+    ./mvnw package -DskipTests
     if [ $? -ne 0 ]; then
         echo "ERROR: Java application build failed"
         exit 1

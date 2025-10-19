@@ -42,7 +42,6 @@ class ConversionSettings:
     use_amf: bool = False  # AMD
     use_qsv: bool = False  # Intel Quick Sync
     use_videotoolbox: bool = False  # Apple
-    hardware_decoding: bool = True  # Enable hardware decoding when available
     
     # Subtitle options
     convert_subtitles: bool = True
@@ -74,12 +73,9 @@ class ConversionSettings:
     normalize_audio: bool = False
     
     # Video options
-    video_codec: str = "Software H.264"  # User's codec selection from UI (e.g., "H.265 AMF (GPU)")
     video_codec_fallback: str = "libx264"
     video_preset: str = "medium"
-    quality_preset: str = "medium"  # Quality preset from UI (highest/high/medium/low/very low)
-    crf: int = 23  # CRF value from UI
-    video_crf: int = 23  # Fallback CRF (deprecated, use 'crf' instead)
+    video_crf: int = 23
     target_resolution: Optional[str] = None
     
     # General options
@@ -324,9 +320,15 @@ class FFmpegCore:
     def generate_subtitles(self, video_path: str, language: Optional[str] = None, 
                           progress_callback: Optional[Callable] = None) -> Dict:
         """Generate subtitles for a video file using Whisper AI"""
+        logger.info("=== Starting Whisper AI Subtitle Generation ===")
+        logger.info(f"Video: {video_path}")
+        logger.info(f"Language: {language or 'auto-detect'}")
+        logger.info(f"Model: {self.settings.whisper_model}")
+        
         # Check if Whisper is available
         whisper_status = self.check_whisper()
         if not whisper_status.get("whisper_available"):
+            logger.error("Whisper AI is not installed")
             return {
                 "status": "error",
                 "message": "Whisper AI is not installed. Please install it from Settings > Subtitles.",
@@ -337,8 +339,11 @@ class FFmpegCore:
         installed_models = whisper_status.get("installed_models", [])
         requested_model = self.settings.whisper_model
         
+        logger.info(f"Installed Whisper models: {installed_models}")
+        
         if requested_model not in installed_models:
             available = whisper_status.get("available_models", [])
+            logger.error(f"Requested model '{requested_model}' not installed. Available: {available}")
             return {
                 "status": "error",
                 "message": f"Whisper model '{requested_model}' is not installed. Please download it from Settings > Subtitles. Available models: {', '.join(available)}",
@@ -346,7 +351,13 @@ class FFmpegCore:
             }
         
         try:
-            output_path = Path(video_path).with_suffix(f".{language or 'auto'}.srt")
+            # Generate output path with language code
+            video_file = Path(video_path)
+            lang_suffix = language if language else "auto"
+            output_path = video_file.parent / f"{video_file.stem}.{lang_suffix}.srt"
+            
+            logger.info(f"Output subtitle path: {output_path}")
+            logger.info("Starting Whisper transcription (this may take several minutes)...")
             
             success, message = self.whisper_mgr.generate_subtitles(
                 video_path,
@@ -356,23 +367,90 @@ class FFmpegCore:
                 progress_callback=progress_callback
             )
             
+            if success:
+                logger.info(f"✅ Successfully generated subtitles: {output_path}")
+                logger.info(f"Message: {message}")
+            else:
+                logger.error(f"❌ Failed to generate subtitles: {message}")
+            
             return {
                 "status": "success" if success else "error",
                 "message": message,
                 "subtitle_path": str(output_path) if success else None
             }
         except Exception as e:
-            logger.error(f"Error generating subtitles: {e}", exc_info=True)
+            logger.error(f"❌ Error generating subtitles: {e}", exc_info=True)
             return {
                 "status": "error",
                 "message": f"Failed to generate subtitles: {str(e)}",
                 "subtitle_path": None
             }
     
+    def search_subtitles(self, video_path: str, languages: Optional[List[str]] = None) -> Dict:
+        """Search for available subtitles without downloading"""
+        try:
+            logger.info("=== Starting Subtitle Search ===")
+            logger.info(f"Video: {video_path}")
+            
+            if languages is None:
+                languages = self.settings.subtitle_languages
+            
+            logger.info(f"Languages: {languages}")
+            logger.info("Searching across multiple providers...")
+            logger.info(f"Providers available: OpenSubtitles.com, Addic7ed, SubDL, Subf2m, YIFY, Podnapisi, SubDivX (7 total)")
+            
+            # Search all providers
+            results = self.subtitle_providers.search_all_providers(video_path, languages)
+            
+            logger.info(f"Found {len(results)} subtitle(s) from {len(set(r.get('provider', 'unknown') for r in results))} providers")
+            
+            # Log provider breakdown
+            provider_counts = {}
+            for r in results:
+                provider = r.get('provider', 'unknown')
+                provider_counts[provider] = provider_counts.get(provider, 0) + 1
+            
+            for provider, count in provider_counts.items():
+                logger.info(f"  - {provider}: {count} subtitle(s)")
+            
+            # Format results for UI
+            formatted_results = []
+            for result in results:
+                formatted_results.append({
+                    "language": result.get("language", "unknown"),
+                    "provider": result.get("provider", "unknown"),
+                    "format": result.get("format", "srt"),
+                    "download_url": result.get("download_url", ""),
+                    "file_id": result.get("file_id", ""),
+                    "score": result.get("score", 0),
+                    "filename": result.get("filename", "")
+                })
+            
+            return {
+                "status": "success",
+                "message": f"Found {len(results)} subtitle(s)",
+                "count": len(results),
+                "subtitles": formatted_results
+            }
+        except Exception as e:
+            logger.error(f"Error searching subtitles: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "message": f"Search failed: {str(e)}",
+                "count": 0,
+                "subtitles": []
+            }
+    
     def download_subtitles(self, video_path: str, languages: Optional[List[str]] = None) -> Dict:
         """Download subtitles from multiple providers"""
+        logger.info("=== Starting Subtitle Download ===")
+        logger.info(f"Video: {video_path}")
+        
         if languages is None:
             languages = self.settings.subtitle_languages
+        
+        logger.info(f"Languages: {languages}")
+        logger.info("Searching across multiple providers...")
         
         # Use multi-provider search
         results = self.subtitle_providers.batch_download([video_path], languages)
@@ -381,6 +459,13 @@ class FFmpegCore:
         failed_count = len(results.get("failed", []))
         
         subtitle_paths = [item["subtitle"] for item in results.get("success", [])]
+        
+        if success_count > 0:
+            logger.info(f"✅ Downloaded {success_count} subtitle(s)")
+            for path in subtitle_paths:
+                logger.info(f"  - {path}")
+        else:
+            logger.warning(f"❌ No subtitles downloaded. {failed_count} attempts failed")
         
         return {
             "status": "success" if success_count > 0 else "error",
@@ -646,24 +731,10 @@ class FFmpegCore:
             
             # Build FFmpeg command
             # Place global flags early to reduce stderr chatter and improve progress behavior
-            cmd = [self.settings.ffmpeg_path, "-hide_banner", "-loglevel", "error"]
+            cmd = [self.settings.ffmpeg_path, "-hide_banner", "-loglevel", "error", "-i", str(input_file)]
             
-            # Determine best encoder with automatic fallback (do this BEFORE input to check hardware support)
+            # Determine best encoder with automatic fallback
             encoder_info = self._select_best_encoder()
-            
-            # Hardware decoding for input (only if using hardware encoder to avoid compatibility issues)
-            if self.settings.hardware_decoding and encoder_info["type"] == "hardware":
-                cmd.extend(["-hwaccel", "auto"])
-                # Only use cuda output format if we're actually using NVENC
-                if encoder_info["codec"].endswith("nvenc"):
-                    cmd.extend(["-hwaccel_output_format", "cuda"])
-                    cmd.extend(["-extra_hw_frames", "8"])
-                    logger.info("Hardware decoding enabled with NVENC optimizations")
-                else:
-                    logger.info("Hardware decoding enabled (basic)")
-            
-            # Input file
-            cmd.extend(["-i", str(input_file)])
             
             if encoder_info["type"] == "hardware":
                 cmd.extend(["-c:v", encoder_info["codec"]])
@@ -671,20 +742,13 @@ class FFmpegCore:
                 # Comprehensive hardware optimizations for ALL GPU types
                 if encoder_info["codec"].endswith("nvenc"):
                     # NVIDIA NVENC optimizations (RTX, GTX, Quadro, Tesla)
-                    cmd.extend(["-preset", "p1"])  # Fastest preset (p1 = fastest, p7 = slowest)
-                    cmd.extend(["-tune", "hq"])  # High quality tune
-                    cmd.extend(["-rc", "vbr"])  # Variable bitrate for better quality/speed balance
+                    cmd.extend(["-preset", self.settings.nvenc_preset])
                     cmd.extend(["-cq", str(self.settings.nvenc_cq)])
-                    cmd.extend(["-b:v", "0"])  # Unconstrained VBR
-                    cmd.extend(["-multipass", "qres"])  # Quarter resolution first pass for speed
-                    cmd.extend(["-spatial-aq", "1"])  # Spatial AQ for quality
-                    cmd.extend(["-temporal-aq", "1"])  # Temporal AQ for better compression
-                    cmd.extend(["-surfaces", "64"])  # Maximum surfaces for RTX cards
+                    cmd.extend(["-rc", "vbr"])  # Variable bitrate for better quality/speed balance
+                    cmd.extend(["-surfaces", "32"])  # More surfaces for better performance
                     cmd.extend(["-forced-idr", "1"])  # Force IDR frames for seeking
                     cmd.extend(["-gpu", "any"])  # Use any available GPU
                     cmd.extend(["-delay", "0"])  # Minimize encoding delay
-                    cmd.extend(["-bf", "3"])  # B-frames for better compression
-                    cmd.extend(["-b_ref_mode", "middle"])  # B-frame reference mode
                     
                 elif encoder_info["codec"].endswith("amf"):
                     # AMD AMF optimizations (RX 400+, APU, Pro series)
@@ -700,13 +764,12 @@ class FFmpegCore:
                     
                 elif encoder_info["codec"].endswith("qsv"):
                     # Intel Quick Sync optimizations (HD Graphics 2000+, Arc, Iris)
-                    cmd.extend(["-preset", "veryfast"])  # Fastest QSV preset
+                    cmd.extend(["-preset", "faster"])  # Speed-optimized preset
                     cmd.extend(["-global_quality", str(self.settings.nvenc_cq)])
                     cmd.extend(["-look_ahead", "1"])  # Enable lookahead for better quality
-                    cmd.extend(["-look_ahead_depth", "60"])  # Maximum lookahead for Arc
-                    cmd.extend(["-async_depth", "6"])  # Higher async depth for speed
+                    cmd.extend(["-look_ahead_depth", "40"])  # Optimal lookahead depth
+                    cmd.extend(["-async_depth", "4"])  # Async processing depth
                     cmd.extend(["-low_power", "0"])  # Use full power mode for speed
-                    cmd.extend(["-extbrc", "1"])  # Extended bitrate control
                     
                 elif encoder_info["codec"].endswith("videotoolbox"):
                     # Apple VideoToolbox optimizations (M1/M2/Intel Macs)
@@ -716,63 +779,38 @@ class FFmpegCore:
                     cmd.extend(["-allow_sw", "1"])  # Allow software fallback if needed
                     
                 # Universal hardware optimizations
-                # FFmpeg thread management (0 = auto-detect and use optimal count)
-                import os
-                cpu_count = os.cpu_count() or 8
-                # For hardware encoding, use all logical cores
-                cmd.extend(["-threads", str(cpu_count)])
+                cmd.extend(["-threads", "0"])  # Use all available threads
                 cmd.extend(["-thread_type", "slice"])  # Slice-based threading for speed
-                logger.info(f"Using {cpu_count} threads for hardware encoding")
                 
             else:
                 # Software encoding fallback with maximum optimizations
                 cmd.extend(["-c:v", encoder_info["codec"]])
                 
-                # Get CRF value from user settings (prefer 'crf' field from UI)
-                crf_value = getattr(self.settings, 'crf', self.settings.video_crf)
-                
-                # Get optimal thread count
-                import os
-                cpu_count = os.cpu_count() or 8
-                optimal_threads = cpu_count  # Use all logical cores for software encoding
-                
                 if encoder_info["codec"] == "libx264":
                     # x264 speed optimizations
-                    cmd.extend(["-preset", "veryfast"])  # Much faster than "faster"
-                    cmd.extend(["-tune", "fastdecode"])  # Optimize for fast decoding
-                    cmd.extend(["-crf", str(crf_value)])
-                    cmd.extend(["-threads", str(optimal_threads)])  # Use all CPU threads
-                    cmd.extend(["-slices", str(min(8, optimal_threads))])  # Optimize slice count
+                    cmd.extend(["-preset", "faster"])  # Balance speed vs quality
+                    cmd.extend(["-crf", str(self.settings.video_crf)])
+                    cmd.extend(["-threads", "0"])  # Use all CPU threads
                     cmd.extend(["-x264-params", 
-                              "aq-mode=1:me=hex:subme=4:ref=2:bframes=2:b-adapt=0:direct=spatial:rc-lookahead=20"])
-                    logger.info(f"x264: Using {optimal_threads} threads with {min(8, optimal_threads)} slices")
+                              "aq-mode=2:me=hex:subme=6:ref=3:bframes=3:b-adapt=1:direct=auto"])
                     
                 elif encoder_info["codec"] == "libx265":
-                    # x265 speed optimizations with thread pools
-                    cmd.extend(["-preset", "veryfast"])  # Fastest practical preset
-                    cmd.extend(["-crf", str(crf_value)])
-                    cmd.extend(["-threads", str(optimal_threads)])
-                    # x265 benefits from more aggressive threading
+                    # x265 speed optimizations
+                    cmd.extend(["-preset", "fast"])  # Faster preset for x265
+                    cmd.extend(["-crf", str(self.settings.video_crf)])
+                    cmd.extend(["-threads", "0"])
                     cmd.extend(["-x265-params", 
-                              f"pools={max(1, optimal_threads // 4)}:aq-mode=1:me=0:subme=1:ref=1:bframes=2:rd=1:pmode:pme:no-cutree:no-sao:no-strong-intra-smoothing:frame-threads={min(6, optimal_threads // 2)}"])
-                    logger.info(f"x265: Using {optimal_threads} threads with {max(1, optimal_threads // 4)} pools")
+                              "aq-mode=2:me=1:subme=2:ref=2:bframes=4:rd=2"])
                     
                 else:
                     # Generic software encoder
                     cmd.extend(["-preset", self.settings.video_preset])
-                    cmd.extend(["-crf", str(crf_value)])
-                    cmd.extend(["-threads", str(optimal_threads)])
-                    logger.info(f"Software encoder: Using {optimal_threads} threads")
+                    cmd.extend(["-crf", str(self.settings.video_crf)])
+                    cmd.extend(["-threads", "0"])
             
             # Universal performance optimizations for ALL encoders
-            cmd.extend(["-movflags", "+write_colr+faststart"])  # Better color + web optimization
+            cmd.extend(["-movflags", "+write_colr"])  # Better color handling
             cmd.extend(["-pix_fmt", "yuv420p"])  # Universal pixel format
-            
-            # Aggressive performance optimizations
-            cmd.extend(["-max_muxing_queue_size", "9999"])  # Prevent queue overflow
-            cmd.extend(["-fflags", "+genpts+igndts"])  # Generate PTS, ignore DTS for speed
-            cmd.extend(["-avoid_negative_ts", "make_zero"])  # Fix timestamp issues
-            cmd.extend(["-fps_mode", "cfr"])  # Constant frame rate for predictable encoding
             
             logger.info(f"Using video encoder: {encoder_info['codec']} ({encoder_info['type']})")
             if encoder_info.get("reason"):
@@ -849,7 +887,8 @@ class FFmpegCore:
             else:
                 logger.info("Subtitle conversion disabled - subtitles will be stripped")
             
-            # Already added in universal optimizations
+            # Increase muxing queue size for complex files
+            cmd.extend(["-max_muxing_queue_size", "2048"])
             
             # Fast start for web playback
             if self.settings.use_faststart and self.settings.output_format in ["mp4", "m4v"]:
@@ -913,18 +952,16 @@ class FFmpegCore:
                     "message": f"Failed to start FFmpeg: {e}"
                 }
             
-            # Get duration, FPS, and resolution from file info first
+            # Get duration and resolution from file info first
             duration = 0
             video_resolution = None
-            source_fps = 23.976  # Default FPS fallback
-            total_frames = 0
             logger.info(f"Getting media info for: {input_file}")
             info = self.get_media_info(str(input_file))
             if info.get("status") == "success":
                 duration = float(info.get("duration", 0))
                 logger.info(f"Input file duration: {duration} seconds")
                 
-                # Extract video resolution and FPS for accurate progress tracking
+                # Extract video resolution for subtitle canvas size
                 video_tracks = info.get("video_tracks", [])
                 if video_tracks and len(video_tracks) > 0:
                     resolution_str = video_tracks[0].get("resolution", "")
@@ -933,16 +970,6 @@ class FFmpegCore:
                             width, height = resolution_str.split("x")
                             video_resolution = f"{width}x{height}"
                             logger.info(f"Input video resolution: {video_resolution}")
-                        except (ValueError, IndexError):
-                            pass
-                    
-                    # Get source FPS for frame-based progress calculation
-                    fps_str = video_tracks[0].get("fps", "")
-                    if fps_str:
-                        try:
-                            source_fps = float(fps_str.split()[0])
-                            total_frames = int(duration * source_fps)
-                            logger.info(f"Source FPS: {source_fps}, Total frames: {total_frames}")
                         except (ValueError, IndexError):
                             pass
             else:
@@ -968,7 +995,7 @@ class FFmpegCore:
             import time
             start_time = time.time()
             
-            # Progress tracking state with frame-based fallback
+            # Progress tracking state
             progress_data = {
                 "frame": 0,
                 "fps": 0.0,
@@ -977,9 +1004,7 @@ class FFmpegCore:
                 "total_size": 0,
                 "out_time_ms": 0,
                 "out_time": "00:00:00.00",
-                "progress": "continue",
-                "last_out_time_ms": 0,  # Track last seen time for stuck detection
-                "stuck_counter": 0  # Count how many times time has been stuck
+                "progress": "continue"
             }
             
             try:
@@ -1061,13 +1086,10 @@ class FFmpegCore:
                                     elif key == "out_time_ms":
                                         if value != "N/A":
                                             new_time_ms = int(value)
-                                            # Track if time is stuck
-                                            if new_time_ms == progress_data["last_out_time_ms"]:
-                                                progress_data["stuck_counter"] += 1
-                                            else:
-                                                progress_data["stuck_counter"] = 0
+                                            # Only update if value actually changed
+                                            if new_time_ms != progress_data["out_time_ms"]:
                                                 progress_data["out_time_ms"] = new_time_ms
-                                                progress_data["last_out_time_ms"] = new_time_ms
+                                                logger.debug(f"Updated out_time_ms to {new_time_ms} (frame {progress_data['frame']})")
                                     elif key == "out_time":
                                         progress_data["out_time"] = value
                                     elif key == "progress":
@@ -1077,35 +1099,15 @@ class FFmpegCore:
                                         if value in ["continue", "end"]:
                                             current_time = time.time()
                                             
-                                            # Calculate progress with fallback to frame-based calculation
-                                            progress_pct = 0
-                                            time_s = 0
-                                            
-                                            # Check if time-based progress is working
                                             if progress_data["out_time_ms"] > 0 and duration > 0:
                                                 time_s = progress_data["out_time_ms"] / 1000000.0
                                                 progress_pct = min(100, (time_s / duration) * 100)
                                                 
-                                                # If time is stuck but frames are progressing, use frame-based fallback
-                                                if progress_data["stuck_counter"] > 5 and total_frames > 0 and progress_data["frame"] > 0:
-                                                    frame_progress = min(100, (progress_data["frame"] / total_frames) * 100)
-                                                    # Use frame progress if it's higher (indicates time is stuck)
-                                                    if frame_progress > progress_pct + 1:
-                                                        progress_pct = frame_progress
-                                                        logger.debug(f"Using frame-based progress: {progress_pct:.2f}% (time stuck)")
-                                            
-                                            # Fallback to frame-based if we have no time data but have frame data
-                                            elif total_frames > 0 and progress_data["frame"] > 0:
-                                                progress_pct = min(100, (progress_data["frame"] / total_frames) * 100)
-                                                time_s = progress_data["frame"] / source_fps if source_fps > 0 else 0
-                                            
-                                            # Send update immediately if we have any meaningful progress
-                                            if progress_pct > 0 or progress_data["frame"] > 10:
                                                 # Calculate ETA
-                                                eta_str = "Calculating..."
+                                                eta_str = "Unknown"
                                                 if progress_pct > 1:
                                                     elapsed = current_time - start_time
-                                                    if elapsed > 1:  # Need at least 1 second of data
+                                                    if elapsed > 0:
                                                         total_time = elapsed * (100 / progress_pct)
                                                         remaining = total_time - elapsed
                                                         if remaining > 3600:
@@ -1264,42 +1266,6 @@ class FFmpegCore:
                 "message": f"Conversion failed: {str(e)}"
             }
 
-    def _test_encoder_quick(self, encoder_name: str) -> bool:
-        """
-        Quick test if an encoder actually works by encoding a tiny test video.
-        
-        Args:
-            encoder_name: FFmpeg encoder name (e.g., "h264_nvenc", "h264_amf")
-        
-        Returns:
-            True if encoder works, False otherwise
-        """
-        try:
-            cmd = [
-                self.settings.ffmpeg_path,
-                "-hide_banner", "-loglevel", "error",
-                "-f", "lavfi", "-i", "color=black:size=320x240:duration=0.1",
-                "-c:v", encoder_name,
-                "-f", "null", "-"
-            ]
-            
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=5
-            )
-            
-            success = result.returncode == 0
-            if not success:
-                logger.debug(f"Encoder {encoder_name} test failed: {result.stderr[:200]}")
-            
-            return success
-            
-        except Exception as e:
-            logger.debug(f"Error testing encoder {encoder_name}: {e}")
-            return False
-    
     def _select_best_encoder(self) -> Dict[str, str]:
         """Select the best available encoder with automatic fallback"""
         # Get hardware information
@@ -1308,127 +1274,24 @@ class FFmpegCore:
         
         logger.info(f"Hardware detection: GPU={hardware_info['gpu']}, CPU={hardware_info['cpu']['vendor']}")
         logger.info(f"Available encoders: {available_encoders}")
-        logger.info(f"User selected codec: {self.settings.video_codec}")
         
-        # Map UI-friendly names to FFmpeg codec names
-        codec_map = {
-            "Auto (Best Available)": ("auto", "auto"),
-            "H.264 NVENC (GPU)": ("h264_nvenc", "hardware"),
-            "H.265 NVENC (GPU)": ("hevc_nvenc", "hardware"),
-            "H.264 AMF (GPU)": ("h264_amf", "hardware"),
-            "H.265 AMF (GPU)": ("hevc_amf", "hardware"),
-            "H.264 Intel QSV (CPU)": ("h264_qsv", "hardware"),
-            "H.265 Intel QSV (CPU)": ("hevc_qsv", "hardware"),
-            "H.264 VideoToolbox (GPU)": ("h264_videotoolbox", "hardware"),
-            "H.265 VideoToolbox (GPU)": ("hevc_videotoolbox", "hardware"),
-            "Software H.264": ("libx264", "software"),
-            "Software H.265": ("libx265", "software"),
-            "Copy": ("copy", "copy")
-        }
-        
-        # Get the user's selected codec from the UI
-        selected_codec_name = self.settings.video_codec
-        
-        # Handle "Auto" selection - test encoders and choose best available
-        if selected_codec_name == "Auto (Best Available)" or selected_codec_name == "auto":
-            logger.info("Auto codec selection - testing encoders to find best option")
-            
-            # Priority list of encoders to test (best to worst)
-            encoders_to_test = [
-                ("h264_nvenc", "NVIDIA H.264 NVENC", hardware_info["gpu"]["nvidia"]),
-                ("hevc_nvenc", "NVIDIA H.265 NVENC", hardware_info["gpu"]["nvidia"]),
-                ("h264_amf", "AMD H.264 AMF", hardware_info["gpu"]["amd"]),
-                ("hevc_amf", "AMD H.265 AMF", hardware_info["gpu"]["amd"]),
-                ("h264_qsv", "Intel H.264 QSV", hardware_info["cpu"]["supports_qsv"]),
-                ("hevc_qsv", "Intel H.265 QSV", hardware_info["cpu"]["supports_qsv"]),
-                ("h264_videotoolbox", "Apple H.264 VideoToolbox", hardware_info["gpu"]["apple"]),
-                ("hevc_videotoolbox", "Apple H.265 VideoToolbox", hardware_info["gpu"]["apple"])
-            ]
-            
-            # Test encoders in priority order
-            for encoder_codec, encoder_name, has_hardware in encoders_to_test:
-                # Skip if hardware not detected
-                if not has_hardware:
-                    continue
-                
-                # Test if encoder actually works
-                logger.info(f"Testing encoder: {encoder_name}")
-                if self._test_encoder_quick(encoder_codec):
-                    logger.info(f"Auto-selected {encoder_codec} ({encoder_name} - tested and working)")
-                    return {
-                        "codec": encoder_codec,
-                        "type": "hardware",
-                        "reason": f"Auto-selected: {encoder_name} (tested and functional)"
-                    }
-                else:
-                    logger.debug(f"Encoder {encoder_codec} failed test, trying next option")
-            
-            # Fallback to software if no hardware encoders work
-            logger.info("Auto-selected libx264 (no functional hardware encoders found)")
-            return {
-                "codec": "libx264",
-                "type": "software",
-                "reason": "Auto-selected: Software H.264 (no GPU available)"
-            }
-        
-        # Map the UI name to the actual FFmpeg codec
-        if selected_codec_name in codec_map:
-            ffmpeg_codec, codec_type = codec_map[selected_codec_name]
-            
-            # If it's a hardware codec, validate it's actually available
-            if codec_type == "hardware":
-                # Check if encoder is in the available list
-                encoder_available = False
-                encoder_check_name = None
-                
-                if "nvenc" in ffmpeg_codec:
-                    encoder_check_name = "NVIDIA H.264" if "h264" in ffmpeg_codec else "NVIDIA H.265"
-                    encoder_available = encoder_check_name in available_encoders and hardware_info["gpu"]["nvidia"]
-                elif "amf" in ffmpeg_codec:
-                    encoder_check_name = "AMD H.264" if "h264" in ffmpeg_codec else "AMD H.265"
-                    encoder_available = encoder_check_name in available_encoders and hardware_info["gpu"]["amd"]
-                elif "qsv" in ffmpeg_codec:
-                    encoder_check_name = "Intel Quick Sync H.264" if "h264" in ffmpeg_codec else "Intel Quick Sync H.265"
-                    encoder_available = encoder_check_name in available_encoders and hardware_info["cpu"]["supports_qsv"]
-                elif "videotoolbox" in ffmpeg_codec:
-                    encoder_check_name = "Apple VideoToolbox H.264" if "h264" in ffmpeg_codec else "Apple VideoToolbox H.265"
-                    encoder_available = encoder_check_name in available_encoders and hardware_info["gpu"]["apple"]
-                
-                if encoder_available:
-                    logger.info(f"Using user-selected codec: {ffmpeg_codec} (validated)")
-                    return {
-                        "codec": ffmpeg_codec,
-                        "type": "hardware",
-                        "reason": f"User selection: {selected_codec_name} (validated)"
-                    }
-                else:
-                    # Hardware encoder not available, fallback to software
-                    logger.warning(f"{selected_codec_name} requested but not available - falling back to software encoding")
-                    fallback_codec = "libx265" if "265" in selected_codec_name or "hevc" in ffmpeg_codec else "libx264"
-                    return {
-                        "codec": fallback_codec,
-                        "type": "software",
-                        "reason": f"{selected_codec_name} not available, using {fallback_codec} fallback"
-                    }
-            else:
-                # Software or copy - always available
-                logger.info(f"Using user-selected codec: {ffmpeg_codec}")
-                return {
-                    "codec": ffmpeg_codec,
-                    "type": codec_type,
-                    "reason": f"User selection: {selected_codec_name}"
-                }
-        
-        # Fallback: If codec name not recognized, use old logic for backward compatibility
-        logger.warning(f"Unrecognized codec selection: {selected_codec_name}, falling back to legacy detection")
-        
+        # Check user preference first, but validate it works
         if self.settings.use_nvenc:
             nvenc_codec = getattr(self.settings, 'nvenc_codec', 'h264_nvenc')
+            
+            # Check if NVENC is actually available and functional
             if hardware_info["gpu"]["nvidia"] and "NVIDIA H.264" in available_encoders:
                 return {
                     "codec": nvenc_codec,
                     "type": "hardware",
-                    "reason": "Legacy flag: NVENC (validated)"
+                    "reason": "User preference: NVENC (validated)"
+                }
+            else:
+                logger.warning("NVENC requested but not available - falling back to software encoding")
+                return {
+                    "codec": "libx264",
+                    "type": "software",
+                    "reason": "NVENC not available, using software fallback"
                 }
         
         elif self.settings.use_amf:
@@ -1436,7 +1299,14 @@ class FFmpegCore:
                 return {
                     "codec": "h264_amf",
                     "type": "hardware",
-                    "reason": "Legacy flag: AMD AMF (validated)"
+                    "reason": "User preference: AMD AMF (validated)"
+                }
+            else:
+                logger.warning("AMD AMF requested but not available - falling back to software encoding")
+                return {
+                    "codec": "libx264",
+                    "type": "software",
+                    "reason": "AMD AMF not available, using software fallback"
                 }
         
         elif self.settings.use_qsv:
@@ -1444,7 +1314,14 @@ class FFmpegCore:
                 return {
                     "codec": "h264_qsv",
                     "type": "hardware",
-                    "reason": "Legacy flag: Intel Quick Sync (validated)"
+                    "reason": "User preference: Intel Quick Sync (validated)"
+                }
+            else:
+                logger.warning("Intel QSV requested but not available - falling back to software encoding")
+                return {
+                    "codec": "libx264",
+                    "type": "software",
+                    "reason": "Intel QSV not available, using software fallback"
                 }
         
         elif self.settings.use_videotoolbox:
@@ -1452,24 +1329,32 @@ class FFmpegCore:
                 return {
                     "codec": "h264_videotoolbox",
                     "type": "hardware",
-                    "reason": "Legacy flag: Apple VideoToolbox (validated)"
+                    "reason": "User preference: Apple VideoToolbox (validated)"
+                }
+            else:
+                logger.warning("Apple VideoToolbox requested but not available - falling back to software encoding")
+                return {
+                    "codec": "libx264",
+                    "type": "software",
+                    "reason": "Apple VideoToolbox not available, using software fallback"
                 }
         
-        # Auto-select best available encoder
-        recommended = self.ffmpeg_mgr.get_recommended_encoder(hardware_info)
-        
-        if recommended != "libx264":
-            return {
-                "codec": recommended,
-                "type": "hardware",
-                "reason": "Auto-selected based on detected hardware"
-            }
         else:
-            return {
-                "codec": "libx264",
-                "type": "software",
-                "reason": "No hardware acceleration available, using software encoding"
-            }
+            # Auto-select best available encoder
+            recommended = self.ffmpeg_mgr.get_recommended_encoder(hardware_info)
+            
+            if recommended != "libx264":
+                return {
+                    "codec": recommended,
+                    "type": "hardware",
+                    "reason": "Auto-selected based on detected hardware"
+                }
+            else:
+                return {
+                    "codec": "libx264",
+                    "type": "software",
+                    "reason": "No hardware acceleration available, using software encoding"
+                }
     
     def _is_hardware_encoder_error(self, error_output: str) -> bool:
         """Check if the error is related to hardware encoder failure"""
@@ -1497,10 +1382,9 @@ class FFmpegCore:
             cmd = [self.settings.ffmpeg_path, "-hide_banner", "-loglevel", "error", "-i", str(input_file)]
             
             # Force software encoding
-            crf_value = getattr(self.settings, 'crf', self.settings.video_crf)
             cmd.extend(["-c:v", "libx264"])
             cmd.extend(["-preset", self.settings.video_preset])
-            cmd.extend(["-crf", str(crf_value)])
+            cmd.extend(["-crf", str(self.settings.video_crf)])
             
             # Audio codec and streams (same as original)
             if self.settings.audio_codec == "copy":

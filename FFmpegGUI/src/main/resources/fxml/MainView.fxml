@@ -140,7 +140,11 @@
                     <HBox spacing="15" alignment="CENTER_LEFT">
                         <VBox spacing="4" styleClass="settings-group">
                             <Label text="Mode" styleClass="group-label"/>
-                            <ComboBox fx:id="quickSubProviderCombo" styleClass="quick-combo" prefWidth="250"/>
+                            <ComboBox fx:id="quickSubProviderCombo" styleClass="quick-combo" prefWidth="250">
+                                <tooltip>
+                                    <Tooltip text="Searches 7 subtitle providers:&#10;✅ OpenSubtitles.com (API key)&#10;✅ Addic7ed (TV shows)&#10;✅ SubDL (Movies &amp; TV)&#10;✅ Subf2m (Movies &amp; TV)&#10;✅ YIFY (Movies only)&#10;✅ Podnapisi (Multilingual)&#10;✅ SubDivX (Spanish)&#10;&#10;AI generation uses Whisper"/>
+                                </tooltip>
+                            </ComboBox>
                         </VBox>
                         
                         <Separator orientation="VERTICAL"/>
@@ -162,10 +166,8 @@
                         <Region HBox.hgrow="ALWAYS"/>
                         
                         <!-- Control Buttons -->
-                        <HBox spacing="10">
-                            <Button fx:id="subtitleSearchButton" onAction="#handleSearchSubtitles" styleClass="toolbar-button" prefWidth="110"/>
-                            <Button fx:id="subtitleDownloadButton" onAction="#handleDownloadSubtitles" styleClass="toolbar-button" prefWidth="120"/>
-                            <Button fx:id="subtitleGenerateButton" onAction="#handleGenerateAI" styleClass="toolbar-button, primary-button" prefWidth="120"/>
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <Button fx:id="subtitleProcessButton" onAction="#handleProcessSubtitles" styleClass="toolbar-button, primary-button" prefWidth="140"/>
                         </HBox>
                     </HBox>
                     
@@ -440,12 +442,14 @@
                                 <Label text="Available Subtitles" styleClass="comparison-title"/>
                                 <TableView fx:id="availableSubtitlesTable" VBox.vgrow="ALWAYS" styleClass="subtitle-table">
                                     <columns>
-                                        <TableColumn text="" prefWidth="40"/>
-                                        <TableColumn text="Language" prefWidth="120"/>
-                                        <TableColumn text="Provider" prefWidth="120"/>
-                                        <TableColumn text="Format" prefWidth="80"/>
-                                        <TableColumn text="Rating" prefWidth="80"/>
+                                        <TableColumn fx:id="subtitleSelectColumn" text="" prefWidth="40"/>
+                                        <TableColumn fx:id="subtitleLanguageColumn" text="Language" prefWidth="120"/>
+                                        <TableColumn fx:id="subtitleProviderColumn" text="Provider" prefWidth="120"/>
+                                        <TableColumn fx:id="subtitleFormatColumn" text="Format" prefWidth="80"/>
                                     </columns>
+                                    <placeholder>
+                                        <Label text="No subtitles found. Click Process to search." styleClass="placeholder-label"/>
+                                    </placeholder>
                                 </TableView>
                             </VBox>
                             

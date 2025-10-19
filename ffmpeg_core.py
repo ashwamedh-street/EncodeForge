@@ -320,9 +320,15 @@ class FFmpegCore:
     def generate_subtitles(self, video_path: str, language: Optional[str] = None, 
                           progress_callback: Optional[Callable] = None) -> Dict:
         """Generate subtitles for a video file using Whisper AI"""
+        logger.info("=== Starting Whisper AI Subtitle Generation ===")
+        logger.info(f"Video: {video_path}")
+        logger.info(f"Language: {language or 'auto-detect'}")
+        logger.info(f"Model: {self.settings.whisper_model}")
+        
         # Check if Whisper is available
         whisper_status = self.check_whisper()
         if not whisper_status.get("whisper_available"):
+            logger.error("Whisper AI is not installed")
             return {
                 "status": "error",
                 "message": "Whisper AI is not installed. Please install it from Settings > Subtitles.",
@@ -333,8 +339,11 @@ class FFmpegCore:
         installed_models = whisper_status.get("installed_models", [])
         requested_model = self.settings.whisper_model
         
+        logger.info(f"Installed Whisper models: {installed_models}")
+        
         if requested_model not in installed_models:
             available = whisper_status.get("available_models", [])
+            logger.error(f"Requested model '{requested_model}' not installed. Available: {available}")
             return {
                 "status": "error",
                 "message": f"Whisper model '{requested_model}' is not installed. Please download it from Settings > Subtitles. Available models: {', '.join(available)}",
@@ -342,7 +351,13 @@ class FFmpegCore:
             }
         
         try:
-            output_path = Path(video_path).with_suffix(f".{language or 'auto'}.srt")
+            # Generate output path with language code
+            video_file = Path(video_path)
+            lang_suffix = language if language else "auto"
+            output_path = video_file.parent / f"{video_file.stem}.{lang_suffix}.srt"
+            
+            logger.info(f"Output subtitle path: {output_path}")
+            logger.info("Starting Whisper transcription (this may take several minutes)...")
             
             success, message = self.whisper_mgr.generate_subtitles(
                 video_path,
@@ -352,23 +367,90 @@ class FFmpegCore:
                 progress_callback=progress_callback
             )
             
+            if success:
+                logger.info(f"✅ Successfully generated subtitles: {output_path}")
+                logger.info(f"Message: {message}")
+            else:
+                logger.error(f"❌ Failed to generate subtitles: {message}")
+            
             return {
                 "status": "success" if success else "error",
                 "message": message,
                 "subtitle_path": str(output_path) if success else None
             }
         except Exception as e:
-            logger.error(f"Error generating subtitles: {e}", exc_info=True)
+            logger.error(f"❌ Error generating subtitles: {e}", exc_info=True)
             return {
                 "status": "error",
                 "message": f"Failed to generate subtitles: {str(e)}",
                 "subtitle_path": None
             }
     
+    def search_subtitles(self, video_path: str, languages: Optional[List[str]] = None) -> Dict:
+        """Search for available subtitles without downloading"""
+        try:
+            logger.info("=== Starting Subtitle Search ===")
+            logger.info(f"Video: {video_path}")
+            
+            if languages is None:
+                languages = self.settings.subtitle_languages
+            
+            logger.info(f"Languages: {languages}")
+            logger.info("Searching across multiple providers...")
+            logger.info(f"Providers available: OpenSubtitles.com, OpenSubtitles.org, YIFY, Podnapisi, SubDivX")
+            
+            # Search all providers
+            results = self.subtitle_providers.search_all_providers(video_path, languages)
+            
+            logger.info(f"Found {len(results)} subtitle(s) from {len(set(r.get('provider', 'unknown') for r in results))} providers")
+            
+            # Log provider breakdown
+            provider_counts = {}
+            for r in results:
+                provider = r.get('provider', 'unknown')
+                provider_counts[provider] = provider_counts.get(provider, 0) + 1
+            
+            for provider, count in provider_counts.items():
+                logger.info(f"  - {provider}: {count} subtitle(s)")
+            
+            # Format results for UI
+            formatted_results = []
+            for result in results:
+                formatted_results.append({
+                    "language": result.get("language", "unknown"),
+                    "provider": result.get("provider", "unknown"),
+                    "format": result.get("format", "srt"),
+                    "download_url": result.get("download_url", ""),
+                    "file_id": result.get("file_id", ""),
+                    "score": result.get("score", 0),
+                    "filename": result.get("filename", "")
+                })
+            
+            return {
+                "status": "success",
+                "message": f"Found {len(results)} subtitle(s)",
+                "count": len(results),
+                "subtitles": formatted_results
+            }
+        except Exception as e:
+            logger.error(f"Error searching subtitles: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "message": f"Search failed: {str(e)}",
+                "count": 0,
+                "subtitles": []
+            }
+    
     def download_subtitles(self, video_path: str, languages: Optional[List[str]] = None) -> Dict:
         """Download subtitles from multiple providers"""
+        logger.info("=== Starting Subtitle Download ===")
+        logger.info(f"Video: {video_path}")
+        
         if languages is None:
             languages = self.settings.subtitle_languages
+        
+        logger.info(f"Languages: {languages}")
+        logger.info("Searching across multiple providers...")
         
         # Use multi-provider search
         results = self.subtitle_providers.batch_download([video_path], languages)
@@ -377,6 +459,13 @@ class FFmpegCore:
         failed_count = len(results.get("failed", []))
         
         subtitle_paths = [item["subtitle"] for item in results.get("success", [])]
+        
+        if success_count > 0:
+            logger.info(f"✅ Downloaded {success_count} subtitle(s)")
+            for path in subtitle_paths:
+                logger.info(f"  - {path}")
+        else:
+            logger.warning(f"❌ No subtitles downloaded. {failed_count} attempts failed")
         
         return {
             "status": "success" if success_count > 0 else "error",

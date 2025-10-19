@@ -14,6 +14,7 @@ import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.control.Tooltip;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.Dragboard;
 import javafx.scene.input.TransferMode;
@@ -29,8 +30,10 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 
@@ -134,9 +137,7 @@ public class MainController {
     @FXML private CheckBox langArabicCheck;
     @FXML private Button whisperStatusButton;
     @FXML private Button openSubsStatusButton;
-    @FXML private Button subtitleSearchButton;
-    @FXML private Button subtitleDownloadButton;
-    @FXML private Button subtitleGenerateButton;
+    @FXML private Button subtitleProcessButton;
     @FXML private Label subtitleSelectedFilesLabel;
     @FXML private ComboBox<String> subtitleLogLevelCombo;
     @FXML private TextArea subtitleLogArea;
@@ -167,6 +168,10 @@ public class MainController {
     @FXML private Label subtitleStatsLabel;
     @FXML private CheckBox embedSubtitlesCheck;
     @FXML private TableView<SubtitleItem> availableSubtitlesTable;
+    @FXML private TableColumn<SubtitleItem, Boolean> subtitleSelectColumn;
+    @FXML private TableColumn<SubtitleItem, String> subtitleLanguageColumn;
+    @FXML private TableColumn<SubtitleItem, String> subtitleProviderColumn;
+    @FXML private TableColumn<SubtitleItem, String> subtitleFormatColumn;
     
     private String currentMode = "encoder";
     
@@ -333,6 +338,7 @@ public class MainController {
         setupQueuedTable();
         setupProcessingTable();
         setupCompletedTable();
+        setupSubtitleTable();
     }
     
     private void setupQueuedTable() {
@@ -419,6 +425,45 @@ public class MainController {
                 updateFileInfo(newVal);
             }
         });
+    }
+    
+    private void setupSubtitleTable() {
+        if (availableSubtitlesTable == null) {
+            return;
+        }
+        
+        // Setup checkbox column
+        subtitleSelectColumn.setCellValueFactory(cd -> 
+            new javafx.beans.property.SimpleBooleanProperty(cd.getValue().isSelected()));
+        subtitleSelectColumn.setCellFactory(col -> new javafx.scene.control.TableCell<SubtitleItem, Boolean>() {
+            private final javafx.scene.control.CheckBox checkBox = new javafx.scene.control.CheckBox();
+            
+            {
+                checkBox.setOnAction(e -> {
+                    SubtitleItem item = getTableView().getItems().get(getIndex());
+                    item.setSelected(checkBox.isSelected());
+                });
+            }
+            
+            @Override
+            protected void updateItem(Boolean item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setGraphic(null);
+                } else {
+                    checkBox.setSelected(item != null && item);
+                    setGraphic(checkBox);
+                }
+            }
+        });
+        
+        // Setup other columns
+        subtitleLanguageColumn.setCellValueFactory(cd -> 
+            new javafx.beans.property.SimpleStringProperty(cd.getValue().getLanguage()));
+        subtitleProviderColumn.setCellValueFactory(cd -> 
+            new javafx.beans.property.SimpleStringProperty(cd.getValue().getProvider()));
+        subtitleFormatColumn.setCellValueFactory(cd -> 
+            new javafx.beans.property.SimpleStringProperty(cd.getValue().getFormat()));
     }
     
     private void updateQueueCounts() {
@@ -518,6 +563,12 @@ public class MainController {
         
         updateQueueCounts();
         updateSelectedFilesLabel();
+        
+        // Update subtitle file list if in subtitle mode
+        if ("subtitle".equals(currentMode)) {
+            updateSubtitleFileList();
+        }
+        
         log("Added " + added + " file(s) to queue");
     }
     
@@ -2096,9 +2147,20 @@ public class MainController {
         // Initialize subtitle quick settings
         if (quickSubProviderCombo != null) {
             quickSubProviderCombo.setItems(FXCollections.observableArrayList(
-                "Automatic (Prefer Download)", "Download Only", "Generate Only"
+                "Automatic (Download + AI if needed)",
+                "Download Only (Multi-provider)",
+                "AI Generation Only (Whisper)",
+                "Both (Download & AI)"
             ));
-            quickSubProviderCombo.setValue("Automatic (Prefer Download)");
+            quickSubProviderCombo.setValue("Automatic (Download + AI if needed)");
+            quickSubProviderCombo.setTooltip(new Tooltip(
+                "Multi-provider download includes:\n" +
+                "• OpenSubtitles.com (with API key)\n" +
+                "• OpenSubtitles.org (free, no auth)\n" +
+                "• YIFY Subtitles (movies)\n" +
+                "• Podnapisi.NET\n" +
+                "• SubDivX (Spanish)"
+            ));
         }
         
         // Language checkboxes are already initialized with default values in FXML
@@ -2157,6 +2219,17 @@ public class MainController {
     private void checkProviderStatus() {
         new Thread(() -> {
             try {
+                // First, send current settings to Python backend
+                try {
+                    JsonObject updateSettings = new JsonObject();
+                    updateSettings.addProperty("action", "update_settings");
+                    updateSettings.add("settings", settings.toJson());
+                    pythonBridge.sendCommand(updateSettings);
+                    logger.info("Settings synchronized with Python backend");
+                } catch (Exception e) {
+                    logger.error("Failed to sync settings with Python backend", e);
+                }
+                
                 // Check FFmpeg status
                 JsonObject ffmpegResponse = pythonBridge.checkFFmpeg();
                 boolean ffmpegAvailable = ffmpegResponse.has("ffmpeg_available") && 
@@ -2192,32 +2265,67 @@ public class MainController {
                             whisperStatusButton.getStyleClass().add("warning");
                         }
                     }
-                    // Disable generate button if Whisper not available
-                    if (subtitleGenerateButton != null) {
-                        subtitleGenerateButton.setDisable(!whisperAvailable);
-                    }
                 });
                 
                 // Check OpenSubtitles status
                 JsonObject osResponse = pythonBridge.checkOpenSubtitles();
                 boolean osConfigured = osResponse.has("configured") && 
                                       osResponse.get("configured").getAsBoolean();
+                boolean hasApiKey = osResponse.has("has_api_key") && 
+                                   osResponse.get("has_api_key").getAsBoolean();
+                
+                logger.info("OpenSubtitles status: configured={}, hasApiKey={}", osConfigured, hasApiKey);
+                
+                // Check if previously validated
+                boolean isValidated = osResponse.has("configured") && osResponse.get("configured").getAsBoolean() &&
+                                     settings != null && settings.isOpensubtitlesValidated();
                 
                 Platform.runLater(() -> {
                     if (openSubsStatusButton != null) {
-                        if (osConfigured) {
-                            openSubsStatusButton.setText("🌐 OpenSubtitles: Ready");
+                        if (isValidated) {
+                            openSubsStatusButton.setText("🌐 Subtitles: 7 Providers ✓");
                             openSubsStatusButton.getStyleClass().removeAll("error", "warning");
                             openSubsStatusButton.getStyleClass().add("active");
+                            openSubsStatusButton.setTooltip(new Tooltip(
+                                "✅ OpenSubtitles.com (validated)\n" +
+                                "✅ Addic7ed (TV shows)\n" +
+                                "✅ SubDL (Movies & TV)\n" +
+                                "✅ Subf2m (Movies & TV)\n" +
+                                "✅ YIFY Subtitles (Movies)\n" +
+                                "✅ Podnapisi (Multilingual)\n" +
+                                "✅ SubDivX (Spanish)\n\n" +
+                                "Total: 7 subtitle providers"
+                            ));
+                        } else if (osConfigured || hasApiKey) {
+                            openSubsStatusButton.setText("🌐 Subtitles: 7 Providers");
+                            openSubsStatusButton.getStyleClass().removeAll("error", "warning");
+                            openSubsStatusButton.getStyleClass().add("active");
+                            openSubsStatusButton.setTooltip(new Tooltip(
+                                "⚠️ OpenSubtitles.com (not validated)\n" +
+                                "✅ Addic7ed (TV shows)\n" +
+                                "✅ SubDL (Movies & TV)\n" +
+                                "✅ Subf2m (Movies & TV)\n" +
+                                "✅ YIFY Subtitles (Movies)\n" +
+                                "✅ Podnapisi (Multilingual)\n" +
+                                "✅ SubDivX (Spanish)\n\n" +
+                                "Total: 7 providers (validate OpenSubtitles in Settings)"
+                            ));
                         } else {
-                            openSubsStatusButton.setText("🌐 OpenSubtitles: Not Setup");
-                            openSubsStatusButton.getStyleClass().removeAll("active");
+                            openSubsStatusButton.setText("🌐 Subtitles: 6 Free Providers");
+                            openSubsStatusButton.getStyleClass().removeAll("error", "active");
                             openSubsStatusButton.getStyleClass().add("warning");
+                            openSubsStatusButton.setTooltip(new Tooltip(
+                                "Using free providers (no API key):\n" +
+                                "✅ Addic7ed (TV shows)\n" +
+                                "✅ SubDL (Movies & TV)\n" +
+                                "✅ Subf2m (Movies & TV)\n" +
+                                "✅ YIFY Subtitles (Movies)\n" +
+                                "✅ Podnapisi (Multilingual)\n" +
+                                "✅ SubDivX (Spanish)\n\n" +
+                                "Add OpenSubtitles API key in Settings\n" +
+                                "for even better results (7 providers)"
+                            ));
                         }
-                    }
-                    // Disable download button if OpenSubtitles not configured
-                    if (subtitleDownloadButton != null) {
-                        subtitleDownloadButton.setDisable(!osConfigured);
                     }
                 });
                 
@@ -2423,48 +2531,416 @@ public class MainController {
     }
     
     @FXML
-    private void handleSearchSubtitles() {
+    private void handleProcessSubtitles() {
         if (queuedFiles.isEmpty()) {
             showWarning("No Files", "Please add files to the queue first.");
             return;
         }
         
-        log("Searching for subtitles...");
-        subtitleStatsLabel.setText("Searching...");
+        // Get the selected mode
+        String mode = quickSubProviderCombo != null ? quickSubProviderCombo.getValue() : "Automatic (Download + AI if needed)";
         
-        // TODO: Implement subtitle search via Python backend
-        new Thread(() -> {
-            try {
-                Thread.sleep(1000); // Simulate search
-                Platform.runLater(() -> {
-                    subtitleStatsLabel.setText("5 available | 3 languages");
-                    log("Subtitle search complete. Found 5 subtitles.");
-                });
-            } catch (InterruptedException e) {
-                logger.error("Subtitle search interrupted", e);
-            }
-        }).start();
+        if (mode == null) {
+            mode = "Automatic (Download + AI if needed)";
+        }
+        
+        log("Processing subtitles in mode: " + mode);
+        
+        // First, search for available subtitles to show in the table
+        if (mode.contains("Download Only") || mode.contains("Automatic") || mode.contains("Both")) {
+            searchAndDisplaySubtitles();
+        } else if (mode.contains("AI Generation Only")) {
+            // Do AI generation directly
+            handleGenerateAI();
+        }
     }
     
-    @FXML
+    private void searchAndDisplaySubtitles() {
+        if (queuedFiles.isEmpty()) {
+            return;
+        }
+        
+        // Get selected languages
+        List<String> selectedLanguages = getSelectedLanguages();
+        
+        if (selectedLanguages.isEmpty()) {
+            showWarning("No Languages", "Please select at least one language.");
+            return;
+        }
+        
+        log("Searching for available subtitles...");
+        
+        if (subtitleStatsLabel != null) {
+            Platform.runLater(() -> subtitleStatsLabel.setText("Searching..."));
+        }
+        
+        // Clear existing results
+        if (availableSubtitlesTable != null) {
+            Platform.runLater(() -> availableSubtitlesTable.getItems().clear());
+        }
+        
+        new Thread(() -> {
+            try {
+                // Get the first file (for now, search for one file at a time)
+                ConversionJob job = queuedFiles.get(0);
+                String filePath = job.getInputPath();
+                String fileName = new File(filePath).getName();
+                
+                log("Searching subtitles for: " + fileName);
+                
+                // Create search request
+                JsonObject request = new JsonObject();
+                request.addProperty("action", "search_subtitles");
+                request.addProperty("video_path", filePath);
+                
+                // Add languages as JSON array
+                JsonArray langsArray = new JsonArray();
+                for (String lang : selectedLanguages) {
+                    langsArray.add(lang);
+                }
+                request.add("languages", langsArray);
+                
+                // Update settings in Python backend
+                JsonObject updateSettings = new JsonObject();
+                updateSettings.addProperty("action", "update_settings");
+                updateSettings.add("settings", settings.toJson());
+                pythonBridge.sendCommand(updateSettings);
+                
+                // Search for subtitles
+                JsonObject response = pythonBridge.sendCommand(request);
+                
+                // Log the full response for debugging
+                logger.info("Search response: {}", response.toString());
+                Platform.runLater(() -> log("Backend response: " + response.toString()));
+                
+                if (response.has("status") && "success".equals(response.get("status").getAsString())) {
+                    int count = response.has("count") ? response.get("count").getAsInt() : 0;
+                    
+                    Platform.runLater(() -> {
+                        log("Found " + count + " subtitle(s)");
+                        
+                        if (count > 0 && response.has("subtitles") && response.get("subtitles").isJsonArray()) {
+                            JsonArray subtitles = response.getAsJsonArray("subtitles");
+                            
+                            // Parse and display results
+                            Set<String> languages = new HashSet<>();
+                            for (int i = 0; i < subtitles.size(); i++) {
+                                JsonObject sub = subtitles.get(i).getAsJsonObject();
+                                String language = sub.has("language") ? sub.get("language").getAsString() : "unknown";
+                                String provider = sub.has("provider") ? sub.get("provider").getAsString() : "unknown";
+                                String format = sub.has("format") ? sub.get("format").getAsString() : "srt";
+                                
+                                languages.add(language);
+                                
+                                SubtitleItem item = new SubtitleItem(false, language, provider, format);
+                                if (availableSubtitlesTable != null) {
+                                    availableSubtitlesTable.getItems().add(item);
+                                }
+                            }
+                            
+                            // Update stats label
+                            if (subtitleStatsLabel != null) {
+                                subtitleStatsLabel.setText(count + " available | " + languages.size() + " language(s)");
+                            }
+                            
+                            log("✅ Results displayed in table. Select and download as needed.");
+                        } else {
+                            if (subtitleStatsLabel != null) {
+                                subtitleStatsLabel.setText("0 available | 0 languages");
+                            }
+                            log("⚠️ No subtitles found. Try AI generation instead.");
+                        }
+                    });
+                } else {
+                    String errorMsg = response.has("message") ? response.get("message").getAsString() : "Search failed";
+                    Platform.runLater(() -> {
+                        log("❌ Search failed: " + errorMsg);
+                        if (subtitleStatsLabel != null) {
+                            subtitleStatsLabel.setText("Search failed");
+                        }
+                    });
+                }
+                
+            } catch (Exception e) {
+                logger.error("Error searching subtitles", e);
+                Platform.runLater(() -> {
+                    log("❌ Error: " + e.getMessage());
+                    if (subtitleStatsLabel != null) {
+                        subtitleStatsLabel.setText("Error");
+                    }
+                });
+            }
+        }, "SubtitleSearch").start();
+    }
+    
+    private List<String> getSelectedLanguages() {
+        List<String> selectedLanguages = new ArrayList<>();
+        if (langEnglishCheck != null && langEnglishCheck.isSelected()) selectedLanguages.add("eng");
+        if (langSpanishCheck != null && langSpanishCheck.isSelected()) selectedLanguages.add("spa");
+        if (langFrenchCheck != null && langFrenchCheck.isSelected()) selectedLanguages.add("fre");
+        if (langGermanCheck != null && langGermanCheck.isSelected()) selectedLanguages.add("ger");
+        if (langJapaneseCheck != null && langJapaneseCheck.isSelected()) selectedLanguages.add("jpn");
+        if (langChineseCheck != null && langChineseCheck.isSelected()) selectedLanguages.add("chi");
+        if (langKoreanCheck != null && langKoreanCheck.isSelected()) selectedLanguages.add("kor");
+        if (langArabicCheck != null && langArabicCheck.isSelected()) selectedLanguages.add("ara");
+        return selectedLanguages;
+    }
+    
     private void handleGenerateAI() {
         if (queuedFiles.isEmpty()) {
             showWarning("No Files", "Please add files to the queue first.");
             return;
         }
         
-        log("Generating AI subtitles with Whisper...");
-        showInfo("AI Generation", "AI subtitle generation started.\nThis may take several minutes...");
+        // Check if Whisper is available
+        try {
+            JsonObject whisperStatus = pythonBridge.checkWhisper();
+            if (!whisperStatus.has("whisper_available") || !whisperStatus.get("whisper_available").getAsBoolean()) {
+                showWarning("Whisper Not Available", 
+                    "Whisper AI is not installed. Please install it from Settings > Subtitles.");
+                return;
+            }
+            
+            // Check if model is installed
+            if (!whisperStatus.has("installed_models") || whisperStatus.get("installed_models").getAsJsonArray().size() == 0) {
+                showWarning("Whisper Model Not Downloaded", 
+                    "No Whisper models are installed. Please download a model from Settings > Subtitles.\n\n" +
+                    "Recommended: 'base' model for good balance of speed and quality.");
+                return;
+            }
+            
+        } catch (Exception e) {
+            logger.error("Error checking Whisper status", e);
+            showError("Error", "Failed to check Whisper status: " + e.getMessage());
+            return;
+        }
         
-        // TODO: Implement AI subtitle generation via Python backend
+        log("Generating AI subtitles with Whisper...");
+        log("Using model: " + settings.getWhisperModel() + ", language: " + settings.getWhisperLanguages());
+        
+        // Process each queued file
+        new Thread(() -> {
+            int successCount = 0;
+            int failedCount = 0;
+            
+            for (ConversionJob job : queuedFiles) {
+                String filePath = job.getInputPath();
+                String fileName = new File(filePath).getName();
+                
+                Platform.runLater(() -> log("Generating subtitles for: " + fileName));
+                
+                try {
+                    JsonObject request = new JsonObject();
+                    request.addProperty("action", "generate_subtitles");
+                    request.addProperty("video_path", filePath);
+                    
+                    // Use language from settings, or null for auto-detect
+                    String language = settings.getWhisperLanguages();
+                    if (language != null && !language.trim().isEmpty() && !"auto".equalsIgnoreCase(language)) {
+                        // Extract first language if multiple are specified
+                        String[] langs = language.split(",");
+                        request.addProperty("language", langs[0].trim());
+                    }
+                    
+                    // Update settings in Python backend to ensure correct model is used
+                    JsonObject updateSettings = new JsonObject();
+                    updateSettings.addProperty("action", "update_settings");
+                    updateSettings.add("settings", settings.toJson());
+                    pythonBridge.sendCommand(updateSettings);
+                    
+                    // Generate subtitles
+                    JsonObject response = pythonBridge.sendCommand(request);
+                    
+                    if (response.has("status") && "success".equals(response.get("status").getAsString())) {
+                        String subtitlePath = response.has("subtitle_path") ? 
+                            response.get("subtitle_path").getAsString() : "unknown";
+                        String message = response.has("message") ? 
+                            response.get("message").getAsString() : "Subtitles generated successfully";
+                        
+                        Platform.runLater(() -> {
+                            log("✅ Generated: " + new File(subtitlePath).getName() + " - " + message);
+                        });
+                        successCount++;
+                    } else {
+                        String errorMsg = response.has("message") ? 
+                            response.get("message").getAsString() : "Unknown error";
+                        Platform.runLater(() -> {
+                            log("❌ Failed: " + fileName + " - " + errorMsg);
+                        });
+                        failedCount++;
+                    }
+                    
+                } catch (TimeoutException e) {
+                    logger.error("Timeout generating subtitles for: " + fileName, e);
+                    Platform.runLater(() -> {
+                        log("❌ Timeout: " + fileName + " - Generation took too long. Try a smaller model.");
+                    });
+                    failedCount++;
+                } catch (Exception e) {
+                    logger.error("Error generating subtitles for: " + fileName, e);
+                    
+                    String errorMsg = e.getMessage();
+                    if (errorMsg != null) {
+                        if (errorMsg.contains("model") && errorMsg.contains("not")) {
+                            Platform.runLater(() -> {
+                                log("❌ Model Error: " + fileName + " - Whisper model not found. Download it from Settings.");
+                                showError("Whisper Model Missing", 
+                                    "The selected Whisper model is not installed.\n\n" +
+                                    "Please go to Settings > Subtitles and download a model first.");
+                            });
+                        } else if (errorMsg.contains("memory") || errorMsg.contains("OOM")) {
+                            Platform.runLater(() -> {
+                                log("❌ Memory Error: " + fileName + " - Out of memory. Try a smaller model.");
+                                showError("Out of Memory", 
+                                    "Not enough memory to run this Whisper model.\n\n" +
+                                    "Try using a smaller model like 'tiny' or 'base'.");
+                            });
+                        } else {
+                            Platform.runLater(() -> {
+                                log("❌ Error: " + fileName + " - " + errorMsg);
+                            });
+                        }
+                    } else {
+                        Platform.runLater(() -> {
+                            log("❌ Error: " + fileName + " - Unknown error occurred");
+                        });
+                    }
+                    failedCount++;
+                }
+            }
+            
+            // Show completion message
+            final int finalSuccess = successCount;
+            final int finalFailed = failedCount;
+            Platform.runLater(() -> {
+                log("AI subtitle generation complete: " + finalSuccess + " success, " + finalFailed + " failed");
+                showInfo("AI Generation Complete", 
+                    String.format("Generated subtitles for %d file(s).\n%d succeeded, %d failed.", 
+                        finalSuccess + finalFailed, finalSuccess, finalFailed));
+            });
+            
+        }, "SubtitleGeneration").start();
     }
     
-    @FXML
     private void handleDownloadSubtitles() {
-        log("Downloading selected subtitles...");
-        showInfo("Download", "Subtitle download started...");
+        if (queuedFiles.isEmpty()) {
+            showWarning("No Files", "Please add files to the queue first.");
+            return;
+        }
         
-        // TODO: Implement subtitle download via Python backend
+        // Get selected languages
+        List<String> selectedLanguages = getSelectedLanguages();
+        
+        if (selectedLanguages.isEmpty()) {
+            showWarning("No Languages", "Please select at least one language.");
+            return;
+        }
+        
+        log("Downloading subtitles for " + queuedFiles.size() + " file(s) in " + selectedLanguages.size() + " language(s)...");
+        log("Languages: " + String.join(", ", selectedLanguages));
+        
+        // Process each queued file
+        new Thread(() -> {
+            int successCount = 0;
+            int failedCount = 0;
+            
+            for (ConversionJob job : queuedFiles) {
+                String filePath = job.getInputPath();
+                String fileName = new File(filePath).getName();
+                
+                Platform.runLater(() -> log("Downloading subtitles for: " + fileName));
+                
+                try {
+                    JsonObject request = new JsonObject();
+                    request.addProperty("action", "download_subtitles");
+                    request.addProperty("video_path", filePath);
+                    
+                    // Add languages as JSON array
+                    JsonArray langsArray = new JsonArray();
+                    for (String lang : selectedLanguages) {
+                        langsArray.add(lang);
+                    }
+                    request.add("languages", langsArray);
+                    
+                    // Update settings in Python backend
+                    JsonObject updateSettings = new JsonObject();
+                    updateSettings.addProperty("action", "update_settings");
+                    updateSettings.add("settings", settings.toJson());
+                    pythonBridge.sendCommand(updateSettings);
+                    
+                    // Download subtitles
+                    JsonObject response = pythonBridge.sendCommand(request);
+                    
+                    if (response.has("status") && "success".equals(response.get("status").getAsString())) {
+                        String message = response.has("message") ? 
+                            response.get("message").getAsString() : "Subtitles downloaded successfully";
+                        
+                        Platform.runLater(() -> {
+                            log("✅ Downloaded: " + fileName + " - " + message);
+                        });
+                        successCount++;
+                    } else {
+                        String errorMsg = response.has("message") ? 
+                            response.get("message").getAsString() : "Unknown error";
+                        
+                        // Check if it's an authentication error
+                        if (errorMsg.toLowerCase().contains("unauthorized") || 
+                            errorMsg.toLowerCase().contains("invalid api key") ||
+                            errorMsg.toLowerCase().contains("authentication") ||
+                            errorMsg.toLowerCase().contains("401")) {
+                            
+                            // Invalidate OpenSubtitles credentials
+                            settings.setOpensubtitlesValidated(false);
+                            settings.save();
+                            
+                            Platform.runLater(() -> {
+                                log("❌ Authentication Error: " + fileName + " - " + errorMsg);
+                                log("⚠️ OpenSubtitles validation invalidated. Please re-validate in Settings.");
+                                showError("Authentication Failed", 
+                                    "OpenSubtitles API authentication failed.\n\n" +
+                                    "Error: " + errorMsg + "\n\n" +
+                                    "Please go to Settings > Subtitles and re-validate your API key.");
+                            });
+                        } else {
+                            Platform.runLater(() -> {
+                                log("❌ Failed: " + fileName + " - " + errorMsg);
+                            });
+                        }
+                        failedCount++;
+                    }
+                    
+                } catch (TimeoutException e) {
+                    logger.error("Timeout downloading subtitles for: " + fileName, e);
+                    Platform.runLater(() -> {
+                        log("❌ Timeout: " + fileName + " - Operation timed out. Check network connection.");
+                    });
+                    failedCount++;
+                } catch (Exception e) {
+                    logger.error("Error downloading subtitles for: " + fileName, e);
+                    
+                    // Check if it's a connection/network error
+                    String errorMsg = e.getMessage();
+                    if (errorMsg != null && (errorMsg.contains("Connection") || errorMsg.contains("Network"))) {
+                        Platform.runLater(() -> {
+                            log("❌ Network Error: " + fileName + " - Check your internet connection");
+                        });
+                    } else {
+                        Platform.runLater(() -> {
+                            log("❌ Error: " + fileName + " - " + (errorMsg != null ? errorMsg : "Unknown error"));
+                        });
+                    }
+                    failedCount++;
+                }
+            }
+            
+            // Show completion message
+            final int finalSuccess = successCount;
+            final int finalFailed = failedCount;
+            Platform.runLater(() -> {
+                log("Subtitle download complete: " + finalSuccess + " success, " + finalFailed + " failed");
+            });
+            
+        }, "SubtitleDownload").start();
     }
     
     // Inner class for subtitle table
@@ -2714,34 +3190,14 @@ public class MainController {
                 formatPatternButton.setText("Format Pattern");
             }
             
-            // Subtitle Search button
-            if (subtitleSearchButton != null) {
+            // Subtitle Process button
+            if (subtitleProcessButton != null) {
                 org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
-                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.SEARCH);
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.PLAY_CIRCLE);
                 icon.setIconSize(TOOLBAR_ICON_SIZE);
                 icon.setIconColor(javafx.scene.paint.Color.WHITE);
-                subtitleSearchButton.setGraphic(icon);
-                subtitleSearchButton.setText("Search");
-            }
-            
-            // Subtitle Download button
-            if (subtitleDownloadButton != null) {
-                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
-                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.DOWNLOAD);
-                icon.setIconSize(TOOLBAR_ICON_SIZE);
-                icon.setIconColor(javafx.scene.paint.Color.WHITE);
-                subtitleDownloadButton.setGraphic(icon);
-                subtitleDownloadButton.setText("Download");
-            }
-            
-            // Subtitle Generate button
-            if (subtitleGenerateButton != null) {
-                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
-                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.MICROPHONE);
-                icon.setIconSize(TOOLBAR_ICON_SIZE);
-                icon.setIconColor(javafx.scene.paint.Color.WHITE);
-                subtitleGenerateButton.setGraphic(icon);
-                subtitleGenerateButton.setText("Generate");
+                subtitleProcessButton.setGraphic(icon);
+                subtitleProcessButton.setText("Process Files");
             }
             
             logger.info("Toolbar icons initialized successfully");

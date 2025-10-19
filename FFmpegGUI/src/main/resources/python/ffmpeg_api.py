@@ -137,6 +137,9 @@ except Exception as e:
         def download_subtitles(self, video_path, languages):
             return {"status": "error", "message": "Subtitle download not available"}
         
+        def search_subtitles(self, video_path, languages):
+            return {"status": "error", "message": "Subtitle search not available"}
+        
         def rename_files(self, file_paths, dry_run=False):
             return {"status": "error", "message": "File renaming not available"}
         
@@ -232,13 +235,6 @@ class FFmpegAPI:
                     return {"status": "error", "message": "file_path required"}
                 return self.core.get_media_info(file_path)
             
-            elif action == "preview_rename":
-                file_paths = request.get("file_paths", [])
-                settings_dict = request.get("settings", {})
-                if not file_paths:
-                    return {"status": "error", "message": "file_paths required"}
-                return self.core.preview_rename(file_paths, settings_dict)
-            
             elif action == "generate_subtitles":
                 video_path = request.get("video_path")
                 language = request.get("language")
@@ -247,6 +243,15 @@ class FFmpegAPI:
                     return {"status": "error", "message": "video_path required"}
                 
                 return self.core.generate_subtitles(video_path, language)
+            
+            elif action == "search_subtitles":
+                video_path = request.get("video_path")
+                languages = request.get("languages", self.settings.subtitle_languages)
+                
+                if not video_path:
+                    return {"status": "error", "message": "video_path required"}
+                
+                return self.core.search_subtitles(video_path, languages)
             
             elif action == "download_subtitles":
                 video_path = request.get("video_path")
@@ -258,6 +263,13 @@ class FFmpegAPI:
                 return self.core.download_subtitles(video_path, languages)
             
             elif action == "preview_rename":
+                file_paths = request.get("file_paths", [])
+                settings_dict = request.get("settings", {})
+                if not file_paths:
+                    return {"status": "error", "message": "file_paths required"}
+                return self.core.preview_rename(file_paths, settings_dict)
+            
+            elif action == "preview_rename_old_duplicate":
                 file_paths = request.get("file_paths", [])
                 
                 if not file_paths:
@@ -396,14 +408,20 @@ class FFmpegAPI:
     def handle_check_opensubtitles(self) -> Dict:
         """Check OpenSubtitles configuration"""
         try:
+            has_api_key = bool(self.settings.opensubtitles_api_key and self.settings.opensubtitles_api_key.strip())
             has_credentials = (self.settings.opensubtitles_username and 
                              self.settings.opensubtitles_password)
+            
+            # OpenSubtitles API v1 only requires API key for basic usage
+            # Username/password are optional for extended features
+            configured = has_api_key
             
             return {
                 "status": "success",
                 "logged_in": has_credentials,
-                "has_api_key": bool(self.settings.opensubtitles_api_key),
-                "configured": has_credentials or bool(self.settings.opensubtitles_api_key)
+                "has_api_key": has_api_key,
+                "configured": configured,
+                "message": "API key only required for basic usage" if has_api_key and not has_credentials else ""
             }
         except Exception as e:
             logger.error(f"Error checking OpenSubtitles: {e}")

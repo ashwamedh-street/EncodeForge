@@ -374,7 +374,7 @@ public class PythonBridge {
         String runtimeDir = System.getProperty("python.runtime.dir");
         if (runtimeDir != null) {
             Path runtimePath = Paths.get(runtimeDir);
-            Path scriptPath = runtimePath.resolve("scripts").resolve("ffmpeg_manager.py");
+            Path scriptPath = runtimePath.resolve("scripts").resolve("ffmpeg_api.py");
             if (Files.exists(scriptPath)) {
                 logger.info("Using bundled Python script: {}", scriptPath);
                 return scriptPath;
@@ -410,7 +410,7 @@ public class PythonBridge {
         }
         
         throw new IOException("Python API script not found. Checked:\n" +
-            "  - " + (runtimeDir != null ? Paths.get(runtimeDir, "scripts", "ffmpeg_manager.py") : "(runtime dir not set)") + "\n" +
+            "  - " + (runtimeDir != null ? Paths.get(runtimeDir, "scripts", "ffmpeg_api.py") : "(runtime dir not set)") + "\n" +
             "  - " + (runtimeDir != null ? Paths.get(runtimeDir, "ffmpeg_api.py") : "(runtime dir not set)") + "\n" +
             "  - " + devScriptPath + "\n" +
             "  - " + parentScriptPath + "\n" +

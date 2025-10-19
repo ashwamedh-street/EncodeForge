@@ -70,6 +70,7 @@ public class ConversionSettings {
     private String opensubtitlesApiKey = "";
     private String opensubtitlesUsername = "";
     private String opensubtitlesPassword = "";
+    private boolean opensubtitlesValidated = false;
     
     // Advanced settings
     private String customFFmpegArgs = "";
@@ -192,6 +193,9 @@ public class ConversionSettings {
     public String getOpensubtitlesPassword() { return opensubtitlesPassword; }
     public void setOpensubtitlesPassword(String opensubtitlesPassword) { this.opensubtitlesPassword = opensubtitlesPassword; }
     
+    public boolean isOpensubtitlesValidated() { return opensubtitlesValidated; }
+    public void setOpensubtitlesValidated(boolean opensubtitlesValidated) { this.opensubtitlesValidated = opensubtitlesValidated; }
+    
     /**
      * Restore default settings
      */
@@ -234,6 +238,7 @@ public class ConversionSettings {
         opensubtitlesApiKey = "";
         opensubtitlesUsername = "";
         opensubtitlesPassword = "";
+        opensubtitlesValidated = false;
     }
     
     /**
@@ -346,6 +351,7 @@ public class ConversionSettings {
         json.addProperty("opensubtitles_api_key", opensubtitlesApiKey);
         json.addProperty("opensubtitles_username", opensubtitlesUsername);
         json.addProperty("opensubtitles_password", opensubtitlesPassword);
+        json.addProperty("opensubtitles_validated", opensubtitlesValidated);
         
         // Advanced
         json.addProperty("custom_args", customFFmpegArgs);

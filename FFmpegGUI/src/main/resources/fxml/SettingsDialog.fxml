@@ -193,49 +193,66 @@
                     
                     <VBox spacing="12">
                         <Label text="AI Subtitle Generation (Whisper)" styleClass="subsection-title"/>
-                        <CheckBox fx:id="enableWhisperCheck" text="Enable Whisper AI subtitle generation"/>
+                        <Label text="Generate subtitles using OpenAI Whisper AI when none are available" styleClass="hint-label"/>
                         
-                        <VBox fx:id="whisperOptions" spacing="10" visible="false" managed="false">
+                        <VBox spacing="10">
                             <VBox spacing="8">
                                 <Label text="Whisper Model:" styleClass="setting-label"/>
                                 <ComboBox fx:id="whisperModelCombo" maxWidth="Infinity"/>
                                 <Label text="Larger models are more accurate but slower. 'base' is recommended for most users." styleClass="hint-label"/>
-                            </VBox>
-                            
-                            <VBox spacing="8">
-                                <Label text="Default Languages:" styleClass="setting-label"/>
-                                <TextField fx:id="whisperLanguagesField" promptText="eng,spa,jpn"/>
-                                <Label text="Comma-separated language codes (e.g., eng for English, spa for Spanish)" styleClass="hint-label"/>
                             </VBox>
                         </VBox>
                     </VBox>
                     
                     <Separator/>
                     
-                    <VBox spacing="12">
-                        <Label text="OpenSubtitles Download" styleClass="subsection-title"/>
-                        <CheckBox fx:id="downloadSubsCheck" text="Enable subtitle downloads from OpenSubtitles"/>
+        <VBox spacing="12">
+            <Label text="Subtitle Download Providers" styleClass="subsection-title"/>
+            <Label text="Download subtitles from multiple free sources. OpenSubtitles API key is optional but recommended." styleClass="hint-label"/>
+            
+            <VBox spacing="4" style="-fx-padding: 8; -fx-background-color: rgba(76, 201, 176, 0.1); -fx-background-radius: 4;">
+                <Label text="✅ Supported Providers (7 total):" style="-fx-font-weight: bold; -fx-text-fill: #4ec9b0;"/>
+                <Label text="  • OpenSubtitles.com (API) - Best quality, requires API key" styleClass="hint-label"/>
+                <Label text="  • Addic7ed - Excellent for TV shows" styleClass="hint-label"/>
+                <Label text="  • SubDL - Movies and TV shows with free API" styleClass="hint-label"/>
+                <Label text="  • Subf2m - Movies and TV shows" styleClass="hint-label"/>
+                <Label text="  • YIFY Subtitles - Movies only" styleClass="hint-label"/>
+                <Label text="  • Podnapisi - Multilingual support" styleClass="hint-label"/>
+                <Label text="  • SubDivX - Spanish subtitles only" styleClass="hint-label"/>
+            </VBox>
+            
+            <Separator/>
                         
+                        <Label text="OpenSubtitles.com (Recommended)" styleClass="setting-label" style="-fx-font-weight: bold;"/>
                         <VBox spacing="8">
-                            <Label text="API Key:" styleClass="setting-label"/>
-                            <TextField fx:id="opensubtitlesApiKeyField" promptText="Optional - for better rate limits"/>
-                            <Label text="Get a free API key at https://www.opensubtitles.com/consumers" styleClass="hint-label"/>
+                            <Label text="API Key (Required):" styleClass="setting-label"/>
+                            <TextField fx:id="opensubtitlesApiKeyField" promptText="Enter your API key"/>
+                            <Label text="⚠️ API key is required. Get a free key at https://www.opensubtitles.com/consumers" styleClass="hint-label" style="-fx-text-fill: orange;"/>
                         </VBox>
                         
                         <VBox spacing="8">
-                            <Label text="Username:" styleClass="setting-label"/>
-                            <TextField fx:id="opensubtitlesUsernameField" promptText="OpenSubtitles username"/>
+                            <Label text="Username (Optional):" styleClass="setting-label"/>
+                            <TextField fx:id="opensubtitlesUsernameField" promptText="Optional - for extended features"/>
+                            <Label text="Username/password provide extended features but are not required" styleClass="hint-label"/>
                         </VBox>
                         
                         <VBox spacing="8">
-                            <Label text="Password:" styleClass="setting-label"/>
-                            <PasswordField fx:id="opensubtitlesPasswordField" promptText="OpenSubtitles password"/>
+                            <Label text="Password (Optional):" styleClass="setting-label"/>
+                            <PasswordField fx:id="opensubtitlesPasswordField" promptText="Optional - for extended features"/>
                         </VBox>
                         
                         <HBox spacing="10">
                             <Button fx:id="validateOpenSubsButton" onAction="#handleValidateOpenSubtitles" styleClass="small-button"/>
                             <Label fx:id="openSubsValidationLabel" text="" styleClass="hint-label"/>
                         </HBox>
+                        
+                        <Separator/>
+                        
+                        <Label text="Other Providers" styleClass="setting-label" style="-fx-font-weight: bold;"/>
+                        <Label text="✅ OpenSubtitles.org REST API - No configuration required (free, no limits)" styleClass="hint-label"/>
+                        <Label text="✅ YIFY Subtitles - No configuration required (good for movies)" styleClass="hint-label"/>
+                        <Label text="⚙️ Podnapisi.NET - Automatically searched (no config)" styleClass="hint-label"/>
+                        <Label text="⚙️ SubDivX - Automatically searched for Spanish content (no config)" styleClass="hint-label"/>
                     </VBox>
                 </VBox>
                 
