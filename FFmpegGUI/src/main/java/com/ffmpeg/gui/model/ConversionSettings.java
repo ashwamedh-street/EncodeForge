@@ -64,13 +64,31 @@ public class ConversionSettings {
     private boolean copyMetadata = true;
     private boolean stripMetadata = false;
     
-    // API Keys
-    private String tmdbApiKey = "";
-    private String tvdbApiKey = "";
+    // API Keys for Subtitles
     private String opensubtitlesApiKey = "";
     private String opensubtitlesUsername = "";
     private String opensubtitlesPassword = "";
     private boolean opensubtitlesValidated = false;
+    
+    // API Keys for Metadata/Renamer
+    private String tmdbApiKey = "";
+    private String tvdbApiKey = "";
+    private String omdbApiKey = "";
+    private String traktApiKey = "";
+    private String fanartApiKey = "";
+    private String malClientId = "";
+    
+    // Validation status (persisted so we don't revalidate every time)
+    private boolean tmdbValidated = false;
+    private boolean tvdbValidated = false;
+    private boolean omdbValidated = false;
+    private boolean traktValidated = false;
+    
+    // Format patterns for renamer (saved presets)
+    private String tvShowPattern = "{title} - S{season}E{episode} - {episodeTitle}";
+    private String moviePattern = "{title} ({year})";
+    private String animePattern = "{title} - {episode} - {episodeTitle}";
+    private String customPattern = "";
     
     // Advanced settings
     private String customFFmpegArgs = "";
@@ -196,6 +214,42 @@ public class ConversionSettings {
     public boolean isOpensubtitlesValidated() { return opensubtitlesValidated; }
     public void setOpensubtitlesValidated(boolean opensubtitlesValidated) { this.opensubtitlesValidated = opensubtitlesValidated; }
     
+    public String getOmdbApiKey() { return omdbApiKey; }
+    public void setOmdbApiKey(String omdbApiKey) { this.omdbApiKey = omdbApiKey; }
+    
+    public String getTraktApiKey() { return traktApiKey; }
+    public void setTraktApiKey(String traktApiKey) { this.traktApiKey = traktApiKey; }
+    
+    public String getFanartApiKey() { return fanartApiKey; }
+    public void setFanartApiKey(String fanartApiKey) { this.fanartApiKey = fanartApiKey; }
+    
+    public String getMalClientId() { return malClientId; }
+    public void setMalClientId(String malClientId) { this.malClientId = malClientId; }
+    
+    public boolean isTmdbValidated() { return tmdbValidated; }
+    public void setTmdbValidated(boolean tmdbValidated) { this.tmdbValidated = tmdbValidated; }
+    
+    public boolean isTvdbValidated() { return tvdbValidated; }
+    public void setTvdbValidated(boolean tvdbValidated) { this.tvdbValidated = tvdbValidated; }
+    
+    public boolean isOmdbValidated() { return omdbValidated; }
+    public void setOmdbValidated(boolean omdbValidated) { this.omdbValidated = omdbValidated; }
+    
+    public boolean isTraktValidated() { return traktValidated; }
+    public void setTraktValidated(boolean traktValidated) { this.traktValidated = traktValidated; }
+    
+    public String getTvShowPattern() { return tvShowPattern; }
+    public void setTvShowPattern(String tvShowPattern) { this.tvShowPattern = tvShowPattern; }
+    
+    public String getMoviePattern() { return moviePattern; }
+    public void setMoviePattern(String moviePattern) { this.moviePattern = moviePattern; }
+    
+    public String getAnimePattern() { return animePattern; }
+    public void setAnimePattern(String animePattern) { this.animePattern = animePattern; }
+    
+    public String getCustomPattern() { return customPattern; }
+    public void setCustomPattern(String customPattern) { this.customPattern = customPattern; }
+    
     /**
      * Restore default settings
      */
@@ -233,12 +287,29 @@ public class ConversionSettings {
         twoPassEncoding = false;
         fastStart = true;
         threadCount = 0;
+        // API Keys
         tmdbApiKey = "";
         tvdbApiKey = "";
+        omdbApiKey = "";
+        traktApiKey = "";
+        fanartApiKey = "";
+        malClientId = "";
         opensubtitlesApiKey = "";
         opensubtitlesUsername = "";
         opensubtitlesPassword = "";
+        
+        // Validation status
         opensubtitlesValidated = false;
+        tmdbValidated = false;
+        tvdbValidated = false;
+        omdbValidated = false;
+        traktValidated = false;
+        
+        // Format patterns
+        tvShowPattern = "{title} - S{season}E{episode} - {episodeTitle}";
+        moviePattern = "{title} ({year})";
+        animePattern = "{title} - {episode} - {episodeTitle}";
+        customPattern = "";
     }
     
     /**
@@ -345,13 +416,31 @@ public class ConversionSettings {
         json.addProperty("copy_metadata", copyMetadata);
         json.addProperty("strip_metadata", stripMetadata);
         
-        // API Keys
-        json.addProperty("tmdb_api_key", tmdbApiKey);
-        json.addProperty("tvdb_api_key", tvdbApiKey);
+        // API Keys - Subtitles
         json.addProperty("opensubtitles_api_key", opensubtitlesApiKey);
         json.addProperty("opensubtitles_username", opensubtitlesUsername);
         json.addProperty("opensubtitles_password", opensubtitlesPassword);
         json.addProperty("opensubtitles_validated", opensubtitlesValidated);
+        
+        // API Keys - Metadata
+        json.addProperty("tmdb_api_key", tmdbApiKey);
+        json.addProperty("tvdb_api_key", tvdbApiKey);
+        json.addProperty("omdb_api_key", omdbApiKey);
+        json.addProperty("trakt_api_key", traktApiKey);
+        json.addProperty("fanart_api_key", fanartApiKey);
+        json.addProperty("mal_client_id", malClientId);
+        
+        // Validation status
+        json.addProperty("tmdb_validated", tmdbValidated);
+        json.addProperty("tvdb_validated", tvdbValidated);
+        json.addProperty("omdb_validated", omdbValidated);
+        json.addProperty("trakt_validated", traktValidated);
+        
+        // Format patterns
+        json.addProperty("tv_show_pattern", tvShowPattern);
+        json.addProperty("movie_pattern", moviePattern);
+        json.addProperty("anime_pattern", animePattern);
+        json.addProperty("custom_pattern", customPattern);
         
         // Advanced
         json.addProperty("custom_args", customFFmpegArgs);

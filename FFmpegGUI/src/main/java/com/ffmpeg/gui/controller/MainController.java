@@ -91,14 +91,18 @@ public class MainController {
     private static final int TOOLBAR_ICON_SIZE = 14;
     private static final int SMALL_ICON_SIZE = 12;
     
-    // Top Toolbar
-    @FXML private ComboBox<String> modeComboBox;
+    // Sidebar Controls
+    @FXML private Button encoderModeButton;
+    @FXML private Button subtitleModeButton;
+    @FXML private Button renamerModeButton;
     @FXML private Button addFilesButton;
     @FXML private Button addFolderButton;
+    @FXML private Button settingsButton;
+    
+    // Control Buttons
     @FXML private Button startButton;
     @FXML private Button pauseButton;
     @FXML private Button stopButton;
-    @FXML private Button settingsButton;
     @FXML private Label statusLabel;
     
     // Mode-Specific Quick Settings
@@ -263,10 +267,8 @@ public class MainController {
         setupQuickSettings();
         setupPreviewTabs();
         
-        // Set default mode
-        if (modeComboBox != null) {
-            modeComboBox.getSelectionModel().selectFirst();
-        }
+        // Set default mode to encoder
+        handleEncoderMode();
         
         // Run checks in parallel for faster startup
         CompletableFuture.runAsync(this::checkFFmpegAvailability);
@@ -276,35 +278,49 @@ public class MainController {
     }
     
     @FXML
-    private void handleModeChange() {
-        String selected = modeComboBox.getSelectionModel().getSelectedItem();
+    private void handleEncoderMode() {
+        currentMode = "encoder";
+        showModePanel(encoderQuickSettings);
+        showModeLayout(encoderModeLayout);
+        updateModeButtonSelection(encoderModeButton);
+        updateSelectedFilesLabel();
+        log("Switched to encoder mode");
+    }
+    
+    @FXML
+    private void handleSubtitleMode() {
+        currentMode = "subtitle";
+        showModePanel(subtitleQuickSettings);
+        showModeLayout(subtitleModeLayout);
+        updateModeButtonSelection(subtitleModeButton);
+        updateSubtitleFileList();
+        updateSelectedFilesLabel();
+        log("Switched to subtitle mode");
+    }
+    
+    @FXML
+    private void handleRenamerMode() {
+        currentMode = "renamer";
+        showModePanel(renamerQuickSettings);
+        showModeLayout(renamerModeLayout);
+        updateModeButtonSelection(renamerModeButton);
         
-        if (selected != null) {
-            if (selected.contains("Encoder")) {
-                currentMode = "encoder";
-                showModePanel(encoderQuickSettings);
-                showModeLayout(encoderModeLayout);
-                
-            } else if (selected.contains("Subtitle")) {
-                currentMode = "subtitle";
-                showModePanel(subtitleQuickSettings);
-                showModeLayout(subtitleModeLayout);
-                updateSubtitleFileList();
-                
-            } else if (selected.contains("Renamer")) {
-                currentMode = "renamer";
-                showModePanel(renamerQuickSettings);
-                showModeLayout(renamerModeLayout);
-                
-                // Immediately load files and show original names
-                if (!queuedFiles.isEmpty()) {
-                    updateRenamePreview();
-                }
-            }
-            
-            updateSelectedFilesLabel();
-            log("Switched to " + currentMode + " mode");
+        // Immediately load files and show original names
+        if (!queuedFiles.isEmpty()) {
+            updateRenamePreview();
         }
+        updateSelectedFilesLabel();
+        log("Switched to renamer mode");
+    }
+    
+    private void updateModeButtonSelection(Button selectedButton) {
+        // Remove selected style from all mode buttons
+        encoderModeButton.getStyleClass().removeAll("selected");
+        subtitleModeButton.getStyleClass().removeAll("selected");
+        renamerModeButton.getStyleClass().removeAll("selected");
+        
+        // Add selected style to the chosen button
+        selectedButton.getStyleClass().add("selected");
     }
     
     private void showModeLayout(javafx.scene.control.SplitPane layout) {
@@ -531,10 +547,23 @@ public class MainController {
             details.append("   ").append(truncateUrl(subtitle.getDownloadUrl())).append("\n\n");
         }
         
+        // Manual download status
+        if (subtitle.isManualDownloadOnly()) {
+            details.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+            details.append("⚠️ MANUAL DOWNLOAD REQUIRED\n");
+            details.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n");
+            details.append("This subtitle requires manual download:\n");
+            details.append("1. Visit the URL above\n");
+            details.append("2. Find and download the subtitle\n");
+            details.append("3. Use 'External File' option below\n");
+            details.append("4. Select the downloaded file\n\n");
+            details.append("⚠️ Cannot use automatic download for this subtitle\n\n");
+        }
+        
         // Provider-specific notes
         String providerNote = getProviderNote(subtitle.getProvider());
-        if (providerNote != null) {
-            details.append("⚠️ Note: ").append(providerNote).append("\n");
+        if (providerNote != null && !subtitle.isManualDownloadOnly()) {
+            details.append("💡 Note: ").append(providerNote).append("\n");
         }
         
         subtitleDetailsLabel.setText(details.toString());
@@ -544,18 +573,18 @@ public class MainController {
         switch (provider) {
             case "OpenSubtitles.com":
                 return "Official API with high-quality subtitles";
+            case "Subscene":
+                return "One of the most popular subtitle sites - movies and TV";
             case "Addic7ed":
                 return "Excellent for TV shows, especially recent episodes";
             case "Jimaku":
-                return "Modern anime subtitle search (Japanese & English)";
-            case "AnimeSubtitles":
-                return "Multi-language anime subtitle database";
-            case "Kitsunekko":
-                return "Japanese anime subtitles (romaji/kanji)";
+                return "Modern anime subtitle search (English & Japanese)";
             case "SubDL":
                 return "Large database for movies and TV shows";
             case "Podnapisi":
                 return "Multi-language subtitle database";
+            case "AnimeSubtitles":
+                return "Multi-language anime subtitle database";
             case "SubDivX":
                 return "Largest Spanish subtitle database";
             case "YIFY":
@@ -617,12 +646,17 @@ public class MainController {
     private String getProviderNote(String provider) {
         switch (provider) {
             case "Addic7ed":
+                return "Auto-download with real scraping; may be blocked by anti-bot";
+            case "Subscene":
+                return "Auto-download via web scraping; very reliable";
             case "Jimaku":
             case "AnimeSubtitles":
-            case "Kitsunekko":
-                return "This provider may require manual download";
+                return "Auto-download via web scraping; anime specialist";
             case "OpenSubtitles.com":
-                return "Requires API key for downloads";
+                return "Requires API key configured in Settings";
+            case "SubDL":
+            case "Podnapisi":
+                return "Automatic download via API";
             default:
                 return null;
         }
@@ -2515,20 +2549,26 @@ public class MainController {
                     }
                 });
                 
-                // Check TMDB status
-                JsonObject tmdbResponse = pythonBridge.checkTMDB();
-                boolean tmdbConfigured = tmdbResponse.has("configured") && 
-                                        tmdbResponse.get("configured").getAsBoolean();
+                // Check metadata provider status from settings
+                boolean tmdbConfigured = settings.getTmdbApiKey() != null && !settings.getTmdbApiKey().isEmpty();
+                boolean tvdbConfigured = settings.getTvdbApiKey() != null && !settings.getTvdbApiKey().isEmpty();
+                boolean omdbConfigured = settings.getOmdbApiKey() != null && !settings.getOmdbApiKey().isEmpty();
+                boolean traktConfigured = settings.getTraktApiKey() != null && !settings.getTraktApiKey().isEmpty();
                 
-                // Check TVDB status
-                JsonObject tvdbResponse = pythonBridge.checkTVDB();
-                boolean tvdbConfigured = tvdbResponse.has("configured") && 
-                                        tvdbResponse.get("configured").getAsBoolean();
+                // Count available providers (4 free + any configured with keys)
+                int availableProviders = 4;  // Always have: AniList, Kitsu, Jikan, TVmaze (free)
+                if (tmdbConfigured) availableProviders++;
+                if (tvdbConfigured) availableProviders++;
+                if (omdbConfigured) availableProviders++;
+                if (traktConfigured) availableProviders++;
+                
+                final int totalProviders = availableProviders;
                 
                 Platform.runLater(() -> {
+                    // Update TMDB button
                     if (tmdbStatusButton != null) {
                         if (tmdbConfigured) {
-                            tmdbStatusButton.setText("🎬 TMDB: Ready");
+                            tmdbStatusButton.setText("🎬 TMDB: Ready" + (settings.isTmdbValidated() ? " ✓" : ""));
                             tmdbStatusButton.getStyleClass().removeAll("error", "warning");
                             tmdbStatusButton.getStyleClass().add("active");
                         } else {
@@ -2538,9 +2578,10 @@ public class MainController {
                         }
                     }
                     
+                    // Update TVDB button
                     if (tvdbStatusButton != null) {
                         if (tvdbConfigured) {
-                            tvdbStatusButton.setText("📺 TVDB: Ready");
+                            tvdbStatusButton.setText("📺 TVDB: Ready" + (settings.isTvdbValidated() ? " ✓" : ""));
                             tvdbStatusButton.getStyleClass().removeAll("error", "warning");
                             tvdbStatusButton.getStyleClass().add("active");
                         } else {
@@ -2550,23 +2591,37 @@ public class MainController {
                         }
                     }
                     
-                    // AniList is always available, so renamer should always work
-                    // Enable renamer buttons since we have at least AniList
+                    // AniList + free providers
+                    if (anilistStatusButton != null) {
+                        anilistStatusButton.setText("🎌 AniList + 3 More: Available");
+                        anilistStatusButton.getStyleClass().removeAll("error", "warning");
+                        anilistStatusButton.getStyleClass().add("active");
+                    }
+                    
+                    // Update status label with provider count
+                    if (activeProviderLabel != null) {
+                        activeProviderLabel.setText("✅ " + totalProviders + "/10 Providers Available");
+                        activeProviderLabel.setStyle("-fx-text-fill: #4ec9b0; -fx-font-weight: bold;");
+                    }
+                    
+                    // Always enable renamer buttons since we have free providers
                     if (refreshMetadataButton != null) {
                         refreshMetadataButton.setDisable(false);
                     }
                     if (applyRenameButton != null) {
                         applyRenameButton.setDisable(false);
                     }
-                });
-                
-                // AniList doesn't require API key
-                Platform.runLater(() -> {
-                    if (anilistStatusButton != null) {
-                        anilistStatusButton.setText("🎌 AniList: Available");
-                        anilistStatusButton.getStyleClass().removeAll("error", "warning");
-                        anilistStatusButton.getStyleClass().add("active");
-                    }
+                    
+                    // Log provider status
+                    log("Metadata Providers: " + totalProviders + "/10 available");
+                    if (tmdbConfigured) log("  ✓ TMDB" + (settings.isTmdbValidated() ? " (validated)" : ""));
+                    if (tvdbConfigured) log("  ✓ TVDB" + (settings.isTvdbValidated() ? " (validated)" : ""));
+                    if (omdbConfigured) log("  ✓ OMDB" + (settings.isOmdbValidated() ? " (validated)" : ""));
+                    if (traktConfigured) log("  ✓ Trakt" + (settings.isTraktValidated() ? " (validated)" : ""));
+                    log("  ✓ AniList (free, always available)");
+                    log("  ✓ Kitsu (free, always available)");
+                    log("  ✓ Jikan/MAL (free, always available)");
+                    log("  ✓ TVmaze (free, always available)");
                 });
                 
             } catch (Exception e) {
@@ -2663,6 +2718,25 @@ public class MainController {
                 try {
                     Platform.runLater(() -> log("Processing " + subtitle.getLanguage() + " subtitle from " + subtitle.getProvider() + "..."));
                     
+                    // Check if manual download only
+                    if (subtitle.isManualDownloadOnly()) {
+                        Platform.runLater(() -> {
+                            log("⚠️ Manual download required for " + subtitle.getProvider());
+                            log("   Please download manually from: " + subtitle.getDownloadUrl());
+                            log("   Then use 'External File' option to apply it");
+                            showWarning("Manual Download Required",
+                                "The subtitle from " + subtitle.getProvider() + " requires manual download.\n\n" +
+                                "Steps:\n" +
+                                "1. Visit: " + subtitle.getDownloadUrl() + "\n" +
+                                "2. Download the subtitle file\n" +
+                                "3. Use 'External File' option in the Subtitles tab\n" +
+                                "4. Browse and select the downloaded file\n\n" +
+                                "We couldn't get a direct download link for this subtitle.");
+                        });
+                        failCount++;
+                        continue;
+                    }
+                    
                     // Step 1: Download the subtitle
                     Platform.runLater(() -> log("Downloading subtitle from " + subtitle.getProvider() + "..."));
                     
@@ -2682,14 +2756,30 @@ public class MainController {
                         boolean requiresManual = downloadResponse.has("requires_manual_download") && 
                                                 downloadResponse.get("requires_manual_download").getAsBoolean();
                         
-                        if (requiresManual) {
+                        // Check if message contains manual download instructions
+                        boolean hasManualInstructions = errorMsg.toLowerCase().contains("manual") || 
+                                                       errorMsg.toLowerCase().contains("visit:") ||
+                                                       errorMsg.toLowerCase().contains("please:");
+                        
+                        if (requiresManual || hasManualInstructions) {
                             Platform.runLater(() -> {
-                                log("⚠️ Manual download required: " + errorMsg);
-                                showWarning("Manual Download Required", 
-                                    subtitle.getProvider() + " requires manual download.\n\n" + errorMsg);
+                                log("⚠️ Manual download required:");
+                                // Log the full message with line breaks
+                                for (String line : errorMsg.split("\n")) {
+                                    log("   " + line);
+                                }
+                                showWarning("Manual Download Required - " + subtitle.getProvider(), errorMsg);
                             });
                         } else {
-                            Platform.runLater(() -> log("❌ Download failed: " + errorMsg));
+                            Platform.runLater(() -> {
+                                log("❌ Download failed: " + subtitle.getProvider());
+                                // Show detailed error in log
+                                for (String line : errorMsg.split("\n")) {
+                                    log("   " + line);
+                                }
+                                showError("Download Failed", 
+                                    "Failed to download from " + subtitle.getProvider() + ":\n\n" + errorMsg);
+                            });
                         }
                         failCount++;
                         continue;
@@ -2781,14 +2871,53 @@ public class MainController {
     
     @FXML
     private void handleOpenFormatter() {
-        showInfo("Format Pattern", "Format pattern editor coming soon!\n\nAvailable tokens:\n" +
-            "{title} - Show/Movie title\n" +
-            "{year} - Release year\n" +
-            "{season} - Season number (S01)\n" +
-            "{episode} - Episode number (E01)\n" +
-            "{episodeTitle} - Episode title\n" +
-            "{quality} - Video quality\n" +
-            "{codec} - Video codec");
+        try {
+            // Load the pattern editor dialog
+            javafx.fxml.FXMLLoader loader = new javafx.fxml.FXMLLoader(
+                getClass().getResource("/fxml/PatternEditorDialog.fxml"));
+            javafx.scene.Parent root = loader.load();
+            
+            // Get the controller and configure it
+            PatternEditorController controller = loader.getController();
+            
+            // Create a new stage for the dialog
+            javafx.stage.Stage patternStage = new javafx.stage.Stage();
+            patternStage.initModality(javafx.stage.Modality.APPLICATION_MODAL);
+            patternStage.initStyle(javafx.stage.StageStyle.UNDECORATED);
+            patternStage.setTitle("Format Pattern Editor");
+            
+            // Set the scene
+            javafx.scene.Scene scene = new javafx.scene.Scene(root);
+            patternStage.setScene(scene);
+            
+            // Configure the controller
+            controller.setDialogStage(patternStage);
+            controller.setSettings(settings);
+            
+            // Determine which pattern type to show based on current selection
+            String renameType = quickRenameTypeCombo != null ? quickRenameTypeCombo.getValue() : "Auto Detect";
+            if (renameType != null) {
+                if (renameType.contains("Movie")) {
+                    controller.setPatternType("Movie");
+                } else if (renameType.contains("Anime")) {
+                    controller.setPatternType("Anime");
+                } else {
+                    controller.setPatternType("TV Show");
+                }
+            }
+            
+            // Show and wait
+            patternStage.showAndWait();
+            
+            // If saved, log success
+            if (controller.isSaved()) {
+                log("Format patterns updated successfully");
+            }
+            
+        } catch (Exception e) {
+            logger.error("Error opening pattern editor", e);
+            showError("Error", "Could not open pattern editor: " + e.getMessage());
+        }
     }
     
     @FXML
@@ -2948,10 +3077,11 @@ public class MainController {
                                 String format = sub.has("format") ? sub.get("format").getAsString() : "srt";
                                 String fileId = sub.has("file_id") ? sub.get("file_id").getAsString() : "";
                                 String downloadUrl = sub.has("download_url") ? sub.get("download_url").getAsString() : "";
+                                boolean manualOnly = sub.has("manual_download_only") && sub.get("manual_download_only").getAsBoolean();
                                 
                                 languages.add(language);
                                 
-                                SubtitleItem item = new SubtitleItem(false, language, provider, score, format, fileId, downloadUrl);
+                                SubtitleItem item = new SubtitleItem(false, language, provider, score, format, fileId, downloadUrl, manualOnly);
                                 if (availableSubtitlesTable != null) {
                                     availableSubtitlesTable.getItems().add(item);
                                 }
@@ -3360,12 +3490,17 @@ public class MainController {
         private String format;
         private String fileId;
         private String downloadUrl;
+        private boolean manualDownloadOnly;
         
         public SubtitleItem(boolean selected, String language, String provider, double score, String format) {
-            this(selected, language, provider, score, format, "", "");
+            this(selected, language, provider, score, format, "", "", false);
         }
         
         public SubtitleItem(boolean selected, String language, String provider, double score, String format, String fileId, String downloadUrl) {
+            this(selected, language, provider, score, format, fileId, downloadUrl, false);
+        }
+        
+        public SubtitleItem(boolean selected, String language, String provider, double score, String format, String fileId, String downloadUrl, boolean manualDownloadOnly) {
             this.selected = selected;
             this.language = language;
             this.provider = provider;
@@ -3373,6 +3508,7 @@ public class MainController {
             this.format = format;
             this.fileId = fileId;
             this.downloadUrl = downloadUrl;
+            this.manualDownloadOnly = manualDownloadOnly;
         }
         
         public boolean isSelected() { return selected; }
@@ -3389,6 +3525,8 @@ public class MainController {
         public void setFileId(String fileId) { this.fileId = fileId; }
         public String getDownloadUrl() { return downloadUrl; }
         public void setDownloadUrl(String downloadUrl) { this.downloadUrl = downloadUrl; }
+        public boolean isManualDownloadOnly() { return manualDownloadOnly; }
+        public void setManualDownloadOnly(boolean manualDownloadOnly) { this.manualDownloadOnly = manualDownloadOnly; }
     }
     
     // ========================================

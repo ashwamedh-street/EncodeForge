@@ -134,6 +134,9 @@ except Exception as e:
         def generate_subtitles(self, video_path, language=None):
             return {"status": "error", "message": "Subtitle generation not available"}
         
+        def download_subtitle(self, file_id, provider, video_path, language="eng", download_url=""):
+            return {"status": "error", "message": "Subtitle download not available"}
+        
         def download_subtitles(self, video_path, languages):
             return {"status": "error", "message": "Subtitle download not available"}
         

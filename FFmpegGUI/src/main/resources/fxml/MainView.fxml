@@ -52,26 +52,11 @@
                 </HBox>
             </HBox>
             
-            <!-- Toolbar -->
-            <ToolBar styleClass="main-toolbar">
-                <Label text="Mode:" styleClass="toolbar-label"/>
-                <ComboBox fx:id="modeComboBox" onAction="#handleModeChange" styleClass="mode-combo">
-                    <items>
-                        <FXCollections fx:factory="observableArrayList">
-                            <String fx:value="Encoder"/>
-                            <String fx:value="Subtitle"/>
-                            <String fx:value="Renamer"/>
-                        </FXCollections>
-                    </items>
-                </ComboBox>
-                <Separator orientation="VERTICAL"/>
-                <Button fx:id="addFilesButton" onAction="#handleAddFiles" styleClass="toolbar-button"/>
-                <Button fx:id="addFolderButton" onAction="#handleAddFolder" styleClass="toolbar-button"/>
-                <Separator orientation="VERTICAL"/>
-                <Button fx:id="settingsButton" onAction="#handleSettings" styleClass="toolbar-button"/>
-                <Region HBox.hgrow="ALWAYS"/>
+            <!-- Status Bar -->
+            <HBox styleClass="status-bar" alignment="CENTER_LEFT">
                 <Label fx:id="statusLabel" text="Ready" styleClass="status-label"/>
-            </ToolBar>
+                <Region HBox.hgrow="ALWAYS"/>
+            </HBox>
             
             <!-- Mode-Specific Quick Settings Panel -->
             <VBox fx:id="modeSpecificPanel" styleClass="mode-panel">
@@ -263,6 +248,99 @@
             </VBox>
         </VBox>
     </top>
+    
+    <!-- Left: Sidebar -->
+    <left>
+        <VBox fx:id="sidebar" styleClass="sidebar" prefWidth="80" minWidth="70" maxWidth="90">
+            <padding>
+                <Insets top="15" right="8" bottom="15" left="8"/>
+            </padding>
+            
+            <!-- Mode Selection -->
+            <VBox spacing="4" styleClass="mode-selection">
+                <Label text="Modes" styleClass="sidebar-section-title"/>
+                
+                <!-- Encoder Mode -->
+                <Button fx:id="encoderModeButton" onAction="#handleEncoderMode" styleClass="mode-button" maxWidth="Infinity">
+                    <graphic>
+                        <VBox alignment="CENTER" spacing="2">
+                            <Label text="🎬" styleClass="mode-icon"/>
+                            <Label text="Encoder" styleClass="mode-label"/>
+                        </VBox>
+                    </graphic>
+                </Button>
+                
+                <!-- Subtitle Mode -->
+                <Button fx:id="subtitleModeButton" onAction="#handleSubtitleMode" styleClass="mode-button" maxWidth="Infinity">
+                    <graphic>
+                        <VBox alignment="CENTER" spacing="2">
+                            <Label text="📝" styleClass="mode-icon"/>
+                            <Label text="Subtitles" styleClass="mode-label"/>
+                        </VBox>
+                    </graphic>
+                </Button>
+                
+                <!-- Renamer Mode -->
+                <Button fx:id="renamerModeButton" onAction="#handleRenamerMode" styleClass="mode-button" maxWidth="Infinity">
+                    <graphic>
+                        <VBox alignment="CENTER" spacing="2">
+                            <Label text="📁" styleClass="mode-icon"/>
+                            <Label text="Renamer" styleClass="mode-label"/>
+                        </VBox>
+                    </graphic>
+                </Button>
+            </VBox>
+            
+            <!-- Separator -->
+            <Separator styleClass="sidebar-separator"/>
+            
+            <!-- File Operations -->
+            <VBox spacing="4" styleClass="file-operations">
+                <Label text="Files" styleClass="sidebar-section-title"/>
+                
+                <!-- Add Files -->
+                <Button fx:id="addFilesButton" onAction="#handleAddFiles" styleClass="sidebar-button" maxWidth="Infinity">
+                    <graphic>
+                        <HBox alignment="CENTER_LEFT" spacing="4">
+                            <Label text="📄" styleClass="sidebar-icon"/>
+                            <Label text="Add Files" styleClass="sidebar-button-label"/>
+                        </HBox>
+                    </graphic>
+                </Button>
+                
+                <!-- Add Folder -->
+                <Button fx:id="addFolderButton" onAction="#handleAddFolder" styleClass="sidebar-button" maxWidth="Infinity">
+                    <graphic>
+                        <HBox alignment="CENTER_LEFT" spacing="4">
+                            <Label text="📂" styleClass="sidebar-icon"/>
+                            <Label text="Add Folder" styleClass="sidebar-button-label"/>
+                        </HBox>
+                    </graphic>
+                </Button>
+            </VBox>
+            
+            <!-- Separator -->
+            <Separator styleClass="sidebar-separator"/>
+            
+            <!-- Settings -->
+            <VBox spacing="4" styleClass="settings-section">
+                <Label text="Settings" styleClass="sidebar-section-title"/>
+                
+                <!-- Settings Button -->
+                <Button fx:id="settingsButton" onAction="#handleSettings" styleClass="sidebar-button" maxWidth="Infinity">
+                    <graphic>
+                        <HBox alignment="CENTER_LEFT" spacing="4">
+                            <Label text="⚙️" styleClass="sidebar-icon"/>
+                            <Label text="Settings" styleClass="sidebar-button-label"/>
+                        </HBox>
+                    </graphic>
+                </Button>
+            </VBox>
+            
+            <!-- Spacer to push content to top -->
+            <Region VBox.vgrow="ALWAYS"/>
+        </VBox>
+    </left>
     
     <!-- Center: Main Content Area -->
     <center>

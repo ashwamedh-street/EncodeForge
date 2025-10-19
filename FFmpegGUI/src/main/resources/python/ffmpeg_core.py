@@ -108,8 +108,7 @@ class FFmpegCore:
         self.whisper_mgr = WhisperManager()
         self.renamer = MediaRenamer(
             tmdb_key=self.settings.tmdb_api_key,
-            tvdb_key=self.settings.tvdb_api_key,
-            anidb_key=self.settings.anidb_api_key
+            tvdb_key=self.settings.tvdb_api_key
         )
         self.subtitle_providers = SubtitleProviders(
             opensubtitles_key=self.settings.opensubtitles_api_key,
@@ -397,7 +396,7 @@ class FFmpegCore:
             
             logger.info(f"Languages: {languages}")
             logger.info("Searching across multiple providers...")
-            logger.info(f"Providers available: OpenSubtitles.com, Addic7ed, SubDL, Subf2m, YIFY, Podnapisi, SubDivX + 3 anime providers (10 total)")
+            logger.info("Providers available: OpenSubtitles.com, Addic7ed, SubDL, Subf2m, YIFY, Podnapisi, SubDivX + 3 anime providers (10 total)")
             
             # Search all providers
             results = self.subtitle_providers.search_all_providers(video_path, languages)
@@ -730,7 +729,7 @@ class FFmpegCore:
                 logger.info(f"Subtitle saved externally: {output_subtitle_path}")
                 return {
                     "status": "success",
-                    "message": f"Subtitle saved as external file",
+                    "message": "Subtitle saved as external file",
                     "output_path": str(output_subtitle_path),
                     "mode": "external"
                 }
@@ -784,7 +783,7 @@ class FFmpegCore:
                 logger.info(f"Subtitles burned in successfully: {output_path_obj}")
                 return {
                     "status": "success",
-                    "message": f"Subtitles burned into video",
+                    "message": "Subtitles burned into video",
                     "output_path": str(output_path_obj),
                     "mode": "burn-in"
                 }
@@ -836,7 +835,7 @@ class FFmpegCore:
                 logger.info(f"Subtitles embedded successfully: {output_path_obj}")
                 return {
                     "status": "success",
-                    "message": f"Subtitles embedded in video",
+                    "message": "Subtitles embedded in video",
                     "output_path": str(output_path_obj),
                     "mode": "embed"
                 }

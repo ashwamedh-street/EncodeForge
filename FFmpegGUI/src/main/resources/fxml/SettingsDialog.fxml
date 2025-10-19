@@ -266,12 +266,20 @@
                     <Label text="Metadata &amp; Renaming" styleClass="category-title"/>
                     <Label text="Configure metadata providers for automatic file renaming" styleClass="hint-label"/>
                     
+                    <VBox spacing="4" style="-fx-padding: 8; -fx-background-color: rgba(76, 201, 176, 0.1); -fx-background-radius: 4;">
+                        <Label text="✅ 10 Providers Available!" style="-fx-font-weight: bold; -fx-text-fill: #4ec9b0;"/>
+                        <Label text="Free (No Key): AniList, Kitsu, Jikan/MAL, TVmaze" styleClass="hint-label"/>
+                        <Label text="Requires Key: TMDB, TVDB, OMDB, Trakt" styleClass="hint-label"/>
+                    </VBox>
+                    
+                    <Separator/>
+                    
                     <VBox spacing="12">
-                        <Label text="Metadata Providers" styleClass="subsection-title"/>
+                        <Label text="Metadata Providers (Recommended)" styleClass="subsection-title" style="-fx-font-weight: bold;"/>
                         
                         <VBox spacing="8">
-                            <Label text="TMDB API Key:" styleClass="setting-label"/>
-                            <TextField fx:id="tmdbApiKeyField" promptText="Required for movie/TV metadata"/>
+                            <Label text="TMDB API Key (The Movie Database):" styleClass="setting-label"/>
+                            <TextField fx:id="tmdbApiKeyField" promptText="Best for movies &amp; TV shows"/>
                             <Label text="Get free API key from https://www.themoviedb.org/settings/api" styleClass="hint-label"/>
                             <HBox spacing="10">
                                 <Button fx:id="validateTMDBButton" onAction="#handleValidateTMDB" styleClass="small-button"/>
@@ -280,16 +288,70 @@
                         </VBox>
                         
                         <VBox spacing="8">
-                            <Label text="TVDB API Key:" styleClass="setting-label"/>
-                            <TextField fx:id="tvdbApiKeyField" promptText="Optional - for TV show metadata"/>
+                            <Label text="TVDB API Key (TheTVDB):" styleClass="setting-label"/>
+                            <TextField fx:id="tvdbApiKeyField" promptText="Best for TV show episode details"/>
                             <Label text="Get free API key from https://thetvdb.com/api-information" styleClass="hint-label"/>
                             <HBox spacing="10">
                                 <Button fx:id="validateTVDBButton" onAction="#handleValidateTVDB" styleClass="small-button"/>
                                 <Label fx:id="tvdbValidationLabel" text="" styleClass="hint-label"/>
                             </HBox>
                         </VBox>
+                    </VBox>
+                    
+                    <Separator/>
+                    
+                    <VBox spacing="12">
+                        <Label text="Additional Providers (Optional)" styleClass="subsection-title"/>
                         
-                        <Label text="AniList does not require an API key and is always available" styleClass="hint-label"/>
+                        <VBox spacing="8">
+                            <Label text="OMDB API Key:" styleClass="setting-label"/>
+                            <TextField fx:id="omdbApiKeyField" promptText="Alternative for movies &amp; TV"/>
+                            <Label text="Get free API key from http://www.omdbapi.com/apikey.aspx" styleClass="hint-label"/>
+                            <HBox spacing="10">
+                                <Button fx:id="validateOMDBButton" onAction="#handleValidateOMDB" styleClass="small-button"/>
+                                <Label fx:id="omdbValidationLabel" text="" styleClass="hint-label"/>
+                            </HBox>
+                        </VBox>
+                        
+                        <VBox spacing="8">
+                            <Label text="Trakt API Key:" styleClass="setting-label"/>
+                            <TextField fx:id="traktApiKeyField" promptText="Alternative for movies &amp; TV"/>
+                            <Label text="Get free API key from https://trakt.tv/oauth/applications" styleClass="hint-label"/>
+                            <HBox spacing="10">
+                                <Button fx:id="validateTraktButton" onAction="#handleValidateTrakt" styleClass="small-button"/>
+                                <Label fx:id="traktValidationLabel" text="" styleClass="hint-label"/>
+                            </HBox>
+                        </VBox>
+                        
+                        <Label text="✅ AniList, Kitsu, Jikan/MAL, and TVmaze are always available (no API key needed)" styleClass="hint-label" style="-fx-text-fill: #4ec9b0;"/>
+                    </VBox>
+                    
+                    <Separator/>
+                    
+                    <VBox spacing="12">
+                        <Label text="Format Patterns" styleClass="subsection-title"/>
+                        <Label text="Customize how renamed files are formatted" styleClass="hint-label"/>
+                        
+                        <VBox spacing="8">
+                            <Label text="TV Show Pattern:" styleClass="setting-label"/>
+                            <TextField fx:id="tvShowPatternField" promptText="{title} - S{season}E{episode} - {episodeTitle}"/>
+                            <Label text="Example: Breaking Bad - S01E01 - Pilot" styleClass="hint-label"/>
+                        </VBox>
+                        
+                        <VBox spacing="8">
+                            <Label text="Movie Pattern:" styleClass="setting-label"/>
+                            <TextField fx:id="moviePatternField" promptText="{title} ({year})"/>
+                            <Label text="Example: Inception (2010)" styleClass="hint-label"/>
+                        </VBox>
+                        
+                        <VBox spacing="8">
+                            <Label text="Anime Pattern:" styleClass="setting-label"/>
+                            <TextField fx:id="animePatternField" promptText="{title} - {episode} - {episodeTitle}"/>
+                            <Label text="Example: Naruto - 001 - Episode Title" styleClass="hint-label"/>
+                        </VBox>
+                        
+                        <Button fx:id="openPatternEditorButton" onAction="#handleOpenPatternEditor" text="Open Pattern Editor" styleClass="secondary-button"/>
+                        <Label text="Available tokens: {title}, {year}, {season}, {episode}, {episodeTitle}, {S}, {E}" styleClass="hint-label"/>
                     </VBox>
                 </VBox>
                 

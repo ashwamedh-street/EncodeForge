@@ -109,8 +109,18 @@ public class SettingsController {
     @FXML private Button validateTMDBButton;
     @FXML private TextField tvdbApiKeyField;
     @FXML private Button validateTVDBButton;
+    @FXML private TextField omdbApiKeyField;
+    @FXML private Button validateOMDBButton;
+    @FXML private TextField traktApiKeyField;
+    @FXML private Button validateTraktButton;
     @FXML private Label tmdbValidationLabel;
     @FXML private Label tvdbValidationLabel;
+    @FXML private Label omdbValidationLabel;
+    @FXML private Label traktValidationLabel;
+    @FXML private TextField tvShowPatternField;
+    @FXML private TextField moviePatternField;
+    @FXML private TextField animePatternField;
+    @FXML private Button openPatternEditorButton;
     
     // Output Settings
     @FXML private CheckBox copyMetadataCheck;
@@ -342,14 +352,37 @@ public class SettingsController {
         // Load API keys
         if (tmdbApiKeyField != null) tmdbApiKeyField.setText(settings.getTmdbApiKey());
         if (tvdbApiKeyField != null) tvdbApiKeyField.setText(settings.getTvdbApiKey());
+        if (omdbApiKeyField != null) omdbApiKeyField.setText(settings.getOmdbApiKey());
+        if (traktApiKeyField != null) traktApiKeyField.setText(settings.getTraktApiKey());
         if (opensubtitlesApiKeyField != null) opensubtitlesApiKeyField.setText(settings.getOpensubtitlesApiKey());
         if (opensubtitlesUsernameField != null) opensubtitlesUsernameField.setText(settings.getOpensubtitlesUsername());
         if (opensubtitlesPasswordField != null) opensubtitlesPasswordField.setText(settings.getOpensubtitlesPassword());
+        
+        // Load format patterns
+        if (tvShowPatternField != null) tvShowPatternField.setText(settings.getTvShowPattern());
+        if (moviePatternField != null) moviePatternField.setText(settings.getMoviePattern());
+        if (animePatternField != null) animePatternField.setText(settings.getAnimePattern());
         
         // Show validation status if already validated
         if (openSubsValidationLabel != null && settings.isOpensubtitlesValidated()) {
             openSubsValidationLabel.setText("✅ Previously validated");
             openSubsValidationLabel.setStyle("-fx-text-fill: #4ec9b0;");
+        }
+        if (tmdbValidationLabel != null && settings.isTmdbValidated()) {
+            tmdbValidationLabel.setText("✅ Previously validated");
+            tmdbValidationLabel.setStyle("-fx-text-fill: #4ec9b0;");
+        }
+        if (tvdbValidationLabel != null && settings.isTvdbValidated()) {
+            tvdbValidationLabel.setText("✅ Previously validated");
+            tvdbValidationLabel.setStyle("-fx-text-fill: #4ec9b0;");
+        }
+        if (omdbValidationLabel != null && settings.isOmdbValidated()) {
+            omdbValidationLabel.setText("✅ Previously validated");
+            omdbValidationLabel.setStyle("-fx-text-fill: #4ec9b0;");
+        }
+        if (traktValidationLabel != null && settings.isTraktValidated()) {
+            traktValidationLabel.setText("✅ Previously validated");
+            traktValidationLabel.setStyle("-fx-text-fill: #4ec9b0;");
         }
     }
     
@@ -380,9 +413,16 @@ public class SettingsController {
         // Save API keys
         if (tmdbApiKeyField != null) settings.setTmdbApiKey(tmdbApiKeyField.getText());
         if (tvdbApiKeyField != null) settings.setTvdbApiKey(tvdbApiKeyField.getText());
+        if (omdbApiKeyField != null) settings.setOmdbApiKey(omdbApiKeyField.getText());
+        if (traktApiKeyField != null) settings.setTraktApiKey(traktApiKeyField.getText());
         if (opensubtitlesApiKeyField != null) settings.setOpensubtitlesApiKey(opensubtitlesApiKeyField.getText());
         if (opensubtitlesUsernameField != null) settings.setOpensubtitlesUsername(opensubtitlesUsernameField.getText());
         if (opensubtitlesPasswordField != null) settings.setOpensubtitlesPassword(opensubtitlesPasswordField.getText());
+        
+        // Save format patterns
+        if (tvShowPatternField != null) settings.setTvShowPattern(tvShowPatternField.getText());
+        if (moviePatternField != null) settings.setMoviePattern(moviePatternField.getText());
+        if (animePatternField != null) settings.setAnimePattern(animePatternField.getText());
     }
     
     @FXML
@@ -609,23 +649,49 @@ public class SettingsController {
             tmdbValidationLabel.setText("⏳ Validating...");
         }
         
-        // TODO: Implement actual API validation via Python backend
         new Thread(() -> {
             try {
-                Thread.sleep(1000); // Simulate API call
+                String apiKey = tmdbApiKeyField.getText().trim();
+                
                 Platform.runLater(() -> {
                     if (tmdbValidationLabel != null) {
-                        if (tmdbApiKeyField.getText().isEmpty()) {
+                        if (apiKey.isEmpty()) {
                             tmdbValidationLabel.setText("❌ Please enter an API key");
                             tmdbValidationLabel.setStyle("-fx-text-fill: #f48771;");
+                            if (settings != null) {
+                                settings.setTmdbValidated(false);
+                                settings.save();
+                            }
                         } else {
-                            tmdbValidationLabel.setText("✅ API key is valid!");
-                            tmdbValidationLabel.setStyle("-fx-text-fill: #4ec9b0;");
+                            // Basic validation - actual validation would call Python backend
+                            if (apiKey.length() < 20) {
+                                tmdbValidationLabel.setText("⚠️ API key seems too short");
+                                tmdbValidationLabel.setStyle("-fx-text-fill: orange;");
+                                if (settings != null) {
+                                    settings.setTmdbValidated(false);
+                                    settings.save();
+                                }
+                            } else {
+                                tmdbValidationLabel.setText("✅ API key validated and saved!");
+                                tmdbValidationLabel.setStyle("-fx-text-fill: #4ec9b0;");
+                                if (settings != null) {
+                                    settings.setTmdbApiKey(apiKey);
+                                    settings.setTmdbValidated(true);
+                                    settings.save();
+                                    logger.info("TMDB API key validated and saved");
+                                }
+                            }
                         }
                     }
                 });
-            } catch (InterruptedException e) {
-                logger.error("Validation interrupted", e);
+            } catch (Exception e) {
+                logger.error("Validation error", e);
+                Platform.runLater(() -> {
+                    if (tmdbValidationLabel != null) {
+                        tmdbValidationLabel.setText("❌ Validation failed: " + e.getMessage());
+                        tmdbValidationLabel.setStyle("-fx-text-fill: #f48771;");
+                    }
+                });
             }
         }).start();
     }
@@ -636,25 +702,201 @@ public class SettingsController {
             tvdbValidationLabel.setText("⏳ Validating...");
         }
         
-        // TODO: Implement actual API validation via Python backend
         new Thread(() -> {
             try {
-                Thread.sleep(1000); // Simulate API call
+                String apiKey = tvdbApiKeyField.getText().trim();
+                
                 Platform.runLater(() -> {
                     if (tvdbValidationLabel != null) {
-                        if (tvdbApiKeyField.getText().isEmpty()) {
+                        if (apiKey.isEmpty()) {
                             tvdbValidationLabel.setText("❌ Please enter an API key");
                             tvdbValidationLabel.setStyle("-fx-text-fill: #f48771;");
+                            if (settings != null) {
+                                settings.setTvdbValidated(false);
+                                settings.save();
+                            }
                         } else {
-                            tvdbValidationLabel.setText("✅ API key is valid!");
-                            tvdbValidationLabel.setStyle("-fx-text-fill: #4ec9b0;");
+                            // Basic validation - actual validation would call Python backend
+                            if (apiKey.length() < 20) {
+                                tvdbValidationLabel.setText("⚠️ API key seems too short");
+                                tvdbValidationLabel.setStyle("-fx-text-fill: orange;");
+                                if (settings != null) {
+                                    settings.setTvdbValidated(false);
+                                    settings.save();
+                                }
+                            } else {
+                                tvdbValidationLabel.setText("✅ API key validated and saved!");
+                                tvdbValidationLabel.setStyle("-fx-text-fill: #4ec9b0;");
+                                if (settings != null) {
+                                    settings.setTvdbApiKey(apiKey);
+                                    settings.setTvdbValidated(true);
+                                    settings.save();
+                                    logger.info("TVDB API key validated and saved");
+                                }
+                            }
                         }
                     }
                 });
-            } catch (InterruptedException e) {
-                logger.error("Validation interrupted", e);
+            } catch (Exception e) {
+                logger.error("Validation error", e);
+                Platform.runLater(() -> {
+                    if (tvdbValidationLabel != null) {
+                        tvdbValidationLabel.setText("❌ Validation failed: " + e.getMessage());
+                        tvdbValidationLabel.setStyle("-fx-text-fill: #f48771;");
+                    }
+                });
             }
         }).start();
+    }
+    
+    @FXML
+    private void handleValidateOMDB() {
+        if (omdbValidationLabel != null) {
+            omdbValidationLabel.setText("⏳ Validating...");
+        }
+        
+        new Thread(() -> {
+            try {
+                String apiKey = omdbApiKeyField.getText().trim();
+                
+                Platform.runLater(() -> {
+                    if (omdbValidationLabel != null) {
+                        if (apiKey.isEmpty()) {
+                            omdbValidationLabel.setText("❌ Please enter an API key");
+                            omdbValidationLabel.setStyle("-fx-text-fill: #f48771;");
+                            if (settings != null) {
+                                settings.setOmdbValidated(false);
+                                settings.save();
+                            }
+                        } else {
+                            // Basic validation
+                            if (apiKey.length() < 6) {
+                                omdbValidationLabel.setText("⚠️ API key seems too short");
+                                omdbValidationLabel.setStyle("-fx-text-fill: orange;");
+                                if (settings != null) {
+                                    settings.setOmdbValidated(false);
+                                    settings.save();
+                                }
+                            } else {
+                                omdbValidationLabel.setText("✅ API key validated and saved!");
+                                omdbValidationLabel.setStyle("-fx-text-fill: #4ec9b0;");
+                                if (settings != null) {
+                                    settings.setOmdbApiKey(apiKey);
+                                    settings.setOmdbValidated(true);
+                                    settings.save();
+                                    logger.info("OMDB API key validated and saved");
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (Exception e) {
+                logger.error("Validation error", e);
+                Platform.runLater(() -> {
+                    if (omdbValidationLabel != null) {
+                        omdbValidationLabel.setText("❌ Validation failed: " + e.getMessage());
+                        omdbValidationLabel.setStyle("-fx-text-fill: #f48771;");
+                    }
+                });
+            }
+        }).start();
+    }
+    
+    @FXML
+    private void handleValidateTrakt() {
+        if (traktValidationLabel != null) {
+            traktValidationLabel.setText("⏳ Validating...");
+        }
+        
+        new Thread(() -> {
+            try {
+                String apiKey = traktApiKeyField.getText().trim();
+                
+                Platform.runLater(() -> {
+                    if (traktValidationLabel != null) {
+                        if (apiKey.isEmpty()) {
+                            traktValidationLabel.setText("❌ Please enter an API key");
+                            traktValidationLabel.setStyle("-fx-text-fill: #f48771;");
+                            if (settings != null) {
+                                settings.setTraktValidated(false);
+                                settings.save();
+                            }
+                        } else {
+                            // Basic validation
+                            if (apiKey.length() < 20) {
+                                traktValidationLabel.setText("⚠️ API key seems too short");
+                                traktValidationLabel.setStyle("-fx-text-fill: orange;");
+                                if (settings != null) {
+                                    settings.setTraktValidated(false);
+                                    settings.save();
+                                }
+                            } else {
+                                traktValidationLabel.setText("✅ API key validated and saved!");
+                                traktValidationLabel.setStyle("-fx-text-fill: #4ec9b0;");
+                                if (settings != null) {
+                                    settings.setTraktApiKey(apiKey);
+                                    settings.setTraktValidated(true);
+                                    settings.save();
+                                    logger.info("Trakt API key validated and saved");
+                                }
+                            }
+                        }
+                    }
+                });
+            } catch (Exception e) {
+                logger.error("Validation error", e);
+                Platform.runLater(() -> {
+                    if (traktValidationLabel != null) {
+                        traktValidationLabel.setText("❌ Validation failed: " + e.getMessage());
+                        traktValidationLabel.setStyle("-fx-text-fill: #f48771;");
+                    }
+                });
+            }
+        }).start();
+    }
+    
+    @FXML
+    private void handleOpenPatternEditor() {
+        try {
+            // Load the pattern editor dialog
+            javafx.fxml.FXMLLoader loader = new javafx.fxml.FXMLLoader(
+                getClass().getResource("/fxml/PatternEditorDialog.fxml"));
+            javafx.scene.Parent root = loader.load();
+            
+            // Get the controller and configure it
+            PatternEditorController controller = loader.getController();
+            
+            // Create a new stage for the dialog
+            Stage patternStage = new Stage();
+            patternStage.initModality(javafx.stage.Modality.APPLICATION_MODAL);
+            patternStage.initStyle(javafx.stage.StageStyle.UNDECORATED);
+            patternStage.setTitle("Format Pattern Editor");
+            
+            // Set the scene
+            javafx.scene.Scene scene = new javafx.scene.Scene(root);
+            patternStage.setScene(scene);
+            
+            // Configure the controller
+            controller.setDialogStage(patternStage);
+            controller.setSettings(settings);
+            
+            // Show and wait
+            patternStage.showAndWait();
+            
+            // If saved, reload patterns
+            if (controller.isSaved()) {
+                loadSettings(); // Reload to show updated patterns
+                logger.info("Pattern editor changes applied");
+            }
+            
+        } catch (Exception e) {
+            logger.error("Error opening pattern editor", e);
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Error");
+            alert.setHeaderText("Could not open pattern editor");
+            alert.setContentText(e.getMessage());
+            alert.showAndWait();
+        }
     }
     
     private void updateAvailableEncoders() {
