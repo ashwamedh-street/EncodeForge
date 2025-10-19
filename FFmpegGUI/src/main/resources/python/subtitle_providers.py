@@ -4,16 +4,16 @@ Multi-provider subtitle search and download
 Supports: OpenSubtitles, Subscene, Addic7ed, and more
 """
 
-import logging
-import json
-import urllib.request
-import urllib.parse
-import urllib.error
-from pathlib import Path
-from typing import Optional, Dict, List, Tuple
 import hashlib
-import struct
+import json
+import logging
 import re
+import struct
+import urllib.error
+import urllib.parse
+import urllib.request
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 from opensubtitles_manager import OpenSubtitlesManager
 
@@ -25,7 +25,19 @@ class SubtitleProviders:
     
     def __init__(self, opensubtitles_key: str = "", opensubtitles_user: str = "", opensubtitles_pass: str = ""):
         self.opensubtitles = OpenSubtitlesManager(opensubtitles_key, opensubtitles_user, opensubtitles_pass)
-        self.providers = ["opensubtitles", "subscene", "addic7ed"]
+        self.providers = ["opensubtitles"]  # Only OpenSubtitles for now (has proper API)
+        
+    def search_podnapisi(self, video_path: str, languages: List[str]) -> List[Dict]:
+        """Search Podnapisi.NET (basic implementation)"""
+        # Podnapisi.NET doesn't have a public API, would need scraping
+        # For now, return empty results
+        return []
+    
+    def search_subdivx(self, video_path: str, languages: List[str]) -> List[Dict]:
+        """Search SubDivX (Spanish subtitles)"""
+        # SubDivX doesn't have a public API, would need scraping
+        # For now, return empty results
+        return []
     
     def search_all_providers(self, video_path: str, languages: List[str]) -> List[Dict]:
         """Search all providers and aggregate results"""

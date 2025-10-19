@@ -3,13 +3,13 @@
 Media Renamer - FileBot-style renaming with database integration
 """
 
-import re
-import logging
-from pathlib import Path
-from typing import Optional, Dict, List, Tuple
-import urllib.request
-import urllib.parse
 import json
+import logging
+import re
+import urllib.parse
+import urllib.request
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +32,17 @@ class MediaRenamer:
     # AniList GraphQL API
     ANILIST_API_URL = "https://graphql.anilist.co"
     
-    def __init__(self, tmdb_key: str = "", tvdb_key: str = "", anidb_key: str = ""):
+    # OMDB API (Open Movie Database)
+    OMDB_API_URL = "http://www.omdbapi.com/"
+    
+    # MyAnimeList API
+    MAL_API_URL = "https://api.myanimelist.net/v2"
+    
+    def __init__(self, tmdb_key: str = "", tvdb_key: str = "", anidb_key: str = "", omdb_key: str = ""):
         self.tmdb_key = tmdb_key
         self.tvdb_key = tvdb_key
         self.anidb_key = anidb_key
+        self.omdb_key = omdb_key
         self.tvdb_token = None  # TVDB requires JWT token
     
     def detect_media_type(self, filename: str) -> str:
@@ -197,7 +204,7 @@ class MediaRenamer:
         
         return None
     
-    def search_anime_anilist(self, title: str, episode: int = 1) -> Optional[Dict]:
+    def search_anime(self, title: str, season: int = 1, episode: int = 1) -> Optional[Dict]:
         """Search anime using AniList GraphQL API"""
         try:
             query = """
@@ -207,11 +214,15 @@ class MediaRenamer:
                     title {
                         romaji
                         english
+                        native
                     }
                     startDate {
                         year
                     }
                     episodes
+                    format
+                    status
+                    description
                 }
             }
             """
@@ -235,14 +246,128 @@ class MediaRenamer:
                 return {
                     "show_title": title_data.get("english") or title_data.get("romaji", ""),
                     "show_year": str(anime.get("startDate", {}).get("year", "")),
-                    "season": 1,
+                    "season": season,
                     "episode": episode,
                     "episode_title": f"Episode {episode}",
-                    "overview": "",
+                    "overview": anime.get("description", "")[:200] + "..." if anime.get("description") else "",
                     "source": "anilist"
                 }
         except Exception as e:
             logger.error(f"AniList search error: {e}")
+        
+        return None
+    
+    def search_anime_movie(self, title: str, year: Optional[int] = None) -> Optional[Dict]:
+        """Search anime movie using AniList GraphQL API"""
+        try:
+            query = """
+            query ($search: String) {
+                Media (search: $search, type: ANIME, format: MOVIE) {
+                    id
+                    title {
+                        romaji
+                        english
+                        native
+                    }
+                    startDate {
+                        year
+                    }
+                    description
+                    averageScore
+                }
+            }
+            """
+            
+            variables = {"search": title}
+            data = json.dumps({"query": query, "variables": variables}).encode('utf-8')
+            
+            request = urllib.request.Request(
+                self.ANILIST_API_URL,
+                data=data,
+                headers={"Content-Type": "application/json"}
+            )
+            
+            with urllib.request.urlopen(request, timeout=10) as response:
+                result = json.loads(response.read().decode())
+            
+            if result.get("data", {}).get("Media"):
+                anime = result["data"]["Media"]
+                title_data = anime.get("title", {})
+                
+                return {
+                    "title": title_data.get("english") or title_data.get("romaji", ""),
+                    "year": str(anime.get("startDate", {}).get("year", "")),
+                    "overview": anime.get("description", "")[:200] + "..." if anime.get("description") else "",
+                    "rating": anime.get("averageScore", 0) / 10.0 if anime.get("averageScore") else 0,
+                    "source": "anilist"
+                }
+        except Exception as e:
+            logger.error(f"AniList movie search error: {e}")
+        
+        return None
+    
+    def search_omdb_movie(self, title: str, year: Optional[int] = None) -> Optional[Dict]:
+        """Search movie using OMDB API"""
+        if not self.omdb_key:
+            return None
+            
+        try:
+            params = {
+                "apikey": self.omdb_key,
+                "t": title,
+                "type": "movie"
+            }
+            
+            if year:
+                params["y"] = str(year)
+            
+            url = f"{self.OMDB_API_URL}?{urllib.parse.urlencode(params)}"
+            
+            with urllib.request.urlopen(url, timeout=10) as response:
+                data = json.loads(response.read().decode())
+            
+            if data.get("Response") == "True":
+                return {
+                    "title": data.get("Title", ""),
+                    "year": data.get("Year", ""),
+                    "overview": data.get("Plot", ""),
+                    "rating": float(data.get("imdbRating", 0)) if data.get("imdbRating") != "N/A" else 0,
+                    "source": "omdb"
+                }
+        except Exception as e:
+            logger.error(f"OMDB search error: {e}")
+        
+        return None
+    
+    def search_omdb_tv(self, title: str, season: int = 1, episode: int = 1) -> Optional[Dict]:
+        """Search TV show using OMDB API"""
+        if not self.omdb_key:
+            return None
+            
+        try:
+            params = {
+                "apikey": self.omdb_key,
+                "t": title,
+                "type": "series"
+            }
+            
+            url = f"{self.OMDB_API_URL}?{urllib.parse.urlencode(params)}"
+            
+            with urllib.request.urlopen(url, timeout=10) as response:
+                data = json.loads(response.read().decode())
+            
+            if data.get("Response") == "True":
+                return {
+                    "show_title": data.get("Title", ""),
+                    "show_year": data.get("Year", "")[:4] if data.get("Year") else "",
+                    "season": season,
+                    "episode": episode,
+                    "episode_title": f"Episode {episode}",
+                    "overview": data.get("Plot", ""),
+                    "source": "omdb"
+                }
+        except Exception as e:
+            logger.error(f"OMDB TV search error: {e}")
         
         return None
     
@@ -257,9 +382,15 @@ class MediaRenamer:
             if result:
                 return result
         
-        # Try AniList for anime detection
-        if any(word in title.lower() for word in ['anime', 'naruto', 'attack on titan', 'bleach', 'one piece']):
-            result = self.search_anime_anilist(title, episode)
+        # Try AniList for anime detection (always available)
+        if any(word in title.lower() for word in ['anime', 'naruto', 'attack on titan', 'bleach', 'one piece', 'dragon ball', 'demon slayer', 'jujutsu kaisen']):
+            result = self.search_anime(title, season, episode)
+            if result:
+                return result
+        
+        # Try OMDB as another fallback
+        if self.omdb_key:
+            result = self.search_omdb_tv(title, season, episode)
             if result:
                 return result
         
@@ -321,12 +452,24 @@ class MediaRenamer:
     
     def search_movie(self, title: str, year: Optional[int] = None) -> Optional[Dict]:
         """
-        Search for movie information using TMDB
+        Search for movie information using multiple providers
         
         Returns dict with movie information or None
         """
+        # Try AniList for anime movies first
+        result = self.search_anime_movie(title, year)
+        if result:
+            return result
+        
+        # Try OMDB if available
+        if self.omdb_key:
+            result = self.search_omdb_movie(title, year)
+            if result:
+                return result
+        
+        # Fall back to TMDB
         if not self.tmdb_key:
-            logger.warning("TMDB API key not configured")
+            logger.warning("No movie API keys configured")
             return None
         
         try:

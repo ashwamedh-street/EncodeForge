@@ -26,6 +26,7 @@ public class PythonBridge {
     private BufferedWriter writer;
     private ExecutorService executorService;
     private boolean isRunning = false;
+    private final Object ioLock = new Object();
     
     public PythonBridge() {
         this.executorService = Executors.newFixedThreadPool(2);
@@ -49,11 +50,15 @@ public class PythonBridge {
         
         ProcessBuilder pb = new ProcessBuilder(
             pythonExecutable.toString(),
+            "-u",  // Unbuffered mode for real-time progress updates
             scriptPath.toString()
         );
         
         // Set working directory
         pb.directory(scriptPath.getParent().toFile());
+        
+        // Set environment variable for Python unbuffered mode
+        pb.environment().put("PYTHONUNBUFFERED", "1");
         
         // Merge error stream for easier handling
         pb.redirectErrorStream(true);
@@ -90,30 +95,29 @@ public class PythonBridge {
         if (!isRunning) {
             throw new IllegalStateException("Python bridge not running");
         }
-        
-        // Send command
-        String commandJson = gson.toJson(command);
-        logger.debug("Sending command: {}", commandJson);
-        
-        writer.write(commandJson);
-        writer.newLine();
-        writer.flush();
-        
-        // Read response with timeout
-        Future<String> future = executorService.submit(() -> reader.readLine());
-        
-        try {
-            String responseLine = future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
-            logger.debug("Received response: {}", responseLine);
-            
-            return gson.fromJson(responseLine, JsonObject.class);
-        } catch (InterruptedException | ExecutionException e) {
-            logger.error("Error reading response from Python", e);
-            throw new IOException("Failed to read response from Python", e);
-        } catch (TimeoutException e) {
-            logger.error("Python command timed out after {} seconds", TIMEOUT_SECONDS);
-            future.cancel(true);
-            throw e;
+        synchronized (ioLock) {
+            // Send command
+            String commandJson = gson.toJson(command);
+            logger.debug("Sending command: {}", commandJson);
+            writer.write(commandJson);
+            writer.newLine();
+            writer.flush();
+
+            // Read response with timeout
+            Future<String> future = executorService.submit(() -> reader.readLine());
+
+            try {
+                String responseLine = future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                logger.debug("Received response: {}", responseLine);
+                return gson.fromJson(responseLine, JsonObject.class);
+            } catch (InterruptedException | ExecutionException e) {
+                logger.error("Error reading response from Python", e);
+                throw new IOException("Failed to read response from Python", e);
+            } catch (TimeoutException e) {
+                logger.error("Python command timed out after {} seconds", TIMEOUT_SECONDS);
+                future.cancel(true);
+                throw e;
+            }
         }
     }
     
@@ -127,31 +131,56 @@ public class PythonBridge {
         
         executorService.submit(() -> {
             try {
-                String commandJson = gson.toJson(command);
-                logger.debug("Sending streaming command: {}", commandJson);
-                
-                writer.write(commandJson);
-                writer.newLine();
-                writer.flush();
-                
-                // Read streaming responses
+                // Write command (hold lock only for write)
+                synchronized (ioLock) {
+                    String commandJson = gson.toJson(command);
+                    logger.debug("Sending streaming command: {}", commandJson);
+                    writer.write(commandJson);
+                    writer.newLine();
+                    writer.flush();
+                }
+
+                // Read streaming responses (without holding lock)
                 String line;
                 while ((line = reader.readLine()) != null) {
+                    logger.trace("Streaming line: {}", line);
                     JsonObject response = gson.fromJson(line, JsonObject.class);
-                    
-                    // Check if this is a progress update or final response
                     if (response.has("progress")) {
                         progressCallback.accept(response);
-                    } else if (response.has("status")) {
-                        // Final response
+                        continue;
+                    }
+                    if (response.has("status")) {
+                        String status = response.get("status").getAsString();
+                        // Only break when the conversion completes or errors
+                        boolean isFinal = "complete".equals(status) || "error".equals(status) || response.has("results");
                         progressCallback.accept(response);
-                        break;
+                        if (isFinal) {
+                            break;
+                        } else {
+                            // Ignore non-final status (e.g., stop_conversion ack)
+                            continue;
+                        }
                     }
                 }
             } catch (IOException e) {
                 logger.error("Error in streaming command", e);
             }
         });
+    }
+
+    /**
+     * Stop current conversion (best-effort cancel).
+     */
+    public void requestStopConversion() throws IOException {
+        JsonObject command = new JsonObject();
+        command.addProperty("action", "stop_conversion");
+        synchronized (ioLock) {
+            String commandJson = gson.toJson(command);
+            logger.debug("Sending stop command: {}", commandJson);
+            writer.write(commandJson);
+            writer.newLine();
+            writer.flush();
+        }
     }
     
     /**
@@ -160,6 +189,42 @@ public class PythonBridge {
     public JsonObject checkFFmpeg() throws IOException, TimeoutException {
         JsonObject command = new JsonObject();
         command.addProperty("action", "check_ffmpeg");
+        return sendCommand(command);
+    }
+    
+    /**
+     * Check Whisper availability
+     */
+    public JsonObject checkWhisper() throws IOException, TimeoutException {
+        JsonObject command = new JsonObject();
+        command.addProperty("action", "check_whisper");
+        return sendCommand(command);
+    }
+    
+    /**
+     * Check OpenSubtitles status
+     */
+    public JsonObject checkOpenSubtitles() throws IOException, TimeoutException {
+        JsonObject command = new JsonObject();
+        command.addProperty("action", "check_opensubtitles");
+        return sendCommand(command);
+    }
+    
+    /**
+     * Check TMDB status
+     */
+    public JsonObject checkTMDB() throws IOException, TimeoutException {
+        JsonObject command = new JsonObject();
+        command.addProperty("action", "check_tmdb");
+        return sendCommand(command);
+    }
+    
+    /**
+     * Check TVDB status
+     */
+    public JsonObject checkTVDB() throws IOException, TimeoutException {
+        JsonObject command = new JsonObject();
+        command.addProperty("action", "check_tvdb");
         return sendCommand(command);
     }
     

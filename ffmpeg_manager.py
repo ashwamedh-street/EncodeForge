@@ -3,16 +3,15 @@
 FFmpeg Manager - Handles FFmpeg detection, download, and version management
 """
 
+import logging
 import os
 import platform
 import subprocess
+import tarfile
 import urllib.request
 import zipfile
-import tarfile
-import json
 from pathlib import Path
-from typing import Optional, Dict, Tuple, List
-import logging
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +31,7 @@ class FFmpegManager:
         self.ffprobe_path = None
         self.version_info = {}
         
-    def detect_ffmpeg(self) -> Tuple[bool, Dict[str, str]]:
+    def detect_ffmpeg(self) -> Tuple[bool, Dict[str, Union[str, List[str]]]]:
         """
         Detect FFmpeg installation and get version information
         
@@ -57,7 +56,7 @@ class FFmpegManager:
                 which_result = shutil.which("ffmpeg")
                 if which_result:
                     paths_to_check.insert(0, which_result)
-            except:
+            except Exception:
                 pass
             
             # Add executable variants
@@ -108,7 +107,7 @@ class FFmpegManager:
                         logger.info(f"Recursive search found: {found_path}")
                         paths_to_check.insert(0, found_path)
                     else:
-                        logger.debug(f"Recursive search in Documents did not find ffmpeg.exe")
+                        logger.debug("Recursive search in Documents did not find ffmpeg.exe")
         else:
             paths_to_check.extend([
                 "ffmpeg",
@@ -265,12 +264,51 @@ class FFmpegManager:
                 
                 for encoder_id, encoder_name in hw_encoders:
                     if encoder_id in output:
-                        encoders.append(encoder_name)
+                        # Test if the encoder actually works
+                        if self._test_encoder(encoder_id):
+                            encoders.append(encoder_name)
+                        else:
+                            logger.warning(f"Encoder {encoder_id} is available but not functional")
         
         except Exception as e:
             logger.error(f"Error checking encoders: {e}")
         
         return encoders
+    
+    def _test_encoder(self, encoder_name: str) -> bool:
+        """Test if a hardware encoder is actually functional"""
+        try:
+            if not self.ffmpeg_path:
+                return False
+            
+            # Create a minimal test command to check if encoder works
+            # This creates a 1-second black video to test the encoder
+            cmd = [
+                self.ffmpeg_path,
+                "-f", "lavfi",
+                "-i", "color=black:size=320x240:duration=0.1",
+                "-c:v", encoder_name,
+                "-f", "null",
+                "-"
+            ]
+            
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            # If return code is 0, encoder works
+            success = result.returncode == 0
+            if not success:
+                logger.debug(f"Encoder {encoder_name} test failed: {result.stderr}")
+            
+            return success
+            
+        except Exception as e:
+            logger.debug(f"Error testing encoder {encoder_name}: {e}")
+            return False
     
     def _check_decoders(self) -> list:
         """Check available hardware decoders"""
@@ -372,7 +410,7 @@ class FFmpegManager:
             # Find ffmpeg executable
             for root, dirs, files in os.walk(install_dir):
                 for file in files:
-                    if file.startswith("ffmpeg") and (file.endswith(".exe") or not "." in file):
+                    if file.startswith("ffmpeg") and (file.endswith(".exe") or "." not in file):
                         ffmpeg_exe = Path(root) / file
                         self.ffmpeg_path = str(ffmpeg_exe)
                         self.ffprobe_path = str(ffmpeg_exe).replace("ffmpeg", "ffprobe")
@@ -401,6 +439,170 @@ class FFmpegManager:
             logger.error(f"Error downloading FFmpeg: {e}")
             return False, f"Download failed: {str(e)}"
     
+    def detect_hardware(self) -> Dict[str, Any]:
+        """Detect system hardware (GPU, CPU) for codec compatibility"""
+        hardware_info = {
+            "gpu": {
+                "nvidia": False,
+                "amd": False,
+                "intel": False,
+                "apple": False,
+                "details": []
+            },
+            "cpu": {
+                "vendor": "unknown",
+                "model": "unknown",
+                "supports_qsv": False
+            }
+        }
+        
+        try:
+            # Detect GPU using multiple methods
+            self._detect_gpu_wmi(hardware_info)
+            self._detect_gpu_nvidia_smi(hardware_info)
+            self._detect_gpu_dxdiag(hardware_info)
+            
+            # Detect CPU
+            self._detect_cpu(hardware_info)
+            
+        except Exception as e:
+            logger.debug(f"Error detecting hardware: {e}")
+        
+        return hardware_info
+    
+    def _detect_gpu_wmi(self, hardware_info: Dict):
+        """Detect GPU using WMI (Windows only)"""
+        if platform.system() != "Windows":
+            return
+        
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["wmic", "path", "win32_VideoController", "get", "name"],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            
+            if result.returncode == 0:
+                output = result.stdout.lower()
+                if "nvidia" in output or "geforce" in output or "quadro" in output or "rtx" in output or "gtx" in output:
+                    hardware_info["gpu"]["nvidia"] = True
+                    hardware_info["gpu"]["details"].append("NVIDIA GPU detected via WMI")
+                
+                if "amd" in output or "radeon" in output or "rx " in output:
+                    hardware_info["gpu"]["amd"] = True
+                    hardware_info["gpu"]["details"].append("AMD GPU detected via WMI")
+                
+                if "intel" in output or "uhd" in output or "iris" in output:
+                    hardware_info["gpu"]["intel"] = True
+                    hardware_info["gpu"]["details"].append("Intel GPU detected via WMI")
+                    
+        except Exception as e:
+            logger.debug(f"WMI GPU detection failed: {e}")
+    
+    def _detect_gpu_nvidia_smi(self, hardware_info: Dict):
+        """Detect NVIDIA GPU using nvidia-smi"""
+        try:
+            result = subprocess.run(
+                ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            if result.returncode == 0 and result.stdout.strip():
+                hardware_info["gpu"]["nvidia"] = True
+                gpu_name = result.stdout.strip()
+                hardware_info["gpu"]["details"].append(f"NVIDIA GPU: {gpu_name}")
+                
+        except Exception as e:
+            logger.debug(f"nvidia-smi detection failed: {e}")
+    
+    def _detect_gpu_dxdiag(self, hardware_info: Dict):
+        """Detect GPU using dxdiag (Windows only)"""
+        if platform.system() != "Windows":
+            return
+        
+        try:
+            result = subprocess.run(
+                ["dxdiag", "/t", "dxdiag_output.txt"],
+                capture_output=True,
+                timeout=15
+            )
+            
+            if result.returncode == 0:
+                try:
+                    with open("dxdiag_output.txt", "r", encoding="utf-8", errors="ignore") as f:
+                        content = f.read().lower()
+                        
+                        if "nvidia" in content or "geforce" in content:
+                            hardware_info["gpu"]["nvidia"] = True
+                            hardware_info["gpu"]["details"].append("NVIDIA GPU detected via dxdiag")
+                        
+                        if "amd" in content or "radeon" in content:
+                            hardware_info["gpu"]["amd"] = True
+                            hardware_info["gpu"]["details"].append("AMD GPU detected via dxdiag")
+                        
+                        if "intel" in content and ("uhd" in content or "iris" in content):
+                            hardware_info["gpu"]["intel"] = True
+                            hardware_info["gpu"]["details"].append("Intel GPU detected via dxdiag")
+                    
+                    # Clean up
+                    os.remove("dxdiag_output.txt")
+                except Exception as e:
+                    logger.debug(f"Error reading dxdiag output: {e}")
+                    
+        except Exception as e:
+            logger.debug(f"dxdiag detection failed: {e}")
+    
+    def _detect_cpu(self, hardware_info: Dict):
+        """Detect CPU information"""
+        try:
+            import platform
+            hardware_info["cpu"]["model"] = platform.processor()
+            
+            # Try to get more detailed CPU info
+            if platform.system() == "Windows":
+                try:
+                    result = subprocess.run(
+                        ["wmic", "cpu", "get", "name"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    
+                    if result.returncode == 0:
+                        cpu_name = result.stdout.strip().split('\n')[-1].strip()
+                        if cpu_name and cpu_name != "Name":
+                            hardware_info["cpu"]["model"] = cpu_name
+                            
+                            # Check for Intel (supports Quick Sync)
+                            if "intel" in cpu_name.lower():
+                                hardware_info["cpu"]["vendor"] = "intel"
+                                hardware_info["cpu"]["supports_qsv"] = True
+                            elif "amd" in cpu_name.lower():
+                                hardware_info["cpu"]["vendor"] = "amd"
+                                
+                except Exception as e:
+                    logger.debug(f"CPU detection via wmic failed: {e}")
+            
+            else:
+                # Linux/macOS
+                try:
+                    with open("/proc/cpuinfo", "r") as f:
+                        content = f.read().lower()
+                        if "intel" in content:
+                            hardware_info["cpu"]["vendor"] = "intel"
+                            hardware_info["cpu"]["supports_qsv"] = True
+                        elif "amd" in content:
+                            hardware_info["cpu"]["vendor"] = "amd"
+                except Exception:
+                    pass
+                    
+        except Exception as e:
+            logger.debug(f"CPU detection failed: {e}")
+
     def get_hwaccel_options(self) -> Dict[str, List[str]]:
         """Get available hardware acceleration options"""
         options = {
@@ -412,7 +614,9 @@ class FFmpegManager:
             return options
         
         # Check for NVIDIA
-        if "NVIDIA" in " ".join(self.version_info.get("encoders", [])):
+        if "NVIDIA" not in " ".join(self.version_info.get("encoders", [])):
+            pass
+        else:
             options["decode"].append("cuda")
             options["decode"].append("cuvid")
             options["encode"].append("nvenc")
@@ -433,6 +637,25 @@ class FFmpegManager:
             options["encode"].append("videotoolbox")
         
         return options
+    
+    def get_recommended_encoder(self, hardware_info: Optional[Dict[str, Any]] = None) -> str:
+        """Get the best available encoder based on hardware"""
+        if hardware_info is None:
+            hardware_info = self.detect_hardware()
+        
+        available_encoders = self.version_info.get("encoders", [])
+        
+        # Priority order: NVIDIA > AMD > Intel > Software
+        if hardware_info["gpu"]["nvidia"] and "NVIDIA H.264" in available_encoders:
+            return "h264_nvenc"
+        elif hardware_info["gpu"]["amd"] and "AMD H.264" in available_encoders:
+            return "h264_amf"
+        elif hardware_info["cpu"]["supports_qsv"] and "Intel Quick Sync H.264" in available_encoders:
+            return "h264_qsv"
+        elif hardware_info["gpu"]["apple"] and "Apple VideoToolbox H.264" in available_encoders:
+            return "h264_videotoolbox"
+        else:
+            return "libx264"  # Software fallback
 
 
 def main():
@@ -442,18 +665,18 @@ def main():
     success, info = manager.detect_ffmpeg()
     
     if success:
-        print("✅ FFmpeg detected!")
+        print("SUCCESS: FFmpeg detected!")
         print(f"Path: {info['ffmpeg_path']}")
         print(f"Version: {info['version']}")
         print(f"Hardware Encoders: {', '.join(info['encoders']) if info['encoders'] else 'None'}")
         print(f"Hardware Decoders: {', '.join(info['decoders']) if info['decoders'] else 'None'}")
         
         hwaccel = manager.get_hwaccel_options()
-        print(f"\nHardware Acceleration Options:")
+        print("\nHardware Acceleration Options:")
         print(f"  Decode: {', '.join(hwaccel['decode']) if hwaccel['decode'] else 'None'}")
         print(f"  Encode: {', '.join(hwaccel['encode']) if hwaccel['encode'] else 'None'}")
     else:
-        print("❌ FFmpeg not found")
+        print("ERROR: FFmpeg not found")
         print(info.get("error", "Unknown error"))
         print("\nAttempting automatic download...")
         
@@ -463,9 +686,9 @@ def main():
         success, message = manager.download_ffmpeg(progress_callback=progress_handler)
         
         if success:
-            print(f"✅ {message}")
+            print(f"SUCCESS: {message}")
         else:
-            print(f"❌ {message}")
+            print(f"ERROR: {message}")
 
 
 if __name__ == "__main__":

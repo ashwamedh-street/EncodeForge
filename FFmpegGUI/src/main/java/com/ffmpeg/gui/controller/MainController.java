@@ -366,6 +366,7 @@ public class MainController {
             if (!alreadyInQueue) {
                 ConversionJob job = new ConversionJob(file.getAbsolutePath());
                 job.setOutputFormat("MP4"); // Default
+                job.setStatus("⏳ Queued");
                 conversionQueue.add(job);
                 added++;
             }
@@ -438,16 +439,31 @@ public class MainController {
         stopButton.setDisable(false);
         statusLabel.setText("Encoding...");
         
-        // Get pending files
+        // Get queued or failed files (allow retry)
         List<String> filePaths = new ArrayList<>();
         for (ConversionJob job : conversionQueue) {
-            if (job.getStatus().equals("pending")) {
+            String status = job.getStatus();
+            if (status.contains("Queued") || status.contains("pending") || status.contains("failed") || status.contains("error")) {
                 filePaths.add(job.getInputPath());
-                job.setStatus("queued");
+                job.setStatus("⏳ Queued");
+                job.setProgress(0.0); // Reset progress for retry
             }
         }
         
+        if (filePaths.isEmpty()) {
+            isProcessing = false;
+            startButton.setDisable(false);
+            pauseButton.setDisable(true);
+            stopButton.setDisable(true);
+            log("No files to encode. All files may already be completed.");
+            showWarning("No Files", "No files available to encode. All files are either completed or currently processing.");
+            return;
+        }
+        
         log("Starting encoding of " + filePaths.size() + " file(s)");
+        
+        // Update settings from quick settings UI
+        updateSettingsFromQuickUI();
         
         // Start conversion in background
         new Thread(() -> {
@@ -471,9 +487,9 @@ public class MainController {
         // Get files from queue
         List<String> filePaths = new ArrayList<>();
         for (ConversionJob job : conversionQueue) {
-            if (job.getStatus().equals("pending")) {
+            if (job.getStatus().contains("pending") || job.getStatus().contains("Queued")) {
                 filePaths.add(job.getInputPath());
-                job.setStatus("queued");
+                job.setStatus("⏳ Queued");
             }
         }
         
@@ -556,7 +572,8 @@ public class MainController {
         // Get files from queue
         List<String> filePaths = new ArrayList<>();
         for (ConversionJob job : conversionQueue) {
-            if (job.getStatus().equals("pending")) {
+            String status = job.getStatus();
+            if (status.contains("Queued") || status.contains("pending")) {
                 filePaths.add(job.getInputPath());
             }
         }
@@ -698,18 +715,34 @@ public class MainController {
     @FXML
     private void handlePause() {
         if (isProcessing) {
-            log("Pausing operations...");
-            // TODO: Send pause command to Python backend
-            statusLabel.setText("Paused");
-            pauseButton.setText("▶️ Resume");
-            pauseButton.getStyleClass().add("primary-button");
-            showInfo("Paused", "Processing has been paused. Click Resume to continue.");
+            log("Stopping current operation (FFmpeg doesn't support pause)...");
+            
+            // FFmpeg doesn't support pause, so we stop the current operation
+            try {
+                JsonObject command = new JsonObject();
+                command.addProperty("action", "pause_conversion");
+                pythonBridge.sendCommand(command);
+                
+                // Update UI to show paused state
+                for (ConversionJob job : conversionQueue) {
+                    if (job.getStatus().equals("processing")) {
+                        job.setStatus("paused");
+                    }
+                }
+                
+                pauseButton.setText("Resume");
+                statusLabel.setText("Paused");
+                log("Operations paused (current file stopped)");
+                
+            } catch (Exception e) {
+                logger.error("Error pausing operations", e);
+                log("ERROR: Failed to pause operations - " + e.getMessage());
+            }
         } else {
             log("Resuming operations...");
-            // TODO: Send resume command to Python backend
-            statusLabel.setText("Processing...");
-            pauseButton.setText("⏸️ Pause");
-            pauseButton.getStyleClass().remove("primary-button");
+            // Resume by restarting encoding
+            handleStartEncoding();
+            pauseButton.setText("Pause");
         }
     }
     
@@ -728,15 +761,20 @@ public class MainController {
         if (result.isPresent() && result.get() == ButtonType.OK) {
             log("Stopping operations...");
             
-            // Cancel all processing jobs
+            // Best-effort cancel in backend
+            try {
+                pythonBridge.requestStopConversion();
+            } catch (Exception e) {
+                logger.warn("Stop command failed: {}", e.getMessage());
+            }
+
+            // Update local queue states
             for (ConversionJob job : conversionQueue) {
                 if (job.getStatus().equals("processing") || job.getStatus().equals("queued")) {
                     job.setStatus("cancelled");
                     job.setProgress(0.0);
                 }
             }
-            
-            // TODO: Send stop command to Python backend
             
             resetProcessingState();
             queueTable.refresh();
@@ -952,18 +990,122 @@ public class MainController {
             if (update.has("progress")) {
                 double progress = update.get("progress").getAsDouble();
                 String fileName = update.get("file").getAsString();
+                String status = update.has("status") ? update.get("status").getAsString() : "processing";
                 
-                currentFileProgressBar.setProgress(progress / 100.0);
+                // Handle negative progress (indicates indeterminate state)
+                if (progress < 0) {
+                    currentFileProgressBar.setProgress(-1);  // Indeterminate progress
+                    progressPercentLabel.setText("Processing...");
+                } else {
+                    currentFileProgressBar.setProgress(progress / 100.0);
+                    progressPercentLabel.setText(String.format("%.1f%%", progress));
+                }
+                
+                // Update current file display
                 currentFileLabel.setText(new File(fileName).getName());
-                progressPercentLabel.setText(String.format("%.1f%%", progress));
+                
+                // Build detailed status text with all metrics
+                StringBuilder statusText = new StringBuilder();
+                
+                // Status with emoji
+                switch (status.toLowerCase()) {
+                    case "starting":
+                        statusText.append("🔄 Starting");
+                        break;
+                    case "encoding":
+                        statusText.append("⚡ Encoding");
+                        break;
+                    case "finalizing":
+                        statusText.append("🔧 Finalizing");
+                        break;
+                    case "completed":
+                        statusText.append("✅ Completed");
+                        break;
+                    case "cancelled":
+                        statusText.append("❌ Cancelled");
+                        break;
+                    case "failed":
+                    case "error":
+                        statusText.append("⚠️ Failed");
+                        break;
+                    case "paused":
+                        statusText.append("⏸️ Paused");
+                        break;
+                    default:
+                        statusText.append("🔄 ").append(status.substring(0, 1).toUpperCase()).append(status.substring(1));
+                }
+                
+                // Add frame count if available
+                if (update.has("frame")) {
+                    int frame = update.get("frame").getAsInt();
+                    if (frame > 0) {
+                        statusText.append(" • Frame ").append(frame);
+                    }
+                }
+                
+                // Add FPS if available
+                if (update.has("fps")) {
+                    double fps = update.get("fps").getAsDouble();
+                    if (fps > 0) {
+                        statusText.append(" • ").append(String.format("%.1f fps", fps));
+                    }
+                }
+                
+                // Add speed if available
+                if (update.has("speed") && !update.get("speed").getAsString().equals("0x")) {
+                    statusText.append(" • ").append(update.get("speed").getAsString());
+                }
+                
+                // Add bitrate if available
+                if (update.has("bitrate") && !update.get("bitrate").getAsString().equals("0kbits/s")) {
+                    statusText.append(" • ").append(update.get("bitrate").getAsString());
+                }
+                
+                // Add ETA if available
+                if (update.has("eta") && !update.get("eta").getAsString().equals("Unknown") && 
+                    !update.get("eta").getAsString().equals("Calculating...")) {
+                    statusText.append(" • ETA: ").append(update.get("eta").getAsString());
+                }
+                
+                statusLabel.setText(statusText.toString());
                 
                 // Update job in queue
                 conversionQueue.stream()
                     .filter(job -> job.getInputPath().equals(fileName))
                     .findFirst()
                     .ifPresent(job -> {
-                        job.setProgress(progress);
-                        job.setStatus("processing");
+                        if (progress >= 0) {
+                            job.setProgress(progress);
+                        }
+                        
+                        // Update status based on state
+                        switch (status.toLowerCase()) {
+                            case "completed":
+                                job.setStatus("✅ Completed");
+                                job.setProgress(100.0);
+                                break;
+                            case "starting":
+                                job.setStatus("🔄 Starting");
+                                break;
+                            case "finalizing":
+                                job.setStatus("🔧 Finalizing");
+                                break;
+                            case "encoding":
+                                job.setStatus("⚡ Encoding");
+                                break;
+                            case "cancelled":
+                                job.setStatus("❌ Cancelled");
+                                break;
+                            case "failed":
+                            case "error":
+                                job.setStatus("⚠️ Failed");
+                                break;
+                            case "paused":
+                                job.setStatus("⏸️ Paused");
+                                break;
+                            default:
+                                job.setStatus("🔄 Processing");
+                        }
                     });
                 
                 queueTable.refresh();
@@ -974,19 +1116,48 @@ public class MainController {
                 if (status.equals("complete")) {
                     log("All conversions completed successfully");
                     
+                    // Mark remaining jobs as completed
                     for (ConversionJob job : conversionQueue) {
-                        if (job.getStatus().equals("processing") || job.getStatus().equals("queued")) {
-                            job.setStatus("completed");
+                        String jobStatus = job.getStatus().toLowerCase();
+                        if (jobStatus.contains("processing") || jobStatus.contains("queued") || 
+                            jobStatus.contains("encoding") || jobStatus.contains("starting")) {
+                            job.setStatus("✅ Completed");
                             job.setProgress(100.0);
                         }
                     }
                     
                     resetProcessingState();
-                    statusLabel.setText("Complete!");
+                    statusLabel.setText("✅ All files completed!");
                     
-                } else if (status.equals("error")) {
+                } else if (status.equals("cancelled")) {
+                    String message = update.has("message") ? update.get("message").getAsString() : "Conversion cancelled";
+                    log("CANCELLED: " + message);
+                    
+                    // Mark processing jobs as cancelled
+                    for (ConversionJob job : conversionQueue) {
+                        String jobStatus = job.getStatus().toLowerCase();
+                        if (jobStatus.contains("processing") || jobStatus.contains("encoding") || 
+                            jobStatus.contains("starting") || jobStatus.contains("queued")) {
+                            job.setStatus("❌ Cancelled");
+                        }
+                    }
+                    
+                    resetProcessingState();
+                    statusLabel.setText("❌ Cancelled");
+                    
+                } else if (status.equals("error") || status.equals("failed")) {
                     String message = update.has("message") ? update.get("message").getAsString() : "Unknown error";
                     log("ERROR: " + message);
+                    
+                    // Mark processing jobs as failed
+                    for (ConversionJob job : conversionQueue) {
+                        String jobStatus = job.getStatus().toLowerCase();
+                        if (jobStatus.contains("processing") || jobStatus.contains("encoding") || 
+                            jobStatus.contains("starting") || jobStatus.contains("queued")) {
+                            job.setStatus("⚠️ Failed");
+                        }
+                    }
+                    
                     showError("Conversion Error", message);
                     resetProcessingState();
                 }
@@ -1027,6 +1198,9 @@ public class MainController {
                                 log("Hardware encoders available: " + encoders.size());
                             }
                         }
+                        
+                        // Update encoder options based on hardware detection
+                        updateAvailableEncoders();
                     } else {
                         log("WARNING: FFmpeg not detected");
                         statusLabel.setText("FFmpeg not found");
@@ -1048,6 +1222,173 @@ public class MainController {
                 });
             }
         }).start();
+    }
+    
+    private void updateAvailableEncoders() {
+        new Thread(() -> {
+            try {
+                // Create request for available encoders
+                JsonObject request = new JsonObject();
+                request.addProperty("action", "get_available_encoders");
+                
+                JsonObject response = pythonBridge.sendCommand(request);
+                
+                Platform.runLater(() -> {
+                    if (response.has("status") && response.get("status").getAsString().equals("success")) {
+                        JsonObject encoderSupport = response.getAsJsonObject("encoder_support");
+                        
+                        // Build list of available encoders
+                        List<String> availableEncoders = new ArrayList<>();
+                        
+                        // Always add software encoders
+                        availableEncoders.add("Software H.264");
+                        availableEncoders.add("Software H.265");
+                        
+                        // Add hardware encoders if available
+                        if (encoderSupport.has("nvidia_h264") && encoderSupport.get("nvidia_h264").getAsBoolean()) {
+                            availableEncoders.add("H.264 NVENC (GPU)");
+                        }
+                        if (encoderSupport.has("nvidia_h265") && encoderSupport.get("nvidia_h265").getAsBoolean()) {
+                            availableEncoders.add("H.265 NVENC (GPU)");
+                        }
+                        if (encoderSupport.has("amd_h264") && encoderSupport.get("amd_h264").getAsBoolean()) {
+                            availableEncoders.add("H.264 AMF (GPU)");
+                        }
+                        if (encoderSupport.has("amd_h265") && encoderSupport.get("amd_h265").getAsBoolean()) {
+                            availableEncoders.add("H.265 AMF (GPU)");
+                        }
+                        if (encoderSupport.has("intel_h264") && encoderSupport.get("intel_h264").getAsBoolean()) {
+                            availableEncoders.add("H.264 Intel QSV (CPU)");
+                        }
+                        if (encoderSupport.has("intel_h265") && encoderSupport.get("intel_h265").getAsBoolean()) {
+                            availableEncoders.add("H.265 Intel QSV (CPU)");
+                        }
+                        if (encoderSupport.has("apple_h264") && encoderSupport.get("apple_h264").getAsBoolean()) {
+                            availableEncoders.add("H.264 VideoToolbox (GPU)");
+                        }
+                        if (encoderSupport.has("apple_h265") && encoderSupport.get("apple_h265").getAsBoolean()) {
+                            availableEncoders.add("H.265 VideoToolbox (GPU)");
+                        }
+                        
+                        // Always add copy option
+                        availableEncoders.add("Copy");
+                        
+                        // Update the ComboBox
+                        if (quickCodecCombo != null) {
+                            String currentSelection = quickCodecCombo.getValue();
+                            quickCodecCombo.setItems(FXCollections.observableArrayList(availableEncoders));
+                            
+                            // Try to keep current selection if still available
+                            if (availableEncoders.contains(currentSelection)) {
+                                quickCodecCombo.setValue(currentSelection);
+                            } else {
+                                // Set to recommended encoder or fallback to software
+                                if (response.has("recommended_encoder")) {
+                                    String recommended = response.get("recommended_encoder").getAsString();
+                                    if (recommended.equals("h264_nvenc") && availableEncoders.contains("H.264 NVENC (GPU)")) {
+                                        quickCodecCombo.setValue("H.264 NVENC (GPU)");
+                                    } else if (recommended.equals("h264_amf") && availableEncoders.contains("H.264 AMF (GPU)")) {
+                                        quickCodecCombo.setValue("H.264 AMF (GPU)");
+                                    } else if (recommended.equals("h264_qsv") && availableEncoders.contains("H.264 Intel QSV (CPU)")) {
+                                        quickCodecCombo.setValue("H.264 Intel QSV (CPU)");
+                                    } else {
+                                        quickCodecCombo.setValue("Software H.264");
+                                    }
+                                } else {
+                                    quickCodecCombo.setValue("Software H.264");
+                                }
+                            }
+                        }
+                        
+                        // Log the available encoders
+                        log("Available encoders updated: " + availableEncoders.size() + " options");
+                        
+                        // Show hardware acceleration status
+                        boolean hasHardwareAccel = availableEncoders.stream()
+                            .anyMatch(encoder -> encoder.contains("NVENC") || encoder.contains("AMF") || 
+                                     encoder.contains("QSV") || encoder.contains("VideoToolbox"));
+                        
+                        if (hasHardwareAccel) {
+                            log("Hardware acceleration available");
+                        } else {
+                            log("No hardware acceleration available - using software encoding");
+                        }
+                        
+                    } else {
+                        logger.warn("Failed to get available encoders: " + response.get("message").getAsString());
+                        log("WARNING: Could not detect available encoders, using software fallback");
+                    }
+                });
+                
+            } catch (Exception e) {
+                logger.error("Error updating available encoders", e);
+                Platform.runLater(() -> {
+                    log("ERROR: Could not update encoder options - " + e.getMessage());
+                });
+            }
+        }).start();
+    }
+    
+    private void updateSettingsFromQuickUI() {
+        // Update video settings from quick settings UI
+        if (quickFormatCombo != null && quickFormatCombo.getValue() != null) {
+            settings.setOutputFormat(quickFormatCombo.getValue());
+        }
+        
+        if (quickCodecCombo != null && quickCodecCombo.getValue() != null) {
+            String selectedCodec = quickCodecCombo.getValue();
+            settings.setVideoCodec(selectedCodec);
+            
+            // Update hardware acceleration flags based on codec selection
+            if (selectedCodec.contains("NVENC")) {
+                settings.setUseNvenc(true);
+                settings.setHardwareDecoding(true);
+            } else if (selectedCodec.contains("AMF")) {
+                settings.setUseNvenc(false);
+                settings.setHardwareDecoding(true);
+            } else if (selectedCodec.contains("QSV")) {
+                settings.setUseNvenc(false);
+                settings.setHardwareDecoding(true);
+            } else if (selectedCodec.contains("VideoToolbox")) {
+                settings.setUseNvenc(false);
+                settings.setHardwareDecoding(true);
+            } else {
+                // Software encoding
+                settings.setUseNvenc(false);
+                settings.setHardwareDecoding(false);
+            }
+        }
+        
+        if (quickQualityCombo != null && quickQualityCombo.getValue() != null) {
+            String quality = quickQualityCombo.getValue();
+            // Extract CRF value from quality string like "Medium (CQ 23)"
+            if (quality.contains("CQ ")) {
+                try {
+                    String crfStr = quality.substring(quality.indexOf("CQ ") + 3, quality.indexOf(")"));
+                    int crf = Integer.parseInt(crfStr);
+                    settings.setCrfValue(crf);
+                    settings.setNvencCq(crf); // Also set NVENC CQ
+                } catch (Exception e) {
+                    logger.warn("Could not parse CRF from quality setting: " + quality);
+                }
+            }
+        }
+        
+        if (quickPresetCombo != null && quickPresetCombo.getValue() != null) {
+            settings.setQualityPreset(quickPresetCombo.getValue());
+        }
+        
+        if (quickHwAccelCheck != null) {
+            settings.setHardwareDecoding(quickHwAccelCheck.isSelected());
+        }
+        
+        if (quickDownloadSubsCheck != null) {
+            settings.setDownloadSubtitles(quickDownloadSubsCheck.isSelected());
+        }
+        
+        // Log the updated settings
+        logger.debug("Updated settings from quick UI - Codec: {}, Format: {}, Hardware: {}", 
+                    settings.getVideoCodec(), settings.getOutputFormat(), settings.isHardwareDecoding());
     }
     
     private void updateQueueCount() {
@@ -1078,29 +1419,67 @@ public class MainController {
             mediaInfoSection.setManaged(true);
         }
         
-        // Fetch detailed media info from Python
+        // Fetch detailed media info from Python (non-blocking)
         new Thread(() -> {
             try {
+                // Add a small delay if processing to avoid conflicts
+                if (isProcessing) {
+                    Thread.sleep(500);
+                }
+                
                 JsonObject request = new JsonObject();
                 request.addProperty("action", "get_media_info");
                 request.addProperty("file_path", job.getInputPath());
                 
-                JsonObject response = pythonBridge.sendCommand(request);
+                // Use a shorter timeout for media info during processing
+                JsonObject response;
+                if (isProcessing) {
+                    // Quick timeout during processing to avoid blocking
+                    response = pythonBridge.sendCommand(request);
+                } else {
+                    response = pythonBridge.sendCommand(request);
+                }
                 
                 Platform.runLater(() -> {
                     if (response.has("status") && "success".equals(response.get("status").getAsString())) {
                         updateMediaTracks(response);
                     } else {
-                        // Fallback to basic info
-                        if (videoTracksListView != null) videoTracksListView.getItems().clear();
-                        if (audioTracksListView != null) audioTracksListView.getItems().clear();
-                        if (subtitleTracksListView != null) subtitleTracksListView.getItems().clear();
+                        // Show placeholder info during processing
+                        if (isProcessing) {
+                            showProcessingPlaceholder();
+                        } else {
+                            // Fallback to basic info
+                            if (videoTracksListView != null) videoTracksListView.getItems().clear();
+                            if (audioTracksListView != null) audioTracksListView.getItems().clear();
+                            if (subtitleTracksListView != null) subtitleTracksListView.getItems().clear();
+                        }
                     }
                 });
             } catch (Exception e) {
-                logger.error("Error getting media info", e);
+                logger.debug("Could not get media info (possibly due to processing): " + e.getMessage());
+                Platform.runLater(() -> {
+                    if (isProcessing) {
+                        showProcessingPlaceholder();
+                    }
+                });
             }
         }).start();
+    }
+    
+    private void showProcessingPlaceholder() {
+        // Show placeholder information during processing
+        if (videoTracksListView != null) {
+            videoTracksListView.getItems().clear();
+            videoTracksListView.getItems().add("🔄 Processing - Track info temporarily unavailable");
+        }
+        if (audioTracksListView != null) {
+            audioTracksListView.getItems().clear();
+            audioTracksListView.getItems().add("🔄 Processing - Track info temporarily unavailable");
+        }
+        if (subtitleTracksListView != null) {
+            subtitleTracksListView.getItems().clear();
+            subtitleTracksListView.getItems().add("🔄 Processing - Track info temporarily unavailable");
+        }
     }
     
     private void updateMediaTracks(JsonObject mediaInfo) {
@@ -1243,10 +1622,60 @@ public class MainController {
     
     public void shutdown() {
         logger.info("Shutting down main controller");
+        
         if (isProcessing) {
-            // TODO: Cancel ongoing operations
+            logger.info("Forcefully stopping all ongoing operations...");
+            
+            // Force stop all operations with timeout
+            try {
+                JsonObject command = new JsonObject();
+                command.addProperty("action", "shutdown");
+                
+                // Send shutdown command in a separate thread with timeout
+                Thread shutdownThread = new Thread(() -> {
+                    try {
+                        pythonBridge.sendCommand(command);
+                        logger.info("Shutdown command sent to Python bridge");
+                    } catch (Exception e) {
+                        logger.error("Failed to send shutdown command", e);
+                    }
+                });
+                
+                shutdownThread.setDaemon(true);  // Don't block app shutdown
+                shutdownThread.start();
+                
+                // Wait max 2 seconds for graceful shutdown
+                try {
+                    shutdownThread.join(2000);
+                } catch (InterruptedException e) {
+                    logger.warn("Shutdown thread interrupted");
+                }
+                
+            } catch (Exception e) {
+                logger.error("Error during shutdown", e);
+            }
+            
+            // Update all jobs to cancelled state
+            for (ConversionJob job : conversionQueue) {
+                String status = job.getStatus();
+                if (status.contains("processing") || status.contains("queued") || status.contains("Starting")) {
+                    job.setStatus("❌ Cancelled");
+                    job.setProgress(0.0);
+                }
+            }
+            
             isProcessing = false;
         }
+        
+        // Save settings before shutdown (with timeout)
+        try {
+            settings.save();
+            logger.info("Settings saved during shutdown");
+        } catch (Exception e) {
+            logger.error("Failed to save settings during shutdown", e);
+        }
+        
+        logger.info("Main controller shutdown complete");
     }
     
     // ========== Queue Drag and Drop ==========
@@ -1346,11 +1775,12 @@ public class MainController {
             quickFormatCombo.setValue("MP4");
         }
         
+        // Initialize codec combo with default values, will be updated after hardware detection
         if (quickCodecCombo != null) {
             quickCodecCombo.setItems(FXCollections.observableArrayList(
-                "HEVC (H.265)", "AVC (H.264)", "AV1", "VP9", "MPEG-2", "Copy"
+                "Software H.264", "Software H.265", "Copy"
             ));
-            quickCodecCombo.setValue("HEVC (H.265)");
+            quickCodecCombo.setValue("Software H.264");
         }
         
         if (quickQualityCombo != null) {
@@ -1462,9 +1892,7 @@ public class MainController {
                 });
                 
                 // Check Whisper status (for subtitle mode)
-                JsonObject whisperCmd = new JsonObject();
-                whisperCmd.addProperty("action", "check_whisper");
-                JsonObject whisperResponse = pythonBridge.sendCommand(whisperCmd);
+                JsonObject whisperResponse = pythonBridge.checkWhisper();
                 boolean whisperAvailable = whisperResponse.has("whisper_available") && 
                                           whisperResponse.get("whisper_available").getAsBoolean();
                 
@@ -1480,12 +1908,20 @@ public class MainController {
                             whisperStatusButton.getStyleClass().add("warning");
                         }
                     }
+                    // Disable generate button if Whisper not available
+                    if (subtitleGenerateButton != null) {
+                        subtitleGenerateButton.setDisable(!whisperAvailable);
+                    }
                 });
                 
-                // Update OpenSubtitles status
+                // Check OpenSubtitles status
+                JsonObject osResponse = pythonBridge.checkOpenSubtitles();
+                boolean osConfigured = osResponse.has("configured") && 
+                                      osResponse.get("configured").getAsBoolean();
+                
                 Platform.runLater(() -> {
                     if (openSubsStatusButton != null) {
-                        if (settings.getOpensubtitlesApiKey() != null && !settings.getOpensubtitlesApiKey().isEmpty()) {
+                        if (osConfigured) {
                             openSubsStatusButton.setText("🌐 OpenSubtitles: Ready");
                             openSubsStatusButton.getStyleClass().removeAll("error", "warning");
                             openSubsStatusButton.getStyleClass().add("active");
@@ -1495,12 +1931,25 @@ public class MainController {
                             openSubsStatusButton.getStyleClass().add("warning");
                         }
                     }
+                    // Disable download button if OpenSubtitles not configured
+                    if (subtitleDownloadButton != null) {
+                        subtitleDownloadButton.setDisable(!osConfigured);
+                    }
                 });
                 
-                // Update TMDB status
+                // Check TMDB status
+                JsonObject tmdbResponse = pythonBridge.checkTMDB();
+                boolean tmdbConfigured = tmdbResponse.has("configured") && 
+                                        tmdbResponse.get("configured").getAsBoolean();
+                
+                // Check TVDB status
+                JsonObject tvdbResponse = pythonBridge.checkTVDB();
+                boolean tvdbConfigured = tvdbResponse.has("configured") && 
+                                        tvdbResponse.get("configured").getAsBoolean();
+                
                 Platform.runLater(() -> {
                     if (tmdbStatusButton != null) {
-                        if (settings.getTmdbApiKey() != null && !settings.getTmdbApiKey().isEmpty()) {
+                        if (tmdbConfigured) {
                             tmdbStatusButton.setText("🎬 TMDB: Ready");
                             tmdbStatusButton.getStyleClass().removeAll("error", "warning");
                             tmdbStatusButton.getStyleClass().add("active");
@@ -1510,12 +1959,9 @@ public class MainController {
                             tmdbStatusButton.getStyleClass().add("warning");
                         }
                     }
-                });
-                
-                // Update TVDB status
-                Platform.runLater(() -> {
+                    
                     if (tvdbStatusButton != null) {
-                        if (settings.getTvdbApiKey() != null && !settings.getTvdbApiKey().isEmpty()) {
+                        if (tvdbConfigured) {
                             tvdbStatusButton.setText("📺 TVDB: Ready");
                             tvdbStatusButton.getStyleClass().removeAll("error", "warning");
                             tvdbStatusButton.getStyleClass().add("active");
@@ -1524,6 +1970,15 @@ public class MainController {
                             tvdbStatusButton.getStyleClass().removeAll("active");
                             tvdbStatusButton.getStyleClass().add("warning");
                         }
+                    }
+                    
+                    // AniList is always available, so renamer should always work
+                    // Enable renamer buttons since we have at least AniList
+                    if (refreshMetadataButton != null) {
+                        refreshMetadataButton.setDisable(false);
+                    }
+                    if (applyRenameButton != null) {
+                        applyRenameButton.setDisable(false);
                     }
                 });
                 

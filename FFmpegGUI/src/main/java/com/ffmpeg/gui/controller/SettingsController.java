@@ -164,12 +164,11 @@ public class SettingsController {
             outputFormatCombo.setValue("MP4");
         }
         
-        // Video codec
+        // Video codec - will be updated after hardware detection
         if (videoCodecCombo != null) {
             videoCodecCombo.setItems(javafx.collections.FXCollections.observableArrayList(
-                "Copy (no re-encode)", "H.264 (CPU)", "H.264 NVENC (GPU)", 
-                "H.265 (CPU)", "H.265 NVENC (GPU)", "VP9", "AV1"));
-            videoCodecCombo.setValue("H.264 NVENC (GPU)");
+                "Copy (no re-encode)", "Software H.264", "Software H.265"));
+            videoCodecCombo.setValue("Software H.264");
         }
         
         // Quality preset
@@ -221,6 +220,16 @@ public class SettingsController {
     public void setPythonBridge(PythonBridge pythonBridge) {
         this.pythonBridge = pythonBridge;
         checkFFmpegStatus();
+        
+        // Update encoders after a short delay to ensure FFmpeg check completes
+        new Thread(() -> {
+            try {
+                Thread.sleep(1000);  // Wait 1 second for FFmpeg detection to complete
+                Platform.runLater(() -> updateAvailableEncoders());
+            } catch (InterruptedException e) {
+                logger.error("Interrupted while waiting to update encoders", e);
+            }
+        }).start();
     }
     
     public void navigateToCategory(String category) {
@@ -308,6 +317,9 @@ public class SettingsController {
         convertSubsCheck.setSelected(settings.isConvertSubtitles());
         subtitleFormatCombo.setValue(settings.getSubtitleFormat());
         
+        // Load Whisper settings
+        if (whisperModelCombo != null) whisperModelCombo.setValue(settings.getWhisperModel());
+        
         hwDecodeCheck.setSelected(settings.isHardwareDecoding());
         
         // Load API keys
@@ -336,6 +348,9 @@ public class SettingsController {
         
         settings.setConvertSubtitles(convertSubsCheck.isSelected());
         settings.setSubtitleFormat(subtitleFormatCombo.getValue());
+        
+        // Save Whisper settings
+        if (whisperModelCombo != null) settings.setWhisperModel(whisperModelCombo.getValue());
         
         settings.setHardwareDecoding(hwDecodeCheck.isSelected());
         
@@ -590,6 +605,98 @@ public class SettingsController {
                 });
             } catch (InterruptedException e) {
                 logger.error("Validation interrupted", e);
+            }
+        }).start();
+    }
+    
+    private void updateAvailableEncoders() {
+        if (pythonBridge == null) {
+            logger.warn("Python bridge not available for encoder detection in settings");
+            return;
+        }
+        
+        new Thread(() -> {
+            try {
+                // Create request for available encoders
+                JsonObject request = new JsonObject();
+                request.addProperty("action", "get_available_encoders");
+                
+                JsonObject response = pythonBridge.sendCommand(request);
+                
+                Platform.runLater(() -> {
+                    if (response.has("status") && response.get("status").getAsString().equals("success")) {
+                        JsonObject encoderSupport = response.getAsJsonObject("encoder_support");
+                        
+                        // Build list of available encoders
+                        java.util.List<String> availableEncoders = new java.util.ArrayList<>();
+                        
+                        // Always add copy and software encoders
+                        availableEncoders.add("Copy (no re-encode)");
+                        availableEncoders.add("Software H.264");
+                        availableEncoders.add("Software H.265");
+                        
+                        // Add hardware encoders if available
+                        if (encoderSupport.has("nvidia_h264") && encoderSupport.get("nvidia_h264").getAsBoolean()) {
+                            availableEncoders.add("H.264 NVENC (GPU)");
+                        }
+                        if (encoderSupport.has("nvidia_h265") && encoderSupport.get("nvidia_h265").getAsBoolean()) {
+                            availableEncoders.add("H.265 NVENC (GPU)");
+                        }
+                        if (encoderSupport.has("amd_h264") && encoderSupport.get("amd_h264").getAsBoolean()) {
+                            availableEncoders.add("H.264 AMF (GPU)");
+                        }
+                        if (encoderSupport.has("amd_h265") && encoderSupport.get("amd_h265").getAsBoolean()) {
+                            availableEncoders.add("H.265 AMF (GPU)");
+                        }
+                        if (encoderSupport.has("intel_h264") && encoderSupport.get("intel_h264").getAsBoolean()) {
+                            availableEncoders.add("H.264 Intel QSV (CPU)");
+                        }
+                        if (encoderSupport.has("intel_h265") && encoderSupport.get("intel_h265").getAsBoolean()) {
+                            availableEncoders.add("H.265 Intel QSV (CPU)");
+                        }
+                        if (encoderSupport.has("apple_h264") && encoderSupport.get("apple_h264").getAsBoolean()) {
+                            availableEncoders.add("H.264 VideoToolbox (GPU)");
+                        }
+                        if (encoderSupport.has("apple_h265") && encoderSupport.get("apple_h265").getAsBoolean()) {
+                            availableEncoders.add("H.265 VideoToolbox (GPU)");
+                        }
+                        
+                        // Update the ComboBox
+                        if (videoCodecCombo != null) {
+                            String currentSelection = videoCodecCombo.getValue();
+                            videoCodecCombo.setItems(javafx.collections.FXCollections.observableArrayList(availableEncoders));
+                            
+                            // Try to keep current selection if still available
+                            if (availableEncoders.contains(currentSelection)) {
+                                videoCodecCombo.setValue(currentSelection);
+                            } else {
+                                // Set to recommended encoder or fallback to software
+                                if (response.has("recommended_encoder")) {
+                                    String recommended = response.get("recommended_encoder").getAsString();
+                                    if (recommended.equals("h264_nvenc") && availableEncoders.contains("H.264 NVENC (GPU)")) {
+                                        videoCodecCombo.setValue("H.264 NVENC (GPU)");
+                                    } else if (recommended.equals("h264_amf") && availableEncoders.contains("H.264 AMF (GPU)")) {
+                                        videoCodecCombo.setValue("H.264 AMF (GPU)");
+                                    } else if (recommended.equals("h264_qsv") && availableEncoders.contains("H.264 Intel QSV (CPU)")) {
+                                        videoCodecCombo.setValue("H.264 Intel QSV (CPU)");
+                                    } else {
+                                        videoCodecCombo.setValue("Software H.264");
+                                    }
+                                } else {
+                                    videoCodecCombo.setValue("Software H.264");
+                                }
+                            }
+                        }
+                        
+                        logger.info("Settings dialog: Available encoders updated with {} options", availableEncoders.size());
+                        
+                    } else {
+                        logger.warn("Failed to get available encoders for settings dialog");
+                    }
+                });
+                
+            } catch (Exception e) {
+                logger.error("Error updating available encoders in settings dialog", e);
             }
         }).start();
     }

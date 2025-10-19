@@ -3,12 +3,10 @@
 Whisper Manager - Handles Whisper AI model management and subtitle generation
 """
 
-import os
-import sys
 import logging
-from pathlib import Path
-from typing import Optional, Dict, List
 import subprocess
+from pathlib import Path
+from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +34,7 @@ class WhisperManager:
     def _check_installation(self) -> bool:
         """Check if Whisper is installed"""
         try:
-            import whisper
+            import whisper  # noqa: F401
             self.whisper_available = True
             
             # Check which models are downloaded
@@ -86,6 +84,7 @@ class WhisperManager:
             logger.info("Installing openai-whisper...")
             
             # Install using pip
+            import sys
             result = subprocess.run(
                 [sys.executable, "-m", "pip", "install", "-U", "openai-whisper"],
                 capture_output=True,
@@ -141,7 +140,7 @@ class WhisperManager:
             logger.info(f"Downloading Whisper model: {model_name}")
             
             # This will download the model if not already present
-            model = whisper.load_model(model_name)
+            whisper.load_model(model_name)
             
             if model_name not in self.installed_models:
                 self.installed_models.append(model_name)
@@ -209,7 +208,11 @@ class WhisperManager:
             result = model.transcribe(video_path, **options)
             
             # Convert to SRT format
-            srt_content = self._segments_to_srt(result["segments"])
+            segments = result.get("segments", [])
+            if isinstance(segments, list):
+                srt_content = self._segments_to_srt(segments)
+            else:
+                return False, "Invalid segments data from Whisper"
             
             # Write to file
             with open(output_path, "w", encoding="utf-8") as f:
@@ -266,8 +269,6 @@ class WhisperManager:
 
 def main():
     """Test the Whisper manager"""
-    import sys
-    
     manager = WhisperManager()
     
     status = manager.get_status()
@@ -276,8 +277,8 @@ def main():
     print(f"  Installed: {status['installed']}")
     
     if status['installed']:
-        print(f"  Downloaded Models: {', '.join(status['models']) if status['models'] else 'None'}")
-        print(f"\nAvailable Models:")
+        print("  Downloaded Models: " + (', '.join(status['models']) if status['models'] else 'None'))
+        print("\nAvailable Models:")
         for model in status['available_models']:
             info = manager.get_model_info(model)
             status_icon = "✅" if info['installed'] else "❌"
