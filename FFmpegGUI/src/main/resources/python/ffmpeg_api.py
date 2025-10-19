@@ -256,6 +256,22 @@ class FFmpegAPI:
                 
                 return self.core.search_subtitles(video_path, languages)
             
+            elif action == "download_subtitle":
+                file_id = request.get("file_id")
+                provider = request.get("provider")
+                video_path = request.get("video_path")
+                language = request.get("language", "eng")
+                download_url = request.get("download_url", "")
+                
+                if not file_id:
+                    return {"status": "error", "message": "file_id required"}
+                if not provider:
+                    return {"status": "error", "message": "provider required"}
+                if not video_path:
+                    return {"status": "error", "message": "video_path required"}
+                
+                return self.core.download_subtitle(file_id, provider, video_path, language, download_url)
+            
             elif action == "download_subtitles":
                 video_path = request.get("video_path")
                 languages = request.get("languages", self.settings.subtitle_languages)

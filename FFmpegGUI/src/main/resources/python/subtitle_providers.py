@@ -161,21 +161,50 @@ class SubtitleProviders:
         return results
     
     def _lang_code_to_name(self, lang_code: str) -> str:
-        """Convert 3-letter language code to full name"""
+        """Convert language code to full name - supports ISO 639-2/3 and Whisper codes"""
         lang_map = {
-            "eng": "English",
-            "spa": "Spanish",
-            "fre": "French",
-            "ger": "German",
-            "ita": "Italian",
-            "por": "Portuguese",
-            "rus": "Russian",
-            "ara": "Arabic",
-            "chi": "Chinese",
-            "jpn": "Japanese",
-            "kor": "Korean"
+            # English
+            "eng": "English", "en": "English",
+            # Spanish (with dialects)
+            "spa": "Spanish", "es": "Spanish", "es-MX": "Spanish (LA)",
+            # French
+            "fre": "French", "fra": "French", "fr": "French",
+            # German
+            "ger": "German", "deu": "German", "de": "German",
+            # Italian
+            "ita": "Italian", "it": "Italian",
+            # Portuguese (with dialects)
+            "por": "Portuguese", "pt": "Portuguese (EU)",
+            "pob": "Portuguese (BR)", "pt-BR": "Portuguese (BR)",
+            # Russian
+            "rus": "Russian", "ru": "Russian",
+            # Arabic
+            "ara": "Arabic", "ar": "Arabic",
+            # Chinese (with variants)
+            "chi": "Chinese", "zh": "Chinese (Simp)", "zh-CN": "Chinese (Simp)",
+            "zht": "Chinese (Trad)", "zh-TW": "Chinese (Trad)", "zho": "Chinese",
+            # Japanese
+            "jpn": "Japanese", "ja": "Japanese",
+            # Korean
+            "kor": "Korean", "ko": "Korean",
+            # Hindi
+            "hin": "Hindi", "hi": "Hindi",
+            # Thai
+            "tha": "Thai", "th": "Thai",
+            # Vietnamese
+            "vie": "Vietnamese", "vi": "Vietnamese",
+            # Turkish
+            "tur": "Turkish", "tr": "Turkish",
+            # Polish
+            "pol": "Polish", "pl": "Polish",
+            # Dutch
+            "dut": "Dutch", "nld": "Dutch", "nl": "Dutch",
+            # Swedish
+            "swe": "Swedish", "sv": "Swedish",
+            # Norwegian
+            "nor": "Norwegian", "no": "Norwegian", "nb": "Norwegian"
         }
-        return lang_map.get(lang_code, lang_code)
+        return lang_map.get(lang_code, lang_code.upper())
     
     def search_addic7ed(self, video_path: str, languages: List[str]) -> List[Dict]:
         """
@@ -473,19 +502,36 @@ class SubtitleProviders:
         return results
     
     def _lang_name_to_code(self, lang_name: str) -> str:
-        """Convert full language name to 3-letter code"""
+        """Convert full language name to 3-letter ISO 639-2 code"""
         lang_map = {
             "english": "eng",
             "spanish": "spa",
+            "spanish (eu)": "spa",
+            "spanish (la)": "spa",
             "french": "fre",
             "german": "ger",
             "italian": "ita",
             "portuguese": "por",
+            "portuguese (eu)": "por",
+            "portuguese (br)": "pob",
+            "portuguese (brazil)": "pob",
             "russian": "rus",
             "arabic": "ara",
             "chinese": "chi",
+            "chinese (simplified)": "chi",
+            "chinese (simp)": "chi",
+            "chinese (traditional)": "zht",
+            "chinese (trad)": "zht",
             "japanese": "jpn",
-            "korean": "kor"
+            "korean": "kor",
+            "hindi": "hin",
+            "thai": "tha",
+            "vietnamese": "vie",
+            "turkish": "tur",
+            "polish": "pol",
+            "dutch": "dut",
+            "swedish": "swe",
+            "norwegian": "nor"
         }
         return lang_map.get(lang_name.lower(), lang_name)
     
@@ -847,6 +893,172 @@ class SubtitleProviders:
         
         return results
     
+    def download_subtitle(self, file_id: str, provider: str, output_path: str, download_url: str = "") -> Tuple[bool, str]:
+        """
+        Download a specific subtitle by file_id and provider
+        
+        Args:
+            file_id: The subtitle's file_id from search results
+            provider: Provider name (e.g., "OpenSubtitles.com", "Addic7ed", etc.)
+            output_path: Where to save the subtitle file
+            download_url: Optional direct download URL
+            
+        Returns:
+            (success: bool, message: str or path)
+        """
+        try:
+            logger.info(f"Downloading subtitle from {provider}: {file_id}")
+            logger.info(f"Output path: {output_path}")
+            
+            # Ensure output directory exists
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+            
+            if provider == "OpenSubtitles.com":
+                # Extract file_id (should be numeric)
+                if isinstance(file_id, str) and file_id.isdigit():
+                    file_id_int = int(file_id)
+                elif isinstance(file_id, int):
+                    file_id_int = file_id
+                else:
+                    return False, f"Invalid file_id format for OpenSubtitles: {file_id}"
+                
+                success, message = self.opensubtitles.download_subtitle(file_id_int, output_path)
+                if success:
+                    logger.info(f"✅ Successfully downloaded from OpenSubtitles: {output_path}")
+                    return True, output_path
+                else:
+                    logger.error(f"❌ OpenSubtitles download failed: {message}")
+                    return False, message
+            
+            elif provider in ["Addic7ed", "Jimaku", "AnimeSubtitles", "Kitsunekko"]:
+                # These providers require web scraping or have no direct API
+                # Return a message directing the user to manual download
+                message = (f"{provider} requires manual download. "
+                          f"Please visit: {download_url if download_url else f'https://www.{provider.lower()}.com'}\n"
+                          f"Search for your content and download manually, then use 'External File' option.")
+                logger.warning(f"⚠️ {provider} manual download required")
+                return False, message
+            
+            elif provider == "SubDL":
+                # SubDL has an API but requires additional parsing
+                return self._download_from_subdl(file_id, download_url, output_path)
+            
+            elif provider == "YIFY":
+                # YIFY requires scraping the movie page
+                return self._download_from_yify(file_id, download_url, output_path)
+            
+            elif provider == "Podnapisi":
+                # Podnapisi has direct download links
+                return self._download_from_podnapisi(file_id, download_url, output_path)
+            
+            elif provider == "SubDivX":
+                # SubDivX requires following redirect links
+                return self._download_from_subdivx(file_id, download_url, output_path)
+            
+            elif provider == "Subf2m":
+                # Subf2m requires scraping the subtitle page
+                return self._download_from_subf2m(file_id, download_url, output_path)
+            
+            else:
+                return False, f"Download not implemented for provider: {provider}"
+                
+        except Exception as e:
+            logger.error(f"Error downloading subtitle: {e}", exc_info=True)
+            return False, f"Download error: {str(e)}"
+    
+    def _download_from_subdl(self, file_id: str, download_url: str, output_path: str) -> Tuple[bool, str]:
+        """Download from SubDL"""
+        try:
+            # SubDL API provides download links
+            api_url = f"https://api.subdl.com/api/v1/subtitles/{file_id}"
+            req = urllib.request.Request(api_url, headers=self.session_headers)
+            
+            with urllib.request.urlopen(req, timeout=30) as response:
+                data = json.loads(response.read().decode('utf-8'))
+                
+                if data.get('success') and data.get('download_url'):
+                    download_link = data['download_url']
+                    
+                    # Download the subtitle file
+                    req2 = urllib.request.Request(download_link, headers=self.session_headers)
+                    with urllib.request.urlopen(req2, timeout=30) as dl_response:
+                        content = dl_response.read()
+                        
+                        # Handle compressed files
+                        if download_link.endswith('.gz'):
+                            content = gzip.decompress(content)
+                        
+                        with open(output_path, 'wb') as f:
+                            f.write(content)
+                        
+                        logger.info(f"✅ Downloaded from SubDL: {output_path}")
+                        return True, output_path
+                else:
+                    return False, "SubDL download link not available"
+                    
+        except Exception as e:
+            logger.error(f"SubDL download error: {e}")
+            return False, f"SubDL download failed: {str(e)}"
+    
+    def _download_from_yify(self, file_id: str, download_url: str, output_path: str) -> Tuple[bool, str]:
+        """Download from YIFY Subtitles"""
+        try:
+            # YIFY requires scraping - for now, return manual download message
+            message = (f"YIFY requires manual download. Please visit: {download_url}\n"
+                      f"Download the subtitle manually and use 'External File' option.")
+            logger.warning("⚠️ YIFY manual download required")
+            return False, message
+        except Exception as e:
+            return False, f"YIFY download error: {str(e)}"
+    
+    def _download_from_podnapisi(self, file_id: str, download_url: str, output_path: str) -> Tuple[bool, str]:
+        """Download from Podnapisi"""
+        try:
+            # Podnapisi provides direct download links
+            if not download_url:
+                return False, "No download URL provided for Podnapisi"
+            
+            req = urllib.request.Request(download_url, headers=self.session_headers)
+            
+            with urllib.request.urlopen(req, timeout=30) as response:
+                content = response.read()
+                
+                # Handle compressed files
+                if content[:2] == b'\x1f\x8b':  # gzip magic number
+                    content = gzip.decompress(content)
+                
+                with open(output_path, 'wb') as f:
+                    f.write(content)
+                
+                logger.info(f"✅ Downloaded from Podnapisi: {output_path}")
+                return True, output_path
+                
+        except Exception as e:
+            logger.error(f"Podnapisi download error: {e}")
+            return False, f"Podnapisi download failed: {str(e)}"
+    
+    def _download_from_subdivx(self, file_id: str, download_url: str, output_path: str) -> Tuple[bool, str]:
+        """Download from SubDivX"""
+        try:
+            # SubDivX requires manual download as it has anti-bot protection
+            message = (f"SubDivX requires manual download. Please visit: {download_url}\n"
+                      f"Download the subtitle manually and use 'External File' option.")
+            logger.warning("⚠️ SubDivX manual download required")
+            return False, message
+        except Exception as e:
+            return False, f"SubDivX download error: {str(e)}"
+    
+    def _download_from_subf2m(self, file_id: str, download_url: str, output_path: str) -> Tuple[bool, str]:
+        """Download from Subf2m"""
+        try:
+            # Subf2m requires scraping the subtitle page
+            message = (f"Subf2m requires manual download. Please visit: {download_url}\n"
+                      f"Download the subtitle manually and use 'External File' option.")
+            logger.warning("⚠️ Subf2m manual download required")
+            return False, message
+        except Exception as e:
+            return False, f"Subf2m download error: {str(e)}"
+    
     def download_best_subtitle(self, video_path: str, language: str = "en") -> Tuple[bool, Optional[str]]:
         """Download best subtitle from any provider"""
         results = self.search_all_providers(video_path, [language])
@@ -855,9 +1067,7 @@ class SubtitleProviders:
             logger.warning(f"No subtitles found for {video_path}")
             return False, None
         
-        # Sort by rating and downloads
-        results.sort(key=lambda x: (x.get("rating", 0), x.get("downloads", 0)), reverse=True)
-        
+        # Sort by score (already ranked)
         # Try each subtitle until one succeeds
         for subtitle in results:
             try:
@@ -865,25 +1075,22 @@ class SubtitleProviders:
                 logger.info(f"Attempting to download from {provider}: {subtitle.get('file_name', 'unknown')}")
                 
                 video_file = Path(video_path)
-                output_path = str(video_file.parent / f"{video_file.stem}.{language}.srt")
+                lang_code = subtitle.get("language", language)
+                output_path = str(video_file.parent / f"{video_file.stem}.{lang_code}.srt")
                 
-                if provider == "opensubtitles":
-                    success, message = self.opensubtitles.download_subtitle(
-                        subtitle["file_id"],
-                        output_path
-                    )
-                    if success:
-                        logger.info(f"Successfully downloaded from OpenSubtitles: {output_path}")
-                        return True, output_path
-                        
-                elif provider == "opensubs_com":
-                    # Download from OpenSubtitles.com REST API
-                    success = self._download_from_opensubs_com(subtitle, output_path)
-                    if success:
-                        logger.info(f"Successfully downloaded from OpenSubs.com: {output_path}")
-                        return True, output_path
+                success, result = self.download_subtitle(
+                    subtitle["file_id"],
+                    provider,
+                    output_path,
+                    subtitle.get("download_url", "")
+                )
                 
-                # Add more provider downloads here as implemented
+                if success:
+                    logger.info(f"✅ Successfully downloaded: {result}")
+                    return True, result
+                else:
+                    logger.warning(f"⚠️ {provider} download failed: {result}")
+                    continue
                 
             except Exception as e:
                 logger.error(f"Error downloading from {subtitle.get('provider')}: {e}")

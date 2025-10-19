@@ -127,14 +127,31 @@ public class MainController {
     
     // Subtitle Quick Settings
     @FXML private ComboBox<String> quickSubProviderCombo;
+    // European Languages
     @FXML private CheckBox langEnglishCheck;
     @FXML private CheckBox langSpanishCheck;
+    @FXML private CheckBox langSpanishLACheck;
     @FXML private CheckBox langFrenchCheck;
     @FXML private CheckBox langGermanCheck;
+    @FXML private CheckBox langItalianCheck;
+    @FXML private CheckBox langPortugueseCheck;
+    @FXML private CheckBox langPortugueseBRCheck;
+    // Asian Languages
     @FXML private CheckBox langJapaneseCheck;
     @FXML private CheckBox langChineseCheck;
+    @FXML private CheckBox langChineseTWCheck;
     @FXML private CheckBox langKoreanCheck;
+    @FXML private CheckBox langHindiCheck;
+    @FXML private CheckBox langThaiCheck;
+    @FXML private CheckBox langVietnameseCheck;
+    // Other Major Languages
+    @FXML private CheckBox langRussianCheck;
     @FXML private CheckBox langArabicCheck;
+    @FXML private CheckBox langTurkishCheck;
+    @FXML private CheckBox langPolishCheck;
+    @FXML private CheckBox langDutchCheck;
+    @FXML private CheckBox langSwedishCheck;
+    @FXML private CheckBox langNorwegianCheck;
     @FXML private Button whisperStatusButton;
     @FXML private Button openSubsStatusButton;
     @FXML private Button subtitleProcessButton;
@@ -467,6 +484,148 @@ public class MainController {
             new javafx.beans.property.SimpleObjectProperty<>(cd.getValue().getScore()));
         subtitleFormatColumn.setCellValueFactory(cd -> 
             new javafx.beans.property.SimpleStringProperty(cd.getValue().getFormat()));
+        
+        // Selection listener to update details panel
+        availableSubtitlesTable.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            updateSubtitleDetails(newVal);
+        });
+    }
+    
+    private void updateSubtitleDetails(SubtitleItem subtitle) {
+        if (subtitleDetailsLabel == null) {
+            return;
+        }
+        
+        if (subtitle == null) {
+            subtitleDetailsLabel.setText("Select a subtitle to view details");
+            return;
+        }
+        
+        // Build detailed info display
+        StringBuilder details = new StringBuilder();
+        
+        // Provider info
+        details.append("🌐 Provider: ").append(subtitle.getProvider()).append("\n");
+        details.append("   ").append(getProviderDescription(subtitle.getProvider())).append("\n\n");
+        
+        // Language
+        details.append("🗣️ Language: ").append(subtitle.getLanguage().toUpperCase());
+        details.append(" (").append(getLanguageName(subtitle.getLanguage())).append(")\n\n");
+        
+        // Quality score
+        details.append("⭐ Quality Score: ").append(String.format("%.1f", subtitle.getScore())).append("/100\n");
+        details.append("   ").append(getScoreDescription(subtitle.getScore())).append("\n\n");
+        
+        // Format
+        details.append("📄 Format: ").append(subtitle.getFormat().toUpperCase()).append("\n");
+        details.append("   ").append(getFormatDescription(subtitle.getFormat())).append("\n\n");
+        
+        // File ID (for debugging/support)
+        if (subtitle.getFileId() != null && !subtitle.getFileId().isEmpty()) {
+            details.append("🔑 File ID: ").append(subtitle.getFileId()).append("\n\n");
+        }
+        
+        // Download info
+        if (subtitle.getDownloadUrl() != null && !subtitle.getDownloadUrl().isEmpty()) {
+            details.append("🔗 Download URL:\n");
+            details.append("   ").append(truncateUrl(subtitle.getDownloadUrl())).append("\n\n");
+        }
+        
+        // Provider-specific notes
+        String providerNote = getProviderNote(subtitle.getProvider());
+        if (providerNote != null) {
+            details.append("⚠️ Note: ").append(providerNote).append("\n");
+        }
+        
+        subtitleDetailsLabel.setText(details.toString());
+    }
+    
+    private String getProviderDescription(String provider) {
+        switch (provider) {
+            case "OpenSubtitles.com":
+                return "Official API with high-quality subtitles";
+            case "Addic7ed":
+                return "Excellent for TV shows, especially recent episodes";
+            case "Jimaku":
+                return "Modern anime subtitle search (Japanese & English)";
+            case "AnimeSubtitles":
+                return "Multi-language anime subtitle database";
+            case "Kitsunekko":
+                return "Japanese anime subtitles (romaji/kanji)";
+            case "SubDL":
+                return "Large database for movies and TV shows";
+            case "Podnapisi":
+                return "Multi-language subtitle database";
+            case "SubDivX":
+                return "Largest Spanish subtitle database";
+            case "YIFY":
+                return "Movie subtitles (matches YIFY releases)";
+            case "Subf2m":
+                return "Popular subtitle site for movies and TV";
+            default:
+                return "Community-contributed subtitles";
+        }
+    }
+    
+    private String getLanguageName(String code) {
+        switch (code.toLowerCase()) {
+            case "eng": case "en": return "English";
+            case "spa": case "es": return "Spanish";
+            case "fre": case "fr": return "French";
+            case "ger": case "de": return "German";
+            case "ita": case "it": return "Italian";
+            case "por": case "pt": return "Portuguese";
+            case "rus": case "ru": return "Russian";
+            case "jpn": case "ja": return "Japanese";
+            case "chi": case "zh": return "Chinese";
+            case "kor": case "ko": return "Korean";
+            case "ara": case "ar": return "Arabic";
+            default: return code.toUpperCase();
+        }
+    }
+    
+    private String getScoreDescription(double score) {
+        if (score >= 90) return "Excellent match - highly recommended";
+        if (score >= 75) return "Good match - should work well";
+        if (score >= 60) return "Fair match - may need adjustments";
+        if (score >= 40) return "Poor match - timing may be off";
+        return "Low match - not recommended";
+    }
+    
+    private String getFormatDescription(String format) {
+        switch (format.toLowerCase()) {
+            case "srt":
+                return "SubRip - Most compatible, plain text format";
+            case "ass":
+                return "Advanced SubStation Alpha - Supports styling and effects";
+            case "ssa":
+                return "SubStation Alpha - Supports basic styling";
+            case "vtt":
+                return "WebVTT - Web-based subtitle format";
+            default:
+                return "Standard subtitle format";
+        }
+    }
+    
+    private String truncateUrl(String url) {
+        if (url.length() > 60) {
+            return url.substring(0, 57) + "...";
+        }
+        return url;
+    }
+    
+    private String getProviderNote(String provider) {
+        switch (provider) {
+            case "Addic7ed":
+            case "Jimaku":
+            case "AnimeSubtitles":
+            case "Kitsunekko":
+                return "This provider may require manual download";
+            case "OpenSubtitles.com":
+                return "Requires API key for downloads";
+            default:
+                return null;
+        }
     }
     
     private void updateQueueCounts() {
@@ -2504,34 +2663,66 @@ public class MainController {
                 try {
                     Platform.runLater(() -> log("Processing " + subtitle.getLanguage() + " subtitle from " + subtitle.getProvider() + "..."));
                     
-                    // First, download the subtitle if needed
-                    // For now, we'll assume subtitles are already downloaded
-                    // In a full implementation, you'd download them first
+                    // Step 1: Download the subtitle
+                    Platform.runLater(() -> log("Downloading subtitle from " + subtitle.getProvider() + "..."));
                     
-                    // Create request to apply subtitles
-                    JsonObject request = new JsonObject();
-                    request.addProperty("action", "apply_subtitles");
-                    request.addProperty("video_path", videoPath);
-                    // Note: You'll need to track the actual downloaded subtitle path
-                    // For now, this is a simplified version
-                    request.addProperty("subtitle_path", "path/to/subtitle.srt"); // TODO: Use actual path
-                    request.addProperty("mode", finalMode);
-                    request.addProperty("language", subtitle.getLanguage());
+                    JsonObject downloadRequest = new JsonObject();
+                    downloadRequest.addProperty("action", "download_subtitle");
+                    downloadRequest.addProperty("file_id", subtitle.getFileId());
+                    downloadRequest.addProperty("provider", subtitle.getProvider());
+                    downloadRequest.addProperty("video_path", videoPath);
+                    downloadRequest.addProperty("language", subtitle.getLanguage());
+                    downloadRequest.addProperty("download_url", subtitle.getDownloadUrl());
                     
-                    JsonObject response = pythonBridge.sendCommand(request);
+                    JsonObject downloadResponse = pythonBridge.sendCommand(downloadRequest);
                     
-                    if (response.has("status") && "success".equals(response.get("status").getAsString())) {
-                        String outputPath = response.has("output_path") ? response.get("output_path").getAsString() : "unknown";
+                    // Check if download succeeded
+                    if (!downloadResponse.has("status") || !"success".equals(downloadResponse.get("status").getAsString())) {
+                        String errorMsg = downloadResponse.has("message") ? downloadResponse.get("message").getAsString() : "Download failed";
+                        boolean requiresManual = downloadResponse.has("requires_manual_download") && 
+                                                downloadResponse.get("requires_manual_download").getAsBoolean();
+                        
+                        if (requiresManual) {
+                            Platform.runLater(() -> {
+                                log("⚠️ Manual download required: " + errorMsg);
+                                showWarning("Manual Download Required", 
+                                    subtitle.getProvider() + " requires manual download.\n\n" + errorMsg);
+                            });
+                        } else {
+                            Platform.runLater(() -> log("❌ Download failed: " + errorMsg));
+                        }
+                        failCount++;
+                        continue;
+                    }
+                    
+                    // Get the downloaded subtitle path
+                    String subtitlePath = downloadResponse.get("subtitle_path").getAsString();
+                    Platform.runLater(() -> log("✅ Downloaded to: " + subtitlePath));
+                    
+                    // Step 2: Apply the subtitle
+                    Platform.runLater(() -> log("Applying subtitle in '" + finalMode + "' mode..."));
+                    
+                    JsonObject applyRequest = new JsonObject();
+                    applyRequest.addProperty("action", "apply_subtitles");
+                    applyRequest.addProperty("video_path", videoPath);
+                    applyRequest.addProperty("subtitle_path", subtitlePath);
+                    applyRequest.addProperty("mode", finalMode);
+                    applyRequest.addProperty("language", subtitle.getLanguage());
+                    
+                    JsonObject applyResponse = pythonBridge.sendCommand(applyRequest);
+                    
+                    if (applyResponse.has("status") && "success".equals(applyResponse.get("status").getAsString())) {
+                        String outputPath = applyResponse.has("output_path") ? applyResponse.get("output_path").getAsString() : "unknown";
                         Platform.runLater(() -> log("✅ Success: " + outputPath));
                         successCount++;
                     } else {
-                        String errorMsg = response.has("message") ? response.get("message").getAsString() : "Unknown error";
+                        String errorMsg = applyResponse.has("message") ? applyResponse.get("message").getAsString() : "Unknown error";
                         Platform.runLater(() -> log("❌ Failed: " + errorMsg));
                         failCount++;
                     }
                     
                 } catch (Exception e) {
-                    logger.error("Error applying subtitle", e);
+                    logger.error("Error processing subtitle", e);
                     Platform.runLater(() -> log("❌ Error: " + e.getMessage()));
                     failCount++;
                 }
@@ -2741,7 +2932,7 @@ public class MainController {
                 if (response.has("status") && "success".equals(response.get("status").getAsString())) {
                     int count = response.has("count") ? response.get("count").getAsInt() : 0;
                     
-                    Platform.runLater(() -> {
+                Platform.runLater(() -> {
                         log("Found " + count + " subtitle(s)");
                         
                         if (count > 0 && response.has("subtitles") && response.get("subtitles").isJsonArray()) {
@@ -2755,10 +2946,12 @@ public class MainController {
                                 String provider = sub.has("provider") ? sub.get("provider").getAsString() : "unknown";
                                 double score = sub.has("score") ? sub.get("score").getAsDouble() : 0.0;
                                 String format = sub.has("format") ? sub.get("format").getAsString() : "srt";
+                                String fileId = sub.has("file_id") ? sub.get("file_id").getAsString() : "";
+                                String downloadUrl = sub.has("download_url") ? sub.get("download_url").getAsString() : "";
                                 
                                 languages.add(language);
                                 
-                                SubtitleItem item = new SubtitleItem(false, language, provider, score, format);
+                                SubtitleItem item = new SubtitleItem(false, language, provider, score, format, fileId, downloadUrl);
                                 if (availableSubtitlesTable != null) {
                                     availableSubtitlesTable.getItems().add(item);
                                 }
@@ -2801,15 +2994,104 @@ public class MainController {
     
     private List<String> getSelectedLanguages() {
         List<String> selectedLanguages = new ArrayList<>();
-        if (langEnglishCheck != null && langEnglishCheck.isSelected()) selectedLanguages.add("eng");
-        if (langSpanishCheck != null && langSpanishCheck.isSelected()) selectedLanguages.add("spa");
-        if (langFrenchCheck != null && langFrenchCheck.isSelected()) selectedLanguages.add("fre");
-        if (langGermanCheck != null && langGermanCheck.isSelected()) selectedLanguages.add("ger");
-        if (langJapaneseCheck != null && langJapaneseCheck.isSelected()) selectedLanguages.add("jpn");
-        if (langChineseCheck != null && langChineseCheck.isSelected()) selectedLanguages.add("chi");
-        if (langKoreanCheck != null && langKoreanCheck.isSelected()) selectedLanguages.add("kor");
-        if (langArabicCheck != null && langArabicCheck.isSelected()) selectedLanguages.add("ara");
-        return selectedLanguages;
+        
+        // European Languages (with dialect support)
+        if (langEnglishCheck != null && langEnglishCheck.isSelected()) {
+            selectedLanguages.add("eng");  // ISO 639-2 for English
+            selectedLanguages.add("en");   // Whisper short code
+        }
+        if (langSpanishCheck != null && langSpanishCheck.isSelected()) {
+            selectedLanguages.add("spa");  // Spanish (European)
+            selectedLanguages.add("es");   // Whisper short code
+        }
+        if (langSpanishLACheck != null && langSpanishLACheck.isSelected()) {
+            selectedLanguages.add("spa");  // Latin American Spanish (uses same code)
+            selectedLanguages.add("es-MX"); // Mexican Spanish variant
+        }
+        if (langFrenchCheck != null && langFrenchCheck.isSelected()) {
+            selectedLanguages.add("fre");
+            selectedLanguages.add("fr");
+        }
+        if (langGermanCheck != null && langGermanCheck.isSelected()) {
+            selectedLanguages.add("ger");
+            selectedLanguages.add("de");
+        }
+        if (langItalianCheck != null && langItalianCheck.isSelected()) {
+            selectedLanguages.add("ita");
+            selectedLanguages.add("it");
+        }
+        if (langPortugueseCheck != null && langPortugueseCheck.isSelected()) {
+            selectedLanguages.add("por");  // Portuguese (European)
+            selectedLanguages.add("pt");
+        }
+        if (langPortugueseBRCheck != null && langPortugueseBRCheck.isSelected()) {
+            selectedLanguages.add("pob");  // Portuguese (Brazilian) - subtitle providers
+            selectedLanguages.add("pt-BR"); // Whisper variant
+        }
+        
+        // Asian Languages
+        if (langJapaneseCheck != null && langJapaneseCheck.isSelected()) {
+            selectedLanguages.add("jpn");
+            selectedLanguages.add("ja");
+        }
+        if (langChineseCheck != null && langChineseCheck.isSelected()) {
+            selectedLanguages.add("chi");  // Chinese (Simplified)
+            selectedLanguages.add("zh");   // Whisper code
+            selectedLanguages.add("zh-CN"); // Mainland Chinese
+        }
+        if (langChineseTWCheck != null && langChineseTWCheck.isSelected()) {
+            selectedLanguages.add("zht");  // Traditional Chinese
+            selectedLanguages.add("zh-TW"); // Taiwan Chinese
+        }
+        if (langKoreanCheck != null && langKoreanCheck.isSelected()) {
+            selectedLanguages.add("kor");
+            selectedLanguages.add("ko");
+        }
+        if (langHindiCheck != null && langHindiCheck.isSelected()) {
+            selectedLanguages.add("hin");
+            selectedLanguages.add("hi");
+        }
+        if (langThaiCheck != null && langThaiCheck.isSelected()) {
+            selectedLanguages.add("tha");
+            selectedLanguages.add("th");
+        }
+        if (langVietnameseCheck != null && langVietnameseCheck.isSelected()) {
+            selectedLanguages.add("vie");
+            selectedLanguages.add("vi");
+        }
+        
+        // Other Major Languages
+        if (langRussianCheck != null && langRussianCheck.isSelected()) {
+            selectedLanguages.add("rus");
+            selectedLanguages.add("ru");
+        }
+        if (langArabicCheck != null && langArabicCheck.isSelected()) {
+            selectedLanguages.add("ara");
+            selectedLanguages.add("ar");
+        }
+        if (langTurkishCheck != null && langTurkishCheck.isSelected()) {
+            selectedLanguages.add("tur");
+            selectedLanguages.add("tr");
+        }
+        if (langPolishCheck != null && langPolishCheck.isSelected()) {
+            selectedLanguages.add("pol");
+            selectedLanguages.add("pl");
+        }
+        if (langDutchCheck != null && langDutchCheck.isSelected()) {
+            selectedLanguages.add("dut");
+            selectedLanguages.add("nl");
+        }
+        if (langSwedishCheck != null && langSwedishCheck.isSelected()) {
+            selectedLanguages.add("swe");
+            selectedLanguages.add("sv");
+        }
+        if (langNorwegianCheck != null && langNorwegianCheck.isSelected()) {
+            selectedLanguages.add("nor");
+            selectedLanguages.add("no");
+        }
+        
+        // Remove duplicates while preserving order
+        return new ArrayList<>(new java.util.LinkedHashSet<>(selectedLanguages));
     }
     
     private void handleGenerateAI() {
@@ -3076,13 +3358,21 @@ public class MainController {
         private String provider;
         private double score;
         private String format;
+        private String fileId;
+        private String downloadUrl;
         
         public SubtitleItem(boolean selected, String language, String provider, double score, String format) {
+            this(selected, language, provider, score, format, "", "");
+        }
+        
+        public SubtitleItem(boolean selected, String language, String provider, double score, String format, String fileId, String downloadUrl) {
             this.selected = selected;
             this.language = language;
             this.provider = provider;
             this.score = score;
             this.format = format;
+            this.fileId = fileId;
+            this.downloadUrl = downloadUrl;
         }
         
         public boolean isSelected() { return selected; }
@@ -3095,6 +3385,10 @@ public class MainController {
         public void setScore(double score) { this.score = score; }
         public String getFormat() { return format; }
         public void setFormat(String format) { this.format = format; }
+        public String getFileId() { return fileId; }
+        public void setFileId(String fileId) { this.fileId = fileId; }
+        public String getDownloadUrl() { return downloadUrl; }
+        public void setDownloadUrl(String downloadUrl) { this.downloadUrl = downloadUrl; }
     }
     
     // ========================================
@@ -3120,11 +3414,11 @@ public class MainController {
                 } catch (Exception e) {
                     logger.warn("Failed to load app icon, falling back to FontAwesome icon", e);
                     // Fallback to FontAwesome icon
-                    org.kordamp.ikonli.javafx.FontIcon appIcon = new org.kordamp.ikonli.javafx.FontIcon(
-                        org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.FILM);
-                    appIcon.setIconSize(16);
-                    appIcon.setIconColor(javafx.scene.paint.Color.web("#0078d4"));
-                    appIconLabel.setGraphic(appIcon);
+                org.kordamp.ikonli.javafx.FontIcon appIcon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.FILM);
+                appIcon.setIconSize(16);
+                appIcon.setIconColor(javafx.scene.paint.Color.web("#0078d4"));
+                appIconLabel.setGraphic(appIcon);
                 }
             }
             

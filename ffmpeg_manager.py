@@ -30,14 +30,29 @@ class FFmpegManager:
         self.ffmpeg_path = None
         self.ffprobe_path = None
         self.version_info = {}
+        self._detection_cache = None  # Cache detection results for instant subsequent calls
+        self._cache_timestamp = 0
+        self._encoder_test_cache = {}  # Cache encoder test results {encoder_name: (is_functional, timestamp)}
+        self._encoder_cache_duration = 300  # 5 minutes
         
-    def detect_ffmpeg(self) -> Tuple[bool, Dict[str, Union[str, List[str]]]]:
+    def detect_ffmpeg(self, use_cache: bool = True) -> Tuple[bool, Dict[str, Union[str, List[str]]]]:
         """
         Detect FFmpeg installation and get version information
+        
+        Args:
+            use_cache: If True, return cached results if available (default)
         
         Returns:
             (success, info_dict)
         """
+        import time
+        
+        # Return cached results instantly if available and not too old (< 5 minutes)
+        if use_cache and self._detection_cache is not None:
+            cache_age = time.time() - self._cache_timestamp
+            if cache_age < 300:  # 5 minutes
+                logger.debug(f"Using cached FFmpeg detection (age: {cache_age:.1f}s)")
+                return self._detection_cache
         paths_to_check = []
         
         # Check custom path first
@@ -133,22 +148,31 @@ class FFmpegManager:
                     # Get version info
                     self.version_info = self._get_version_info()
                     
-                    return True, {
+                    # Cache the successful result for instant subsequent calls
+                    result = (True, {
                         "ffmpeg_path": self.ffmpeg_path,
                         "ffprobe_path": self.ffprobe_path,
                         "version": self.version_info.get("version", "Unknown"),
                         "configuration": self.version_info.get("configuration", ""),
                         "encoders": self.version_info.get("encoders", []),
                         "decoders": self.version_info.get("decoders", []),
-                    }
+                    })
+                    self._detection_cache = result
+                    self._cache_timestamp = time.time()
+                    logger.debug("Cached FFmpeg detection results")
+                    return result
         
         logger.warning("FFmpeg not found in any checked location")
         logger.debug(f"Searched paths: {[p for p in paths_to_check if p]}")
         
-        return False, {
+        # Cache failure result too (but with shorter timeout handled above)
+        result = (False, {
             "error": "FFmpeg not found in system PATH or common locations",
             "searched_paths": [p for p in paths_to_check if p]
-        }
+        })
+        self._detection_cache = result
+        self._cache_timestamp = time.time()
+        return result
     
     def _recursive_search(self, directory: str, filename: str, max_depth: int = 3, current_depth: int = 0) -> Optional[str]:
         """Recursively search for a file in directory tree"""
@@ -275,14 +299,34 @@ class FFmpegManager:
         
         return encoders
     
-    def _test_encoder(self, encoder_name: str) -> bool:
-        """Test if a hardware encoder is actually functional"""
+    def _test_encoder(self, encoder_name: str, use_cache: bool = True) -> bool:
+        """
+        Test if a hardware encoder is actually functional
+        
+        Args:
+            encoder_name: Name of the encoder to test
+            use_cache: If True, return cached results if available (default)
+        
+        Returns:
+            True if encoder is functional, False otherwise
+        """
+        import time
+        
+        # Check cache first (return instantly if available)
+        if use_cache and encoder_name in self._encoder_test_cache:
+            cached_result, cached_time = self._encoder_test_cache[encoder_name]
+            cache_age = time.time() - cached_time
+            if cache_age < self._encoder_cache_duration:
+                logger.debug(f"Using cached encoder test for {encoder_name}: {cached_result} (age: {cache_age:.1f}s)")
+                return cached_result
+        
         try:
             if not self.ffmpeg_path:
+                self._encoder_test_cache[encoder_name] = (False, time.time())
                 return False
             
             # Create a minimal test command to check if encoder works
-            # This creates a 1-second black video to test the encoder
+            # This creates a 0.1s black video to test the encoder quickly
             cmd = [
                 self.ffmpeg_path,
                 "-f", "lavfi",
@@ -296,18 +340,23 @@ class FFmpegManager:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=10
+                timeout=5  # Reduced from 10s for faster detection
             )
             
             # If return code is 0, encoder works
             success = result.returncode == 0
             if not success:
-                logger.debug(f"Encoder {encoder_name} test failed: {result.stderr}")
+                logger.debug(f"Encoder {encoder_name} test failed: {result.stderr[:200]}")  # Limit log size
+            
+            # Cache the result for instant subsequent calls
+            self._encoder_test_cache[encoder_name] = (success, time.time())
             
             return success
             
         except Exception as e:
             logger.debug(f"Error testing encoder {encoder_name}: {e}")
+            # Cache the failure result
+            self._encoder_test_cache[encoder_name] = (False, time.time())
             return False
     
     def _check_decoders(self) -> list:

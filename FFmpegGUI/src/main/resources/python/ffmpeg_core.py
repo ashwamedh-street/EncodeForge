@@ -441,6 +441,76 @@ class FFmpegCore:
                 "subtitles": []
             }
     
+    def download_subtitle(
+        self,
+        file_id: str,
+        provider: str,
+        video_path: str,
+        language: str = "eng",
+        download_url: str = ""
+    ) -> Dict:
+        """
+        Download a specific subtitle by file_id and provider
+        
+        Args:
+            file_id: The subtitle's file_id from search results
+            provider: Provider name (e.g., "OpenSubtitles.com", "Addic7ed", etc.)
+            video_path: Path to the video file (used to determine output path)
+            language: Language code (default: "eng")
+            download_url: Optional direct download URL from search results
+            
+        Returns:
+            Dict with status, message, and subtitle_path
+        """
+        logger.info("=== Starting Subtitle Download ===")
+        logger.info(f"Provider: {provider}")
+        logger.info(f"File ID: {file_id}")
+        logger.info(f"Language: {language}")
+        
+        try:
+            video_file = Path(video_path)
+            if not video_file.exists():
+                return {
+                    "status": "error",
+                    "message": f"Video file not found: {video_path}"
+                }
+            
+            # Generate output path
+            output_path = str(video_file.parent / f"{video_file.stem}.{language}.srt")
+            
+            # Download subtitle using SubtitleProviders
+            success, result = self.subtitle_providers.download_subtitle(
+                file_id,
+                provider,
+                output_path,
+                download_url
+            )
+            
+            if success:
+                logger.info(f"✅ Successfully downloaded subtitle to: {result}")
+                return {
+                    "status": "success",
+                    "message": f"Downloaded subtitle from {provider}",
+                    "subtitle_path": result,
+                    "provider": provider,
+                    "language": language
+                }
+            else:
+                logger.error(f"❌ Failed to download subtitle: {result}")
+                return {
+                    "status": "error",
+                    "message": result,
+                    "provider": provider,
+                    "requires_manual_download": "manual download" in result.lower()
+                }
+        
+        except Exception as e:
+            logger.error(f"Error downloading subtitle: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "message": f"Download failed: {str(e)}"
+            }
+    
     def download_subtitles(self, video_path: str, languages: Optional[List[str]] = None) -> Dict:
         """Download subtitles from multiple providers"""
         logger.info("=== Starting Subtitle Download ===")

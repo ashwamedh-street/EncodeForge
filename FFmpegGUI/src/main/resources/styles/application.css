@@ -1066,9 +1066,9 @@
    COMPACT SETTINGS DIALOG
    ======================================== */
 .dialog-pane {
-    -fx-background-color: linear-gradient(to bottom, #1a1a1a 0%, #1e1e1e 100%);
-    -fx-border-color: #0078d4;
-    -fx-border-width: 3;
+    -fx-background-color: linear-gradient(to bottom, #121212 0%, #1e1e1e 100%);
+    -fx-border-color: #2d2d2d;
+    -fx-border-width: 2;
     -fx-border-radius: 0;
     -fx-background-radius: 0;
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.9), 35, 0, 0, 0);

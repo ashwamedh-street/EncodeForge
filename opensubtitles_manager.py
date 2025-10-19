@@ -3,15 +3,15 @@
 OpenSubtitles Manager - Handles subtitle download from OpenSubtitles.com API
 """
 
-import logging
-import json
-import urllib.request
-import urllib.parse
-import urllib.error
 import hashlib
+import json
+import logging
 import struct
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
-from typing import Optional, Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -147,12 +147,22 @@ class OpenSubtitlesManager:
             languages = ['en']
         
         try:
+            # Auto-login if we have credentials but no token
+            if self.username and self.password and not self.auth_token:
+                logger.info("Auto-logging in to OpenSubtitles.com...")
+                success, msg = self.login()
+                if not success:
+                    logger.warning(f"Auto-login failed: {msg}")
+            
             # Calculate file hash
             file_hash = self.calculate_file_hash(file_path)
             file_size = Path(file_path).stat().st_size
             
             if not file_hash:
+                logger.error("Failed to calculate file hash")
                 return False, []
+            
+            logger.info(f"File hash: {file_hash}, size: {file_size}")
             
             # Prepare search parameters
             params = {
@@ -162,6 +172,7 @@ class OpenSubtitlesManager:
             
             # Build URL
             url = f"{self.API_URL}/subtitles?{urllib.parse.urlencode(params)}"
+            logger.info(f"Searching OpenSubtitles.com API: {url}")
             
             # Prepare headers
             headers = {
@@ -171,15 +182,19 @@ class OpenSubtitlesManager:
             
             if self.api_key:
                 headers["Api-Key"] = self.api_key
+                logger.info("Using API key for authentication")
             
             if self.auth_token:
                 headers["Authorization"] = f"Bearer {self.auth_token}"
+                logger.info("Using Bearer token for authentication")
             
             # Make request
             request = urllib.request.Request(url, headers=headers)
             
             with urllib.request.urlopen(request, timeout=15) as response:
                 data = json.loads(response.read().decode())
+            
+            logger.info(f"OpenSubtitles.com API response received: {len(str(data))} chars")
             
             # Parse results
             results = []
@@ -199,14 +214,28 @@ class OpenSubtitlesManager:
                             "download_url": attributes.get("url"),
                             "downloads": attributes.get("download_count", 0),
                             "rating": attributes.get("ratings", 0),
-                            "uploader": attributes.get("uploader", {}).get("name", "Unknown")
+                            "uploader": attributes.get("uploader", {}).get("name", "Unknown"),
+                            "format": "srt"
                         })
             
             logger.info(f"Found {len(results)} subtitle(s) for {Path(file_path).name}")
             return True, results
         
+        except urllib.error.HTTPError as e:
+            logger.error(f"HTTP Error searching subtitles: {e.code} {e.reason}")
+            try:
+                error_body = e.read().decode()
+                logger.error(f"Error body: {error_body}")
+                
+                # Check for API key permission issues
+                if "cannot consume" in error_body.lower() or e.code == 403:
+                    logger.warning("OpenSubtitles API key may not have sufficient permissions")
+                    logger.warning("Consider upgrading your OpenSubtitles account or using free providers")
+            except:
+                pass
+            return False, []
         except Exception as e:
-            logger.error(f"Error searching subtitles: {e}")
+            logger.error(f"Error searching subtitles: {e}", exc_info=True)
             return False, []
     
     def download_subtitle(

@@ -397,7 +397,7 @@ class FFmpegCore:
             
             logger.info(f"Languages: {languages}")
             logger.info("Searching across multiple providers...")
-            logger.info(f"Providers available: OpenSubtitles.com, OpenSubtitles.org, YIFY, Podnapisi, SubDivX")
+            logger.info(f"Providers available: OpenSubtitles.com, Addic7ed, SubDL, Subf2m, YIFY, Podnapisi, SubDivX + 3 anime providers (10 total)")
             
             # Search all providers
             results = self.subtitle_providers.search_all_providers(video_path, languages)
@@ -439,6 +439,76 @@ class FFmpegCore:
                 "message": f"Search failed: {str(e)}",
                 "count": 0,
                 "subtitles": []
+            }
+    
+    def download_subtitle(
+        self,
+        file_id: str,
+        provider: str,
+        video_path: str,
+        language: str = "eng",
+        download_url: str = ""
+    ) -> Dict:
+        """
+        Download a specific subtitle by file_id and provider
+        
+        Args:
+            file_id: The subtitle's file_id from search results
+            provider: Provider name (e.g., "OpenSubtitles.com", "Addic7ed", etc.)
+            video_path: Path to the video file (used to determine output path)
+            language: Language code (default: "eng")
+            download_url: Optional direct download URL from search results
+            
+        Returns:
+            Dict with status, message, and subtitle_path
+        """
+        logger.info("=== Starting Subtitle Download ===")
+        logger.info(f"Provider: {provider}")
+        logger.info(f"File ID: {file_id}")
+        logger.info(f"Language: {language}")
+        
+        try:
+            video_file = Path(video_path)
+            if not video_file.exists():
+                return {
+                    "status": "error",
+                    "message": f"Video file not found: {video_path}"
+                }
+            
+            # Generate output path
+            output_path = str(video_file.parent / f"{video_file.stem}.{language}.srt")
+            
+            # Download subtitle using SubtitleProviders
+            success, result = self.subtitle_providers.download_subtitle(
+                file_id,
+                provider,
+                output_path,
+                download_url
+            )
+            
+            if success:
+                logger.info(f"✅ Successfully downloaded subtitle to: {result}")
+                return {
+                    "status": "success",
+                    "message": f"Downloaded subtitle from {provider}",
+                    "subtitle_path": result,
+                    "provider": provider,
+                    "language": language
+                }
+            else:
+                logger.error(f"❌ Failed to download subtitle: {result}")
+                return {
+                    "status": "error",
+                    "message": result,
+                    "provider": provider,
+                    "requires_manual_download": "manual download" in result.lower()
+                }
+        
+        except Exception as e:
+            logger.error(f"Error downloading subtitle: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "message": f"Download failed: {str(e)}"
             }
     
     def download_subtitles(self, video_path: str, languages: Optional[List[str]] = None) -> Dict:
@@ -618,6 +688,176 @@ class FFmpegCore:
             "status": "success",
             "results": results
         }
+    
+    def apply_subtitles(
+        self,
+        video_path: str,
+        subtitle_path: str,
+        output_path: Optional[str] = None,
+        mode: str = "external",
+        language: str = "eng"
+    ) -> Dict:
+        """
+        Apply subtitles to a video file in various modes
+        
+        Args:
+            video_path: Path to input video file
+            subtitle_path: Path to subtitle file (.srt, .ass, etc.)
+            output_path: Path to output file (auto-generated if None)
+            mode: One of 'burn-in', 'embed', or 'external'
+            language: 3-letter language code (default: 'eng')
+            
+        Returns:
+            Dict with status, message, and output_path
+        """
+        try:
+            video_file = Path(video_path)
+            subtitle_file = Path(subtitle_path)
+            
+            if not video_file.exists():
+                return {"status": "error", "message": f"Video file not found: {video_path}"}
+            if not subtitle_file.exists():
+                return {"status": "error", "message": f"Subtitle file not found: {subtitle_path}"}
+            
+            # Handle external mode (just copy subtitle file)
+            if mode.lower() == "external":
+                # Place subtitle file next to video with same base name
+                output_subtitle_path = video_file.with_suffix(f".{language}{subtitle_file.suffix}")
+                
+                import shutil
+                shutil.copy2(subtitle_path, output_subtitle_path)
+                
+                logger.info(f"Subtitle saved externally: {output_subtitle_path}")
+                return {
+                    "status": "success",
+                    "message": f"Subtitle saved as external file",
+                    "output_path": str(output_subtitle_path),
+                    "mode": "external"
+                }
+            
+            # Generate output path for burn-in/embed
+            if output_path is None:
+                output_dir = video_file.parent
+                base_name = video_file.stem
+                suffix = "_subtitled" if mode.lower() == "burn-in" else "_embedded"
+                output_path_obj = output_dir / f"{base_name}{suffix}{video_file.suffix}"
+            else:
+                output_path_obj = Path(output_path)
+            
+            # Handle burn-in mode (hardcode subtitles into video)
+            if mode.lower() == "burn-in":
+                logger.info(f"Burning in subtitles from {subtitle_file.name}...")
+                
+                # Escape subtitle path for FFmpeg filter
+                subtitle_path_escaped = str(subtitle_file).replace('\\', '/').replace(':', '\\:')
+                
+                cmd = [
+                    self.settings.ffmpeg_path,
+                    "-hide_banner",
+                    "-loglevel", "error",
+                    "-i", str(video_file),
+                    "-vf", f"subtitles='{subtitle_path_escaped}'",
+                    "-c:a", "copy",  # Copy audio stream (no re-encoding)
+                    "-c:v", "libx264",  # Re-encode video to burn in subtitles
+                    "-preset", "fast",
+                    "-crf", "23",
+                    str(output_path_obj)
+                ]
+                
+                logger.info(f"FFmpeg command: {' '.join(cmd)}")
+                
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=3600  # 1 hour timeout
+                )
+                
+                if result.returncode != 0:
+                    logger.error(f"FFmpeg error: {result.stderr}")
+                    return {
+                        "status": "error",
+                        "message": f"Failed to burn in subtitles: {result.stderr}",
+                        "mode": "burn-in"
+                    }
+                
+                logger.info(f"Subtitles burned in successfully: {output_path_obj}")
+                return {
+                    "status": "success",
+                    "message": f"Subtitles burned into video",
+                    "output_path": str(output_path_obj),
+                    "mode": "burn-in"
+                }
+            
+            # Handle embed mode (add subtitle track to video)
+            elif mode.lower() == "embed":
+                logger.info(f"Embedding subtitles from {subtitle_file.name}...")
+                
+                # Determine subtitle codec based on output format
+                output_format = output_path_obj.suffix.lower().lstrip('.')
+                if output_format in ['mp4', 'm4v']:
+                    subtitle_codec = "mov_text"
+                elif output_format in ['mkv', 'webm']:
+                    subtitle_codec = "srt" if subtitle_file.suffix.lower() == '.srt' else "ass"
+                else:
+                    subtitle_codec = "srt"
+                
+                cmd = [
+                    self.settings.ffmpeg_path,
+                    "-hide_banner",
+                    "-loglevel", "error",
+                    "-i", str(video_file),
+                    "-i", str(subtitle_file),
+                    "-c:v", "copy",  # Copy video stream (no re-encoding)
+                    "-c:a", "copy",  # Copy audio stream (no re-encoding)
+                    "-c:s", subtitle_codec,  # Subtitle codec
+                    "-metadata:s:s:0", f"language={language}",  # Set language
+                    "-disposition:s:0", "default",  # Mark as default subtitle
+                    str(output_path_obj)
+                ]
+                
+                logger.info(f"FFmpeg command: {' '.join(cmd)}")
+                
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=600  # 10 minute timeout (fast, no re-encoding)
+                )
+                
+                if result.returncode != 0:
+                    logger.error(f"FFmpeg error: {result.stderr}")
+                    return {
+                        "status": "error",
+                        "message": f"Failed to embed subtitles: {result.stderr}",
+                        "mode": "embed"
+                    }
+                
+                logger.info(f"Subtitles embedded successfully: {output_path_obj}")
+                return {
+                    "status": "success",
+                    "message": f"Subtitles embedded in video",
+                    "output_path": str(output_path_obj),
+                    "mode": "embed"
+                }
+            
+            else:
+                return {
+                    "status": "error",
+                    "message": f"Invalid mode: {mode}. Must be 'burn-in', 'embed', or 'external'"
+                }
+                
+        except subprocess.TimeoutExpired:
+            return {
+                "status": "error",
+                "message": "Subtitle processing timed out"
+            }
+        except Exception as e:
+            logger.error(f"Error applying subtitles: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "message": f"Failed to apply subtitles: {str(e)}"
+            }
     
     def scan_directory(self, directory: str, recursive: bool = True, 
                       file_extensions: Optional[List[str]] = None) -> Dict:

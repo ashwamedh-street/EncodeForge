@@ -151,16 +151,39 @@
                         
                         <VBox spacing="4" styleClass="settings-group">
                             <Label text="Languages (Select Multiple)" styleClass="group-label"/>
-                            <HBox spacing="10" alignment="CENTER_LEFT">
-                                <CheckBox fx:id="langEnglishCheck" text="English" selected="true"/>
-                                <CheckBox fx:id="langSpanishCheck" text="Spanish"/>
-                                <CheckBox fx:id="langFrenchCheck" text="French"/>
-                                <CheckBox fx:id="langGermanCheck" text="German"/>
-                                <CheckBox fx:id="langJapaneseCheck" text="Japanese"/>
-                                <CheckBox fx:id="langChineseCheck" text="Chinese"/>
-                                <CheckBox fx:id="langKoreanCheck" text="Korean"/>
-                                <CheckBox fx:id="langArabicCheck" text="Arabic"/>
-                            </HBox>
+                            <VBox spacing="6">
+                                <!-- Row 1: Major European Languages -->
+                                <HBox spacing="10" alignment="CENTER_LEFT">
+                                    <CheckBox fx:id="langEnglishCheck" text="🇬🇧 English" selected="true"/>
+                                    <CheckBox fx:id="langSpanishCheck" text="🇪🇸 Spanish (EU)"/>
+                                    <CheckBox fx:id="langSpanishLACheck" text="🇲🇽 Spanish (LA)"/>
+                                    <CheckBox fx:id="langFrenchCheck" text="🇫🇷 French"/>
+                                    <CheckBox fx:id="langGermanCheck" text="🇩🇪 German"/>
+                                    <CheckBox fx:id="langItalianCheck" text="🇮🇹 Italian"/>
+                                    <CheckBox fx:id="langPortugueseCheck" text="🇵🇹 Portuguese (EU)"/>
+                                    <CheckBox fx:id="langPortugueseBRCheck" text="🇧🇷 Portuguese (BR)"/>
+                                </HBox>
+                                <!-- Row 2: Asian Languages -->
+                                <HBox spacing="10" alignment="CENTER_LEFT">
+                                    <CheckBox fx:id="langJapaneseCheck" text="🇯🇵 Japanese"/>
+                                    <CheckBox fx:id="langChineseCheck" text="🇨🇳 Chinese (Simp)"/>
+                                    <CheckBox fx:id="langChineseTWCheck" text="🇹🇼 Chinese (Trad)"/>
+                                    <CheckBox fx:id="langKoreanCheck" text="🇰🇷 Korean"/>
+                                    <CheckBox fx:id="langHindiCheck" text="🇮🇳 Hindi"/>
+                                    <CheckBox fx:id="langThaiCheck" text="🇹🇭 Thai"/>
+                                    <CheckBox fx:id="langVietnameseCheck" text="🇻🇳 Vietnamese"/>
+                                </HBox>
+                                <!-- Row 3: Other Major Languages -->
+                                <HBox spacing="10" alignment="CENTER_LEFT">
+                                    <CheckBox fx:id="langRussianCheck" text="🇷🇺 Russian"/>
+                                    <CheckBox fx:id="langArabicCheck" text="🇸🇦 Arabic"/>
+                                    <CheckBox fx:id="langTurkishCheck" text="🇹🇷 Turkish"/>
+                                    <CheckBox fx:id="langPolishCheck" text="🇵🇱 Polish"/>
+                                    <CheckBox fx:id="langDutchCheck" text="🇳🇱 Dutch"/>
+                                    <CheckBox fx:id="langSwedishCheck" text="🇸🇪 Swedish"/>
+                                    <CheckBox fx:id="langNorwegianCheck" text="🇳🇴 Norwegian"/>
+                                </HBox>
+                            </VBox>
                         </VBox>
                         
                         <Region HBox.hgrow="ALWAYS"/>
