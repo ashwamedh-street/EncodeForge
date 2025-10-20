@@ -1,16 +1,14 @@
 package com.encodeforge.controller.components;
 
+import javafx.fxml.FXML;
+import javafx.scene.layout.VBox;
+import java.io.File;
+import java.util.List;
+import java.util.Set;
+
+
 /**
  * ModeController - Handle mode switching (Encoder, Subtitle, Renamer)
- * 
- * Source Lines from MainController:
- * - Lines 218: currentMode field
- * - Lines 107-112: Mode button FXML fields
- * - Lines 124-132: Mode layout FXML fields
- * - Lines 380-424: Mode handlers (handleEncoderMode, handleSubtitleMode, handleRenamerMode)
- * - Lines 416-468: Mode UI switching (updateModeButtonSelection, showModeLayout, showModePanel)
- * 
- * Estimated size: ~300 lines
  */
 public class ModeController implements ISubController {
     
@@ -32,12 +30,148 @@ public class ModeController implements ISubController {
         // TODO: Implement cleanup
     }
     
-    // TODO: Copy methods from MainController:
-    // - handleEncoderMode() [lines 380-388]
-    // - handleSubtitleMode() [lines 390-399]
-    // - handleRenamerMode() [lines 401-414]
-    // - updateModeButtonSelection() [lines 416-424]
-    // - showModeLayout() [lines 426-446]
-    // - showModePanel() [lines 448-468]
+
+    // ========== handleEncoderMode() ==========
+
+    @FXML
+    private void handleEncoderMode() {
+        currentMode = "encoder";
+        showModePanel(encoderQuickSettings);
+        showModeLayout(encoderModeLayout);
+        updateModeButtonSelection(encoderModeButton);
+        updateSelectedFilesLabel();
+        log("Switched to encoder mode");
+    }
+
+
+    // ========== handleSubtitleMode() ==========
+
+    @FXML
+    private void handleSubtitleMode() {
+        currentMode = "subtitle";
+        showModePanel(subtitleQuickSettings);
+        showModeLayout(subtitleModeLayout);
+        updateModeButtonSelection(subtitleModeButton);
+        updateSubtitleFileList();
+        updateSelectedFilesLabel();
+        log("Switched to subtitle mode");
+    }
+
+
+    // ========== handleRenamerMode() ==========
+
+    @FXML
+    private void handleRenamerMode() {
+        currentMode = "renamer";
+        showModePanel(renamerQuickSettings);
+        showModeLayout(renamerModeLayout);
+        updateModeButtonSelection(renamerModeButton);
+        
+        // Immediately load files and show original names
+        if (!queuedFiles.isEmpty()) {
+            updateRenamePreview();
+        }
+        updateSelectedFilesLabel();
+        log("Switched to renamer mode");
+    }
+
+
+    // ========== updateModeButtonSelection() ==========
+
+    private void updateModeButtonSelection(Button selectedButton) {
+        // Remove selected style from all mode buttons
+        encoderModeButton.getStyleClass().removeAll("selected");
+        subtitleModeButton.getStyleClass().removeAll("selected");
+        renamerModeButton.getStyleClass().removeAll("selected");
+        
+        // Add selected style to the chosen button
+        selectedButton.getStyleClass().add("selected");
+    }
+
+
+    // ========== showModeLayout() ==========
+
+    private void showModeLayout(javafx.scene.control.SplitPane layout) {
+        // Hide all layouts
+        if (encoderModeLayout != null) {
+            encoderModeLayout.setVisible(false);
+            encoderModeLayout.setManaged(false);
+        }
+        if (subtitleModeLayout != null) {
+            subtitleModeLayout.setVisible(false);
+            subtitleModeLayout.setManaged(false);
+        }
+        if (renamerModeLayout != null) {
+            renamerModeLayout.setVisible(false);
+            renamerModeLayout.setManaged(false);
+        }
+        
+        // Show selected layout
+        if (layout != null) {
+            layout.setVisible(true);
+            layout.setManaged(true);
+        }
+    }
+
+
+    // ========== showModePanel() ==========
+
+    private void showModePanel(javafx.scene.layout.Region panel) {
+        // Hide all panels
+        if (encoderQuickSettings != null) {
+            encoderQuickSettings.setVisible(false);
+            encoderQuickSettings.setManaged(false);
+        }
+        if (subtitleQuickSettings != null) {
+            subtitleQuickSettings.setVisible(false);
+            subtitleQuickSettings.setManaged(false);
+        }
+        if (renamerQuickSettings != null) {
+            renamerQuickSettings.setVisible(false);
+            renamerQuickSettings.setManaged(false);
+        }
+        
+        // Show the selected panel
+        if (panel != null) {
+            panel.setVisible(true);
+            panel.setManaged(true);
+        }
+    }
+
+    // ========== currentMode field ==========
+
+    private String currentMode = "encoder";
+
+
+    // ========== Mode button FXML fields ==========
+
+    @FXML private Button encoderModeButton;
+    @FXML private Button subtitleModeButton;
+    @FXML private Button renamerModeButton;
+    @FXML private Button addFilesButton;
+    @FXML private Button addFolderButton;
+    @FXML private Button settingsButton;
+
+
+    // ========== Mode layout FXML fields ==========
+
+    @FXML private javafx.scene.layout.VBox encoderQuickSettings;
+    @FXML private javafx.scene.layout.VBox subtitleQuickSettings;
+    @FXML private javafx.scene.layout.VBox renamerQuickSettings;
+    
+    // Mode Layouts
+    @FXML private javafx.scene.control.SplitPane encoderModeLayout;
+    @FXML private javafx.scene.control.SplitPane subtitleModeLayout;
+    @FXML private javafx.scene.control.SplitPane renamerModeLayout;
+    
+
+
+    // ========== Quick settings VBox fields ==========
+
+    // Mode-Specific Quick Settings
+    @FXML private javafx.scene.layout.VBox encoderQuickSettings;
+    @FXML private javafx.scene.layout.VBox subtitleQuickSettings;
+    @FXML private javafx.scene.layout.VBox renamerQuickSettings;
+
 }
 

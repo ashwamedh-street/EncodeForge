@@ -1,3 +1,5 @@
+@Deprecated // This file is deprecated and will be removed in a future version
+
 package com.encodeforge.controller;
 
 import com.encodeforge.model.ConversionJob;
@@ -44,8 +46,8 @@ import java.util.concurrent.TimeoutException;
 /**
  * Main window controller for the modernized UI
  */
-public class MainController {
-    private static final Logger logger = LoggerFactory.getLogger(MainController.class);
+public class LegacyMainController {
+    private static final Logger logger = LoggerFactory.getLogger(LegacyMainController.class);
     
     private final PythonBridge pythonBridge;
     // Separate queues for different states
