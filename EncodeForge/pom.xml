@@ -1,0 +1,281 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.encodeforge</groupId>
+    <artifactId>encodeforge</artifactId>
+    <version>1.0.0</version>
+    <packaging>jar</packaging>
+
+    <name>Encode Forge</name>
+    <description>Beautiful cross-platform media encoding, subtitle management, and file renaming tool</description>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <javafx.version>21.0.1</javafx.version>
+        <mainClass>com.encodeforge.MainApp</mainClass>
+    </properties>
+
+    <dependencies>
+        <!-- JavaFX -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-fxml</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-web</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+
+        <!-- JSON processing -->
+        <dependency>
+            <groupId>com.google.code.gson</groupId>
+            <artifactId>gson</artifactId>
+            <version>2.10.1</version>
+        </dependency>
+
+        <!-- Logging -->
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>2.0.9</version>
+        </dependency>
+        <dependency>
+            <groupId>ch.qos.logback</groupId>
+            <artifactId>logback-classic</artifactId>
+            <version>1.4.11</version>
+        </dependency>
+
+        <!-- Apache Commons for utilities -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+            <version>3.14.0</version>
+        </dependency>
+
+        <!-- ControlsFX for better UI components -->
+        <dependency>
+            <groupId>org.controlsfx</groupId>
+            <artifactId>controlsfx</artifactId>
+            <version>11.2.1</version>
+        </dependency>
+
+        <!-- Ikonli for scalable icons -->
+        <dependency>
+            <groupId>org.kordamp.ikonli</groupId>
+            <artifactId>ikonli-javafx</artifactId>
+            <version>12.3.1</version>
+        </dependency>
+        <dependency>
+            <groupId>org.kordamp.ikonli</groupId>
+            <artifactId>ikonli-fontawesome5-pack</artifactId>
+            <version>12.3.1</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <includes>
+                    <include>**/*</include>
+                </includes>
+            </resource>
+            <!-- Include Python runtime bundle -->
+            <resource>
+                <directory>target/python-runtime</directory>
+                <includes>
+                    <include>**/*</include>
+                </includes>
+                <targetPath>python-runtime</targetPath>
+            </resource>
+        </resources>
+
+        <plugins>
+            <!-- Maven Compiler Plugin -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.11.0</version>
+                <configuration>
+                    <source>17</source>
+                    <target>17</target>
+                </configuration>
+            </plugin>
+
+            <!-- JavaFX Maven Plugin -->
+            <plugin>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-maven-plugin</artifactId>
+                <version>0.0.8</version>
+                <configuration>
+                    <mainClass>${mainClass}</mainClass>
+                </configuration>
+            </plugin>
+
+            <!-- Maven Shade Plugin - Creates fat JAR with all dependencies -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-shade-plugin</artifactId>
+                <version>3.5.1</version>
+                <executions>
+                    <execution>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>shade</goal>
+                        </goals>
+                        <configuration>
+                            <transformers>
+                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                                    <mainClass>${mainClass}</mainClass>
+                                </transformer>
+                            </transformers>
+                            <filters>
+                                <filter>
+                                    <artifact>*:*</artifact>
+                                    <excludes>
+                                        <exclude>META-INF/*.SF</exclude>
+                                        <exclude>META-INF/*.DSA</exclude>
+                                        <exclude>META-INF/*.RSA</exclude>
+                                    </excludes>
+                                </filter>
+                            </filters>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Exec Maven Plugin - Run Python bundle creation -->
+            <!-- Note: Python bundle should be created by build script before Maven runs -->
+            <!--
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>build-python-bundle</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>${project.basedir}/build-python-bundle.bat</executable>
+                            <workingDirectory>${project.basedir}</workingDirectory>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            -->
+
+            <!-- JPackage Plugin - Creates native installers -->
+            <plugin>
+                <groupId>org.panteleyev</groupId>
+                <artifactId>jpackage-maven-plugin</artifactId>
+                <version>1.6.0</version>
+                <executions>
+                    <!-- Windows Executable -->
+                    <execution>
+                        <id>jpackage-windows</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>jpackage</goal>
+                        </goals>
+                        <configuration>
+                            <name>EncodeForge</name>
+                            <appVersion>${project.version}</appVersion>
+                            <vendor>Encode Forge</vendor>
+                            <destination>target/dist/windows</destination>
+                            <input>target</input>
+                            <mainJar>encodeforge-${project.version}.jar</mainJar>
+                            <mainClass>com.encodeforge.MainApp</mainClass>
+                            <type>EXE</type>
+                            <icon>src/main/resources/icons/app-icon.png</icon>
+                            <javaOptions>
+                                <option>-Dfile.encoding=UTF-8</option>
+                                <option>-Xmx2g</option>
+                            </javaOptions>
+                            
+                            <!-- Windows specific -->
+                            <winDirChooser>true</winDirChooser>
+                            <winMenu>true</winMenu>
+                            <winShortcut>true</winShortcut>
+                            <winMenuGroup>Encode Forge</winMenuGroup>
+                            <winUpgradeUuid>12345678-1234-1234-1234-123456789012</winUpgradeUuid>
+                        </configuration>
+                    </execution>
+                    
+                    <!-- Linux AppImage -->
+                    <execution>
+                        <id>jpackage-linux</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>jpackage</goal>
+                        </goals>
+                        <configuration>
+                            <name>EncodeForge</name>
+                            <appVersion>${project.version}</appVersion>
+                            <vendor>Encode Forge</vendor>
+                            <destination>target/dist/linux</destination>
+                            <input>target</input>
+                            <mainJar>encodeforge-${project.version}.jar</mainJar>
+                            <mainClass>com.encodeforge.MainApp</mainClass>
+                            <type>APP_IMAGE</type>
+                            <icon>src/main/resources/icons/app-icon.png</icon>
+                            <javaOptions>
+                                <option>-Dfile.encoding=UTF-8</option>
+                                <option>-Xmx2g</option>
+                            </javaOptions>
+                            
+                            <!-- Linux specific -->
+                            <linuxShortcut>true</linuxShortcut>
+                            <linuxMenuGroup>AudioVideo</linuxMenuGroup>
+                            <linuxPackageName>encodeforge</linuxPackageName>
+                        </configuration>
+                    </execution>
+                    
+                    <!-- macOS App -->
+                    <execution>
+                        <id>jpackage-mac</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>jpackage</goal>
+                        </goals>
+                        <configuration>
+                            <name>Encode Forge</name>
+                            <appVersion>${project.version}</appVersion>
+                            <vendor>Encode Forge</vendor>
+                            <destination>target/dist/mac</destination>
+                            <input>target</input>
+                            <mainJar>encodeforge-${project.version}.jar</mainJar>
+                            <mainClass>com.encodeforge.MainApp</mainClass>
+                            <type>DMG</type>
+                            <icon>src/main/resources/icons/app-icon.png</icon>
+                            <javaOptions>
+                                <option>-Dfile.encoding=UTF-8</option>
+                                <option>-Xmx2g</option>
+                            </javaOptions>
+                            
+                            <!-- Mac specific -->
+                            <macPackageIdentifier>com.encodeforge.app</macPackageIdentifier>
+                            <macPackageName>Encode Forge</macPackageName>
+                            <macSign>false</macSign>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
+
