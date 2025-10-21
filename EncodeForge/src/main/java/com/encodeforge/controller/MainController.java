@@ -2411,21 +2411,65 @@ public class MainController {
             settings.setVideoCodec(selectedCodec);
             
             // Update hardware acceleration flags based on codec selection
-            if (selectedCodec.contains("NVENC")) {
+            if (selectedCodec.equals("Auto (Best Available)")) {
+                // Auto mode - detect and enable best available hardware encoder
+                List<String> availableEncoders = HardwareDetector.getAvailableEncoderList();
+                settings.setHardwareDecoding(true);
+                
+                // Reset all hardware flags first
+                settings.setUseNvenc(false);
+                settings.setUseAmf(false);
+                settings.setUseQsv(false);
+                settings.setUseVideotoolbox(false);
+                
+                // Enable the best available hardware encoder in order of preference
+                if (availableEncoders.stream().anyMatch(e -> e.contains("NVENC"))) {
+                    settings.setUseNvenc(true);
+                    logger.info("Auto mode: Enabled NVENC hardware encoding");
+                } else if (availableEncoders.stream().anyMatch(e -> e.contains("AMF"))) {
+                    settings.setUseAmf(true);
+                    logger.info("Auto mode: Enabled AMF hardware encoding");
+                } else if (availableEncoders.stream().anyMatch(e -> e.contains("QSV"))) {
+                    settings.setUseQsv(true);
+                    logger.info("Auto mode: Enabled QSV hardware encoding");
+                } else if (availableEncoders.stream().anyMatch(e -> e.contains("VideoToolbox"))) {
+                    settings.setUseVideotoolbox(true);
+                    logger.info("Auto mode: Enabled VideoToolbox hardware encoding");
+                } else {
+                    // No hardware encoders available, fall back to software
+                    settings.setHardwareDecoding(false);
+                    logger.info("Auto mode: No hardware encoders available, using software encoding");
+                }
+            } else if (selectedCodec.contains("NVENC")) {
                 settings.setUseNvenc(true);
+                settings.setUseAmf(false);
+                settings.setUseQsv(false);
+                settings.setUseVideotoolbox(false);
                 settings.setHardwareDecoding(true);
             } else if (selectedCodec.contains("AMF")) {
                 settings.setUseNvenc(false);
+                settings.setUseAmf(true);
+                settings.setUseQsv(false);
+                settings.setUseVideotoolbox(false);
                 settings.setHardwareDecoding(true);
             } else if (selectedCodec.contains("QSV")) {
                 settings.setUseNvenc(false);
+                settings.setUseAmf(false);
+                settings.setUseQsv(true);
+                settings.setUseVideotoolbox(false);
                 settings.setHardwareDecoding(true);
             } else if (selectedCodec.contains("VideoToolbox")) {
                 settings.setUseNvenc(false);
+                settings.setUseAmf(false);
+                settings.setUseQsv(false);
+                settings.setUseVideotoolbox(true);
                 settings.setHardwareDecoding(true);
             } else {
                 // Software encoding
                 settings.setUseNvenc(false);
+                settings.setUseAmf(false);
+                settings.setUseQsv(false);
+                settings.setUseVideotoolbox(false);
                 settings.setHardwareDecoding(false);
             }
         }

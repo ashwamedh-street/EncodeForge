@@ -42,6 +42,9 @@ public class ConversionSettings {
     private String qualityPreset = "Medium";
     private int crfValue = 23;
     private boolean useNvenc = true;
+    private boolean useAmf = false;
+    private boolean useQsv = false;
+    private boolean useVideotoolbox = false;
     private String nvencPreset = "p4";
     private int nvencCq = 23;
     
@@ -402,6 +405,9 @@ public class ConversionSettings {
         json.addProperty("video_codec", videoCodec);
         json.addProperty("hardware_decoding", hardwareDecoding);
         json.addProperty("use_nvenc", useNvenc);
+        json.addProperty("use_amf", useAmf);
+        json.addProperty("use_qsv", useQsv);
+        json.addProperty("use_videotoolbox", useVideotoolbox);
         json.addProperty("nvenc_preset", nvencPreset);
         json.addProperty("nvenc_cq", nvencCq);
         json.addProperty("quality_preset", qualityPreset.toLowerCase());
@@ -461,4 +467,14 @@ public class ConversionSettings {
         
         return json;
     }
+    
+    // Getters and Setters for new hardware encoder flags
+    public boolean isUseAmf() { return useAmf; }
+    public void setUseAmf(boolean useAmf) { this.useAmf = useAmf; }
+    
+    public boolean isUseQsv() { return useQsv; }
+    public void setUseQsv(boolean useQsv) { this.useQsv = useQsv; }
+    
+    public boolean isUseVideotoolbox() { return useVideotoolbox; }
+    public void setUseVideotoolbox(boolean useVideotoolbox) { this.useVideotoolbox = useVideotoolbox; }
 }

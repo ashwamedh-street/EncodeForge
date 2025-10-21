@@ -146,7 +146,6 @@ Encode Forge is actively being developed. Current work includes:
 - **Preview Window** - Visual Preview of applied subtitles
 - **Audio Normalization** - Implement loudness normalization
 - **Audio Syncing** - Fix Audio/Subtitle syncing intelligently
-- **Update System** - Checks for updates and automatically updates Encode Forge
 
 ## System Requirements
 

@@ -513,6 +513,7 @@ public class PythonBridge {
         return isRunning && pythonProcess != null && pythonProcess.isAlive();
     }
     
+    
     /**
      * Extract FFmpeg runtime and update settings to use embedded FFmpeg if available
      */
