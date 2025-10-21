@@ -116,15 +116,16 @@ class SubtitleHandler:
                             "download_url": result.get("download_url", ""),
                             "file_id": result.get("file_id", ""),
                             "score": result.get("score", 0),
-                            "filename": result.get("file_name", "")
+                            "filename": result.get("file_name", ""),
+                            "manual_download_only": result.get("manual_download_only", False)
                         })
                     
-                    # Send progress update
+                    # Send progress update - ALWAYS include subtitles array (even when complete!)
                     progress_callback({
                         "progress": True,
                         "provider": provider_name,
-                        "complete": is_complete,
-                        "subtitles": formatted if not is_complete else [],
+                        "provider_complete": is_complete,  # This provider is done (stream continues)
+                        "subtitles": formatted,  # Always send the results!
                         "status": "success" if is_complete else "searching"
                     })
             

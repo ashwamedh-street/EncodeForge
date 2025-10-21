@@ -29,6 +29,7 @@ public class PythonBridge {
     private ExecutorService ioExecutorService; // Separate executor for I/O operations
     private boolean isRunning = false;
     private final Object ioLock = new Object();
+    private final Object streamingLock = new Object(); // Serialize streaming commands
     
     public PythonBridge() {
         // Main executor for CPU-bound tasks
@@ -142,7 +143,8 @@ public class PythonBridge {
     
     /**
      * Send a command with streaming response (for progress updates)
-     * Uses I/O executor for non-blocking stream reading
+     * IMPORTANT: Python stdin/stdout is single-threaded, so streaming commands are serialized
+     * to prevent response mixing. Multiple files will be searched sequentially.
      */
     public void sendStreamingCommand(JsonObject command, Consumer<JsonObject> progressCallback) throws IOException {
         if (!isRunning) {
@@ -150,20 +152,22 @@ public class PythonBridge {
         }
         
         ioExecutorService.submit(() -> {
-            try {
-                // Write command (hold lock only for write)
-                synchronized (ioLock) {
-                    String commandJson = gson.toJson(command);
-                    logger.debug("Sending streaming command: {}", commandJson);
-                    writer.write(commandJson);
-                    writer.newLine();
-                    writer.flush();
-                }
+            // Serialize entire streaming command to prevent response mixing
+            synchronized (streamingLock) {
+                try {
+                    // Write command
+                    synchronized (ioLock) {
+                        String commandJson = gson.toJson(command);
+                        logger.debug("Sending streaming command: {}", commandJson);
+                        writer.write(commandJson);
+                        writer.newLine();
+                        writer.flush();
+                    }
 
-                // Read streaming responses (without holding lock)
-                String line;
-                boolean receivedFinalResponse = false;
-                while ((line = reader.readLine()) != null && !receivedFinalResponse) {
+                    // Read streaming responses
+                    String line;
+                    boolean receivedFinalResponse = false;
+                    while ((line = reader.readLine()) != null && !receivedFinalResponse) {
                     logger.trace("Streaming line: {}", line);
                     JsonObject response = gson.fromJson(line, JsonObject.class);
                     
@@ -189,18 +193,19 @@ public class PythonBridge {
                     }
                 }
                 
-                if (!receivedFinalResponse) {
-                    logger.warn("Stream ended without receiving final response");
+                    if (!receivedFinalResponse) {
+                        logger.warn("Stream ended without receiving final response");
+                    }
+                } catch (IOException e) {
+                    logger.error("Error in streaming command", e);
+                    // Send error to callback
+                    JsonObject errorResponse = new JsonObject();
+                    errorResponse.addProperty("status", "error");
+                    errorResponse.addProperty("message", "Streaming error: " + e.getMessage());
+                    errorResponse.addProperty("complete", true);
+                    progressCallback.accept(errorResponse);
                 }
-            } catch (IOException e) {
-                logger.error("Error in streaming command", e);
-                // Send error to callback
-                JsonObject errorResponse = new JsonObject();
-                errorResponse.addProperty("status", "error");
-                errorResponse.addProperty("message", "Streaming error: " + e.getMessage());
-                errorResponse.addProperty("complete", true);
-                progressCallback.accept(errorResponse);
-            }
+            } // End streamingLock - ensures one streaming command at a time
         });
     }
 
@@ -220,8 +225,27 @@ public class PythonBridge {
     }
     
     /**
+     * Get all provider/service status information in a single consolidated call.
+     * This replaces the need for individual check methods and reduces overhead.
+     * 
+     * Returns status for:
+     * - FFmpeg availability and version
+     * - Whisper availability and version
+     * - OpenSubtitles configuration and login status
+     * - Metadata providers (TMDB, TVDB, OMDB, Trakt, Fanart, AniList, Kitsu, Jikan, TVmaze)
+     * - Subtitle providers count
+     */
+    public JsonObject getAllStatus() throws IOException, TimeoutException {
+        JsonObject command = new JsonObject();
+        command.addProperty("action", "get_all_status");
+        return sendCommand(command);
+    }
+    
+    /**
+     * @deprecated Use getAllStatus() instead for better performance
      * Check if FFmpeg is available
      */
+    @Deprecated
     public JsonObject checkFFmpeg() throws IOException, TimeoutException {
         JsonObject command = new JsonObject();
         command.addProperty("action", "check_ffmpeg");
@@ -229,8 +253,10 @@ public class PythonBridge {
     }
     
     /**
+     * @deprecated Use getAllStatus() instead for better performance
      * Check Whisper availability
      */
+    @Deprecated
     public JsonObject checkWhisper() throws IOException, TimeoutException {
         JsonObject command = new JsonObject();
         command.addProperty("action", "check_whisper");
@@ -238,8 +264,10 @@ public class PythonBridge {
     }
     
     /**
+     * @deprecated Use getAllStatus() instead for better performance
      * Check OpenSubtitles status
      */
+    @Deprecated
     public JsonObject checkOpenSubtitles() throws IOException, TimeoutException {
         JsonObject command = new JsonObject();
         command.addProperty("action", "check_opensubtitles");
@@ -247,8 +275,10 @@ public class PythonBridge {
     }
     
     /**
+     * @deprecated Use getAllStatus() instead for better performance
      * Check TMDB status
      */
+    @Deprecated
     public JsonObject checkTMDB() throws IOException, TimeoutException {
         JsonObject command = new JsonObject();
         command.addProperty("action", "check_tmdb");
@@ -256,8 +286,10 @@ public class PythonBridge {
     }
     
     /**
+     * @deprecated Use getAllStatus() instead for better performance
      * Check TVDB status
      */
+    @Deprecated
     public JsonObject checkTVDB() throws IOException, TimeoutException {
         JsonObject command = new JsonObject();
         command.addProperty("action", "check_tvdb");

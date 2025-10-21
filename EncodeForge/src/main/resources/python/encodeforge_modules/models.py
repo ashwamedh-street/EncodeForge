@@ -46,6 +46,9 @@ class ConversionSettings:
     renaming_pattern_movie: str = "{title} ({year})"
     tmdb_api_key: str = ""
     tvdb_api_key: str = ""
+    omdb_api_key: str = ""
+    trakt_api_key: str = ""
+    fanart_api_key: str = ""
     anidb_api_key: str = ""
     
     # Audio options

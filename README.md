@@ -100,7 +100,7 @@ python ffmpeg_cli.py renamer /path/to/videos --tmdb-api-key YOUR_KEY --preview-o
 
 **Subtitle Providers**
 
-*Free Providers - No API Key Required:*
+*Free Providers - WIP*
 - ✅ **Addic7ed** - Movies, TV shows, and anime subtitles
 - ✅ **SubDL** - Movie & TV subtitles
 - ✅ **Subf2m** - Movie & TV subtitles
@@ -110,13 +110,13 @@ python ffmpeg_cli.py renamer /path/to/videos --tmdb-api-key YOUR_KEY --preview-o
 - ✅ **Kitsunekko** - Anime subtitles (English & Japanese)
 - ✅ **Jimaku** - Anime subtitles (multiple languages)
 
-*API Key Providers - Free Keys Available:*
+*Account Providers*
 
 | Service | Purpose | Limits | Get it here |
 |---------|---------|--------|-------------|
 | OpenSubtitles | Subtitle downloads | 5/day free, 200/day VIP | [opensubtitles.com/consumers](https://www.opensubtitles.com/en/consumers) |
 
-> **Note**: Search works without any API key for OpenSubtitles. API key only needed for downloading subtitles.
+> **Note**: Search works without login unlimited, downloads limited to 5 free per day without account, 20 per day with account, and 200 per day with VIP.
 
 ### Hardware Acceleration
 Encode Forge automatically detects and uses available hardware acceleration:

@@ -199,6 +199,8 @@ class SubtitleProviders:
         
         # OpenSubtitles.com
         logger.info("→ Searching OpenSubtitles.com (with API key)...")
+        if progress_callback:
+            progress_callback("OpenSubtitles.com", [], False)  # Notify start of search
         if self.opensubtitles:
             try:
                 success, results = self.opensubtitles.search_subtitles(video_path, lang_codes)
@@ -208,7 +210,7 @@ class SubtitleProviders:
                         result["provider"] = "OpenSubtitles.com"
                         all_results.append(result)
                     logger.info(f"  ✅ OpenSubtitles.com: Found {len(results)} subtitles")
-                    # Send incremental update
+                    # Send incremental update with results
                     if progress_callback:
                         progress_callback("OpenSubtitles.com", self._rank_subtitles(all_results.copy()), False)
                 else:
@@ -224,6 +226,8 @@ class SubtitleProviders:
         
         # Addic7ed (great for TV shows but works for everything)
         logger.info("→ Searching Addic7ed...")
+        if progress_callback:
+            progress_callback("Addic7ed", all_results.copy(), False)  # Notify start
         try:
             addic7ed_results = self.search_addic7ed(video_path, lang_codes)
             logger.info(f"  Addic7ed returned {len(addic7ed_results)} results")
@@ -237,6 +241,8 @@ class SubtitleProviders:
         
         # SubDL (Movies and TV)
         logger.info("→ Searching SubDL...")
+        if progress_callback:
+            progress_callback("SubDL", all_results.copy(), False)  # Notify start
         try:
             subdl_results = self.search_subdl(video_path, lang_codes)
             logger.info(f"  SubDL returned {len(subdl_results)} results")
@@ -252,6 +258,8 @@ class SubtitleProviders:
         
         # Subf2m (Movies and TV)
         logger.info("→ Searching Subf2m...")
+        if progress_callback:
+            progress_callback("Subf2m", all_results.copy(), False)  # Notify start
         try:
             subf2m_results = self.search_subf2m(video_path, lang_codes)
             logger.info(f"  Subf2m returned {len(subf2m_results)} results")
@@ -267,6 +275,8 @@ class SubtitleProviders:
         
         # YIFY Subtitles (best for movies)
         logger.info("→ Searching YIFY Subtitles...")
+        if progress_callback:
+            progress_callback("YIFY", all_results.copy(), False)  # Notify start
         try:
             yify_results = self.search_yifysubtitles(video_path, lang_codes)
             logger.info(f"  YIFY returned {len(yify_results)} results")
@@ -280,6 +290,8 @@ class SubtitleProviders:
         
         # Podnapisi (web scraping)
         logger.info("→ Searching Podnapisi...")
+        if progress_callback:
+            progress_callback("Podnapisi", all_results.copy(), False)  # Notify start
         try:
             podnapisi_results = self.search_podnapisi(video_path, lang_codes)
             logger.info(f"  Podnapisi returned {len(podnapisi_results)} results")
@@ -296,6 +308,8 @@ class SubtitleProviders:
         # SubDivX (great for Spanish content)
         if "spa" in lang_codes or "es" in lang_codes or "es-MX" in lang_codes:
             logger.info("→ Searching SubDivX (Spanish)...")
+            if progress_callback:
+                progress_callback("SubDivX", all_results.copy(), False)  # Notify start
             try:
                 subdivx_results = self.search_subdivx(video_path, lang_codes)
                 logger.info(f"  SubDivX returned {len(subdivx_results)} results")
@@ -311,6 +325,8 @@ class SubtitleProviders:
         
         # Jimaku (Good for anime and Asian content)
         logger.info("→ Searching Jimaku...")
+        if progress_callback:
+            progress_callback("Jimaku", all_results.copy(), False)  # Notify start
         try:
             jimaku_results = self.search_jimaku(video_path, lang_codes)
             logger.info(f"  Jimaku returned {len(jimaku_results)} results")

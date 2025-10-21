@@ -1965,3 +1965,114 @@ FlowPane {
 .pattern-editor-area .scroll-pane .content {
     -fx-background-color: #2d2d30;
 }
+
+/* ========================================
+   PROGRESS BAR & LOG TOGGLE STYLES
+   ======================================== */
+
+/* Total Progress Bar */
+.progress-section {
+    -fx-padding: 10 0 10 0;
+}
+
+.total-progress-bar {
+    -fx-background-color: #1e1e1e;
+    -fx-background-radius: 4;
+}
+
+.total-progress-bar > .bar {
+    -fx-background-color: linear-gradient(to right, #0078d4 0%, #00a8ff 100%);
+    -fx-background-radius: 4;
+    -fx-background-insets: 0;
+    -fx-padding: 4;
+}
+
+.total-progress-bar > .track {
+    -fx-background-color: #2d2d30;
+    -fx-background-radius: 4;
+    -fx-background-insets: 0;
+}
+
+/* Right Panel Container */
+.right-panel-container {
+    -fx-background-color: transparent;
+}
+
+/* Panel Wrappers (contain toggle button + collapsible content) */
+.encoder-panel-wrapper,
+.subtitle-panel-wrapper,
+.renamer-panel-wrapper {
+    -fx-background-color: transparent;
+}
+
+/* Subtitle Main Content (BorderPane layout) */
+.subtitle-main-content {
+    -fx-background-color: #1e1e1e;
+}
+
+/* Progress Section */
+.progress-section {
+    -fx-padding: 10 0 10 0;
+}
+
+/* Total Progress Bar */
+.total-progress-bar {
+    -fx-background-color: #1e1e1e;
+    -fx-background-radius: 4;
+}
+
+.total-progress-bar > .bar {
+    -fx-background-color: linear-gradient(to right, #0078d4 0%, #00a8ff 100%);
+    -fx-background-radius: 4;
+    -fx-background-insets: 0;
+    -fx-padding: 4;
+}
+
+.total-progress-bar > .track {
+    -fx-background-color: #2d2d30;
+    -fx-background-radius: 4;
+    -fx-background-insets: 0;
+}
+
+/* Toggle Button Bar (Always visible vertical strip) */
+.toggle-button-bar {
+    -fx-background-color: #1e1e1e;
+    -fx-border-color: #2d2d2d;
+    -fx-border-width: 0 1 0 0;
+    -fx-padding: 10 5 10 5;
+    -fx-min-width: 35px;
+    -fx-pref-width: 35px;
+}
+
+/* Panel Toggle Button */
+.panel-toggle-button {
+    -fx-background-color: #2d2d30;
+    -fx-text-fill: #d4d4d4;
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-border-color: #3a3a3a;
+    -fx-border-width: 1;
+    -fx-border-radius: 3;
+    -fx-background-radius: 3;
+    -fx-padding: 6 8 6 8;
+    -fx-cursor: hand;
+    -fx-min-width: 28px;
+    -fx-pref-width: 28px;
+    -fx-min-height: 28px;
+    -fx-pref-height: 28px;
+}
+
+.panel-toggle-button:hover {
+    -fx-background-color: #3a3a3a;
+    -fx-border-color: #0078d4;
+    -fx-text-fill: #ffffff;
+}
+
+.panel-toggle-button:pressed {
+    -fx-background-color: #252525;
+}
+
+.panel-toggle-button:focused {
+    -fx-border-color: #0078d4;
+    -fx-border-width: 2;
+}

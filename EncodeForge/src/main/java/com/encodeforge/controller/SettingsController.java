@@ -251,11 +251,32 @@ public class SettingsController {
     
     public void setPythonBridge(PythonBridge pythonBridge) {
         this.pythonBridge = pythonBridge;
-        checkFFmpegStatus();
+        
+        // Use centralized StatusManager instead of making individual checks
+        updateFFmpegStatusFromManager();
         
         // Encoder detection is now handled instantly by Java HardwareDetector
         // No need for delayed backend checks
         logger.info("Settings dialog initialized with hardware-detected encoders");
+    }
+    
+    /**
+     * Update FFmpeg status display from centralized StatusManager
+     */
+    private void updateFFmpegStatusFromManager() {
+        com.encodeforge.util.StatusManager statusMgr = com.encodeforge.util.StatusManager.getInstance();
+        
+        if (ffmpegVersionLabel != null) {
+            if (statusMgr.isFFmpegAvailable()) {
+                String version = statusMgr.getFFmpegVersion();
+                ffmpegVersionLabel.setText("✅ FFmpeg detected: " + version);
+                ffmpegVersionLabel.setStyle("-fx-text-fill: #4ec9b0;");
+                logger.info("FFmpeg detected: {} at {}", version, settings != null ? settings.getFfmpegPath() : "unknown");
+            } else {
+                ffmpegVersionLabel.setText("❌ FFmpeg not found");
+                ffmpegVersionLabel.setStyle("-fx-text-fill: #f48771;");
+            }
+        }
     }
     
     public void navigateToCategory(String category) {

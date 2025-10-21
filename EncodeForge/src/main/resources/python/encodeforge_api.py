@@ -10,6 +10,7 @@ import logging
 import logging.handlers
 import os
 import sys
+import threading
 from pathlib import Path
 from typing import Dict
 
@@ -98,6 +99,9 @@ except Exception as e:
             self.opensubtitles_password = ""
             self.tmdb_api_key = ""
             self.tvdb_api_key = ""
+            self.omdb_api_key = ""
+            self.trakt_api_key = ""
+            self.fanart_api_key = ""
             
             # Renaming
             self.enable_renaming = False
@@ -202,12 +206,14 @@ class FFmpegAPI:
     def __init__(self):
         self.core = None
         self.settings = ConversionSettings()
+        self._stdout_lock = threading.Lock()  # Protect stdout writes from multiple threads
     
     def _send_response(self, response: Dict):
-        """Send JSON response to stdout"""
-        json.dump(response, sys.stdout)
-        sys.stdout.write('\n')
-        sys.stdout.flush()
+        """Send JSON response to stdout (thread-safe)"""
+        with self._stdout_lock:
+            json.dump(response, sys.stdout)
+            sys.stdout.write('\n')
+            sys.stdout.flush()
     
     def _send_error(self, message: str, error_type: str = "error"):
         """Send error response"""
@@ -253,6 +259,9 @@ class FFmpegAPI:
             elif action == "check_tvdb":
                 return self.handle_check_tvdb()
             
+            elif action == "get_all_status":
+                return self.handle_get_all_status()
+            
             elif action == "get_available_encoders":
                 return self.handle_get_available_encoders()
             
@@ -292,6 +301,13 @@ class FFmpegAPI:
                 else:
                     # Traditional mode - wait for all results
                     return self.core.search_subtitles(video_path, languages)
+            
+            elif action == "batch_search_subtitles":
+                # New batch search endpoint for parallel processing
+                files = request.get("files", [])
+                if not files:
+                    return {"status": "error", "message": "files array required"}
+                return self.handle_batch_search_subtitles(files)
             
             elif action == "advanced_search_subtitles":
                 video_path = request.get("video_path")
@@ -475,6 +491,10 @@ class FFmpegAPI:
         try:
             logger.info(f"Starting streaming subtitle search for: {video_path}")
             
+            # Ensure core is initialized
+            if self.core is None:
+                self.core = FFmpegCore(self.settings)
+            
             def progress_callback(progress_data: Dict):
                 """Send progress updates immediately as they come"""
                 logger.debug(f"Sending progress: {progress_data.get('provider', 'unknown')}")
@@ -491,6 +511,131 @@ class FFmpegAPI:
             return {
                 "status": "error",
                 "message": str(e)
+            }
+    
+    def handle_batch_search_subtitles(self, files: list):
+        """
+        Handle batch subtitle search for multiple files in parallel.
+        Each file dict should contain: file_id, file_name, video_path, languages
+        
+        Searches files in parallel (up to 3 concurrent) and sends progress updates
+        for each file with file_id attached so Java knows which file it's for.
+        """
+        import os
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        
+        try:
+            logger.info(f"Starting batch subtitle search for {len(files)} files")
+            
+            # Ensure core is initialized
+            if self.core is None:
+                self.core = FFmpegCore(self.settings)
+            
+            # Track completion
+            completed_count = 0
+            total_files = len(files)
+            
+            def create_file_progress_callback(file_id, file_name):
+                """Create a progress callback for a specific file"""
+                def progress_callback(progress_data: Dict):
+                    # Add file identification to progress data
+                    progress_data['file_id'] = file_id
+                    progress_data['file_name'] = file_name
+                    logger.debug(f"Sending progress for file {file_id} ({file_name}): {progress_data.get('provider', 'unknown')}")
+                    self._send_response(progress_data)
+                return progress_callback
+            
+            # Search files in parallel using ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=3) as executor:
+                # Submit all search tasks
+                future_to_file = {}
+                for file_info in files:
+                    file_id = file_info.get('file_id')
+                    file_name = file_info.get('file_name', os.path.basename(file_info.get('video_path', '')))
+                    video_path = file_info.get('video_path')
+                    languages = file_info.get('languages', self.settings.subtitle_languages)
+                    
+                    if not video_path:
+                        logger.error(f"No video_path provided for file_id: {file_id}")
+                        # Send error for this file (do NOT close the stream!)
+                        self._send_response({
+                            "file_id": file_id,
+                            "file_name": file_name,
+                            "status": "error",
+                            "message": "video_path required",
+                            "file_complete": True  # This file is done, but stream continues
+                        })
+                        completed_count += 1
+                        continue
+                    
+                    logger.info(f"Submitting search task for file {file_id}: {file_name}")
+                    
+                    # Submit search task
+                    future = executor.submit(
+                        self.core.search_subtitles,
+                        video_path,
+                        languages,
+                        create_file_progress_callback(file_id, file_name)
+                    )
+                    future_to_file[future] = (file_id, file_name)
+                
+                # Wait for all tasks to complete
+                for future in as_completed(future_to_file):
+                    file_id, file_name = future_to_file[future]
+                    try:
+                        result = future.result()
+                        completed_count += 1
+                        subtitle_count = len(result.get('subtitles', []))
+                        logger.info(f"Search completed for file {file_id} ({file_name}): {subtitle_count} subtitles found")
+                        
+                        # Send final result with subtitles for this file
+                        # NOTE: Do NOT set "complete": True here - that closes the stream!
+                        # Only the final batch completion message should have complete: true
+                        final_response = {
+                            "file_id": file_id,
+                            "file_name": file_name,
+                            "status": "success" if result.get("status") == "success" else "complete",
+                            "file_complete": True  # This file is done, but stream continues
+                        }
+                        
+                        # Include subtitle data if present
+                        if "subtitles" in result:
+                            final_response["subtitles"] = result["subtitles"]
+                        if "message" in result:
+                            final_response["message"] = result["message"]
+                        
+                        logger.debug(f"Sending final result for file {file_id}: {subtitle_count} subtitles")
+                        self._send_response(final_response)
+                        
+                    except Exception as e:
+                        completed_count += 1
+                        logger.error(f"Error searching file {file_id} ({file_name}): {e}", exc_info=True)
+                        # Send error for this file
+                        # NOTE: Do NOT set "complete": True here either!
+                        self._send_response({
+                            "file_id": file_id,
+                            "file_name": file_name,
+                            "status": "error",
+                            "message": str(e),
+                            "file_complete": True  # This file is done, but stream continues
+                        })
+            
+            # Send final completion message
+            logger.info(f"Batch search complete: {completed_count}/{total_files} files processed")
+            return {
+                "status": "success",
+                "message": f"Batch search complete: {completed_count}/{total_files} files",
+                "completed": completed_count,
+                "total": total_files,
+                "complete": True
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in batch subtitle search: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "message": str(e),
+                "complete": True
             }
     
     def handle_get_capabilities(self) -> Dict:
@@ -566,6 +711,86 @@ class FFmpegAPI:
                 "message": str(e),
                 "tvdb_available": False,
                 "configured": False
+            }
+    
+    def handle_get_all_status(self) -> Dict:
+        """
+        Consolidated endpoint that checks all provider/service statuses at once.
+        This eliminates the need for multiple individual status check calls.
+        """
+        try:
+            logger.info("Checking all provider statuses")
+            
+            # Ensure core is initialized
+            if self.core is None:
+                self.core = FFmpegCore(self.settings)
+            
+            # Check FFmpeg status
+            ffmpeg_status = self.core.check_ffmpeg()
+            ffmpeg_info = {
+                "available": ffmpeg_status.get("ffmpeg_available", False),
+                "version": ffmpeg_status.get("ffmpeg_version", "Unknown")
+            }
+            
+            # Check Whisper status
+            whisper_status = self.core.check_whisper()
+            whisper_info = {
+                "available": whisper_status.get("whisper_available", False),
+                "version": whisper_status.get("whisper_version", "Unknown")
+            }
+            
+            # Check OpenSubtitles configuration
+            has_opensubtitles_creds = bool(
+                self.settings.opensubtitles_username and 
+                self.settings.opensubtitles_username.strip() and
+                self.settings.opensubtitles_password and 
+                self.settings.opensubtitles_password.strip()
+            )
+            opensubtitles_info = {
+                "available": True,  # Always available (can search without login)
+                "logged_in": has_opensubtitles_creds,
+                "status": "Logged in (20/day)" if has_opensubtitles_creds else "Anonymous (5/day)"
+            }
+            
+            # Check metadata provider configurations
+            metadata_providers = {
+                "tmdb": bool(self.settings.tmdb_api_key and self.settings.tmdb_api_key.strip()),
+                "tvdb": bool(self.settings.tvdb_api_key and self.settings.tvdb_api_key.strip()),
+                "omdb": bool(self.settings.omdb_api_key and self.settings.omdb_api_key.strip()),
+                "trakt": bool(self.settings.trakt_api_key and self.settings.trakt_api_key.strip()),
+                "fanart": bool(self.settings.fanart_api_key and self.settings.fanart_api_key.strip()),
+                # Free providers (always available)
+                "anilist": True,
+                "kitsu": True,
+                "jikan": True,
+                "tvmaze": True
+            }
+            
+            # Count subtitle providers (assuming we have multiple subtitle providers)
+            # This is a simplified count - in reality we'd check each provider's availability
+            subtitle_providers = {
+                "count": 10,  # Default count of subtitle providers
+                "opensubtitles": True,
+                "whisper": whisper_info["available"]
+            }
+            
+            result = {
+                "status": "success",
+                "ffmpeg": ffmpeg_info,
+                "whisper": whisper_info,
+                "opensubtitles": opensubtitles_info,
+                "metadata_providers": metadata_providers,
+                "subtitle_providers": subtitle_providers
+            }
+            
+            logger.info("All provider statuses checked successfully")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error checking all statuses: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "message": str(e)
             }
     
     def handle_get_available_encoders(self) -> Dict:

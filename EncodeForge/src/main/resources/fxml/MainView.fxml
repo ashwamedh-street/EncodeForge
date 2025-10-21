@@ -530,62 +530,76 @@
                 </SplitPane>
             
             <!-- Right Panel: File Info and Preview -->
-            <TabPane fx:id="rightPanelTabs" tabClosingPolicy="UNAVAILABLE" styleClass="info-tab-pane">
+            <HBox styleClass="encoder-panel-wrapper">
+                <!-- Toggle Button (Always Visible) -->
+                <VBox styleClass="toggle-button-bar" alignment="TOP_CENTER">
+                    <Button fx:id="encoderLogToggleButton" text="◀" onAction="#handleToggleEncoderLogs" styleClass="panel-toggle-button">
+                        <tooltip>
+                            <Tooltip text="Hide panel"/>
+                        </tooltip>
+                    </Button>
+                </VBox>
                 
-                <!-- File Info Tab -->
-                <Tab fx:id="fileInfoTab" text="File Info" closable="false">
-                    <ScrollPane fitToWidth="true" styleClass="info-scroll">
-                        <VBox spacing="15" styleClass="tab-content">
+                <!-- Collapsible Panel Content -->
+                <VBox fx:id="encoderRightPanel" styleClass="right-panel-container" HBox.hgrow="ALWAYS" managed="true" visible="true">
+                    <TabPane fx:id="rightPanelTabs" tabClosingPolicy="UNAVAILABLE" styleClass="info-tab-pane" VBox.vgrow="ALWAYS" managed="true" visible="true">
+                    
+                    <!-- File Info Tab -->
+                    <Tab fx:id="fileInfoTab" text="File Info" closable="false">
+                        <ScrollPane fitToWidth="true" styleClass="info-scroll">
+                            <VBox spacing="15" styleClass="tab-content">
+                                <padding>
+                                    <Insets top="15" right="15" bottom="15" left="15"/>
+                                </padding>
+                                
+                                <!-- File Details -->
+                                <VBox spacing="10">
+                                    <Label text="File Details" styleClass="section-subtitle"/>
+                                    <Label fx:id="fileInfoLabel" text="Select a file to view details" styleClass="file-info-text" wrapText="true"/>
+                                </VBox>
+                                
+                                <!-- Media Information -->
+                                <VBox fx:id="mediaInfoSection" spacing="10" managed="false" visible="false">
+                                    <Label text="Media Information" styleClass="section-subtitle"/>
+                                    <VBox spacing="5">
+                                        <Label text="Video Tracks:" styleClass="info-title"/>
+                                        <ListView fx:id="videoTracksListView" prefHeight="100" styleClass="track-list"/>
+                                    </VBox>
+                                    <VBox spacing="5">
+                                        <Label text="Audio Tracks:" styleClass="info-title"/>
+                                        <ListView fx:id="audioTracksListView" prefHeight="100" styleClass="track-list"/>
+                                    </VBox>
+                                    <VBox spacing="5">
+                                        <Label text="Subtitle Tracks:" styleClass="info-title"/>
+                                        <ListView fx:id="subtitleTracksListView" prefHeight="100" styleClass="track-list"/>
+                                    </VBox>
+                                </VBox>
+                            </VBox>
+                        </ScrollPane>
+                    </Tab>
+                    
+                    <!-- Logs Tab -->
+                    <Tab fx:id="logsTab" text="📋 Logs" closable="false">
+                        <VBox spacing="10" styleClass="tab-content">
                             <padding>
-                                <Insets top="15" right="15" bottom="15" left="15"/>
+                                <Insets top="10" right="10" bottom="10" left="10"/>
                             </padding>
                             
-                            <!-- File Details -->
-                            <VBox spacing="10">
-                                <Label text="File Details" styleClass="section-subtitle"/>
-                                <Label fx:id="fileInfoLabel" text="Select a file to view details" styleClass="file-info-text" wrapText="true"/>
-                            </VBox>
+                            <HBox spacing="10" alignment="CENTER_LEFT">
+                                <Label text="Log Level:" styleClass="info-title"/>
+                                <ComboBox fx:id="logLevelComboBox" styleClass="log-level-combo"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Button text="Clear" onAction="#handleClearLogs" styleClass="small-button"/>
+                                <Button text="Export" onAction="#handleExportLogs" styleClass="small-button"/>
+                            </HBox>
                             
-                            <!-- Media Information -->
-                            <VBox fx:id="mediaInfoSection" spacing="10" managed="false" visible="false">
-                                <Label text="Media Information" styleClass="section-subtitle"/>
-                                <VBox spacing="5">
-                                    <Label text="Video Tracks:" styleClass="info-title"/>
-                                    <ListView fx:id="videoTracksListView" prefHeight="100" styleClass="track-list"/>
-                                </VBox>
-                                <VBox spacing="5">
-                                    <Label text="Audio Tracks:" styleClass="info-title"/>
-                                    <ListView fx:id="audioTracksListView" prefHeight="100" styleClass="track-list"/>
-                                </VBox>
-                                <VBox spacing="5">
-                                    <Label text="Subtitle Tracks:" styleClass="info-title"/>
-                                    <ListView fx:id="subtitleTracksListView" prefHeight="100" styleClass="track-list"/>
-                                </VBox>
-                            </VBox>
+                            <TextArea fx:id="logTextArea" VBox.vgrow="ALWAYS" editable="false" wrapText="false" styleClass="log-area"/>
                         </VBox>
-                    </ScrollPane>
-                </Tab>
-                
-                <!-- Logs Tab -->
-                <Tab fx:id="logsTab" text="📋 Logs" closable="false">
-                    <VBox spacing="10" styleClass="tab-content">
-                        <padding>
-                            <Insets top="10" right="10" bottom="10" left="10"/>
-                        </padding>
-                        
-                        <HBox spacing="10" alignment="CENTER_LEFT">
-                            <Label text="Log Level:" styleClass="info-title"/>
-                            <ComboBox fx:id="logLevelComboBox" styleClass="log-level-combo"/>
-                            <Region HBox.hgrow="ALWAYS"/>
-                            <Button text="Clear" onAction="#handleClearLogs" styleClass="small-button"/>
-                            <Button text="Export" onAction="#handleExportLogs" styleClass="small-button"/>
-                        </HBox>
-                        
-                        <TextArea fx:id="logTextArea" VBox.vgrow="ALWAYS" editable="false" wrapText="false" styleClass="log-area"/>
-                    </VBox>
-                </Tab>
-                
+                    </Tab>
+                    
                 </TabPane>
+                </VBox>
+            </HBox>
             </SplitPane>
             <!-- End Encoder Mode Layout -->
             
@@ -593,26 +607,34 @@
             <SplitPane fx:id="subtitleModeLayout" dividerPositions="0.75" orientation="HORIZONTAL" styleClass="main-split-pane" managed="false" visible="false">
                 
                 <!-- Main Content: Subtitle Preview -->
-                <ScrollPane fitToWidth="true" styleClass="preview-scroll">
-                    <VBox fx:id="subtitlePreviewContent" spacing="15" styleClass="preview-content">
-                        <padding>
-                            <Insets top="15" right="15" bottom="15" left="15"/>
-                        </padding>
-                        
-                        <Label text="Subtitle Preview" styleClass="preview-title"/>
-                        
-                        <!-- File Selector -->
-                        <HBox spacing="10" alignment="CENTER_LEFT">
-                            <Label text="Current File:" styleClass="setting-label"/>
-                            <ComboBox fx:id="subtitleFileCombo" styleClass="preview-combo" prefWidth="400" HBox.hgrow="ALWAYS"/>
-                        </HBox>
-                        
-                        <Separator/>
-                        
-                        <!-- Subtitle Results -->
-                        <SplitPane dividerPositions="0.4" VBox.vgrow="ALWAYS" styleClass="comparison-split">
+                <BorderPane styleClass="subtitle-main-content">
+                    <!-- Top: Header Section -->
+                    <top>
+                        <VBox spacing="10">
+                            <padding>
+                                <Insets top="15" right="15" bottom="10" left="15"/>
+                            </padding>
+                            
+                            <Label text="Subtitle Preview" styleClass="preview-title"/>
+                            
+                            <!-- File Selector -->
+                            <HBox spacing="10" alignment="CENTER_LEFT">
+                                <Label text="Current File:" styleClass="setting-label"/>
+                                <ComboBox fx:id="subtitleFileCombo" styleClass="preview-combo" prefWidth="400" HBox.hgrow="ALWAYS"/>
+                            </HBox>
+                            
+                            <Separator/>
+                        </VBox>
+                    </top>
+                    
+                    <!-- Center: Subtitle Results (Expands to fill) -->
+                    <center>
+                        <SplitPane dividerPositions="0.4" styleClass="comparison-split">
                             <!-- Available Subtitles -->
                             <VBox spacing="10" styleClass="comparison-panel">
+                                <padding>
+                                    <Insets top="0" right="10" bottom="0" left="15"/>
+                                </padding>
                                 <Label text="Available Subtitles" styleClass="comparison-title"/>
                                 <TableView fx:id="availableSubtitlesTable" VBox.vgrow="ALWAYS" styleClass="subtitle-table">
                                     <columns>
@@ -630,60 +652,97 @@
                             
                             <!-- Subtitle Details/Preview -->
                             <VBox spacing="10" styleClass="comparison-panel">
+                                <padding>
+                                    <Insets top="0" right="15" bottom="0" left="10"/>
+                                </padding>
                                 <Label text="Subtitle Details" styleClass="comparison-title"/>
                                 <TextArea fx:id="subtitleDetailsLabel" text="Select a subtitle to view details" wrapText="true" editable="false" VBox.vgrow="ALWAYS" styleClass="details-text"/>
                             </VBox>
                         </SplitPane>
-                        
-                        <!-- Footer -->
-                        <HBox spacing="15" alignment="CENTER_LEFT" styleClass="preview-footer">
-                            <Label fx:id="subtitleStatsLabel" text="0 available | 0 languages" styleClass="stats-label"/>
-                            <Region HBox.hgrow="ALWAYS"/>
-                            <Button fx:id="autoSelectBestButton" text="⭐ Auto-Select Best" onAction="#handleAutoSelectBest" styleClass="secondary-button">
-                                <tooltip>
-                                    <Tooltip text="Automatically select the highest-scored subtitle for each language"/>
-                                </tooltip>
-                            </Button>
-                            <Label text="Output Mode:" styleClass="setting-label"/>
-                            <ComboBox fx:id="subtitleOutputModeCombo" styleClass="quick-combo" prefWidth="180">
-                                <tooltip>
-                                    <Tooltip text="External: Save .srt file next to video (no processing)&#10;Embed: Add subtitle track inside video (fast, no re-encode)&#10;Burn-in: Permanently overlay subtitles on video (slow, re-encodes)"/>
-                                </tooltip>
-                            </ComboBox>
-                            <Button text="💾 Apply to File" onAction="#handleApplySubtitles" styleClass="primary-button" prefWidth="140">
-                                <tooltip>
-                                    <Tooltip text="Apply selected subtitles to the currently selected file"/>
-                                </tooltip>
-                            </Button>
-                            <Button text="🔄 Batch Apply All" onAction="#handleBatchApplySubtitles" styleClass="primary-button" style="-fx-background-color: #4a9eff;" prefWidth="160">
-                                <tooltip>
-                                    <Tooltip text="Apply selected subtitles to ALL files in the queue that have results"/>
-                                </tooltip>
-                            </Button>
-                        </HBox>
-                    </VBox>
-                </ScrollPane>
-                
-                <!-- Sidebar: Logs Only -->
-                <TabPane tabClosingPolicy="UNAVAILABLE" styleClass="info-tab-pane">
-                    <Tab text="📋 Logs" closable="false">
-                        <VBox spacing="10" styleClass="tab-content">
+                    </center>
+                    
+                    <!-- Bottom: Progress Bar + Footer -->
+                    <bottom>
+                        <VBox spacing="10">
                             <padding>
-                                <Insets top="10" right="10" bottom="10" left="10"/>
+                                <Insets top="10" right="15" bottom="15" left="15"/>
                             </padding>
                             
-                            <HBox spacing="10" alignment="CENTER_LEFT">
-                                <Label text="Log Level:" styleClass="info-title"/>
-                                <ComboBox fx:id="subtitleLogLevelCombo" styleClass="log-level-combo"/>
-                                <Region HBox.hgrow="ALWAYS"/>
-                                <Button text="Clear" onAction="#handleClearLogs" styleClass="small-button"/>
-                                <Button text="Export" onAction="#handleExportLogs" styleClass="small-button"/>
-                            </HBox>
+                            <!-- Total Progress Bar -->
+                            <VBox spacing="8" styleClass="progress-section">
+                                <HBox spacing="10" alignment="CENTER_LEFT">
+                                    <Label text="Overall Progress:" styleClass="setting-label"/>
+                                    <Label fx:id="subtitleProgressStatusLabel" text="Ready" styleClass="info-label"/>
+                                    <Region HBox.hgrow="ALWAYS"/>
+                                    <Label fx:id="subtitleProgressLabel" text="0 / 0 files" styleClass="stats-label"/>
+                                </HBox>
+                                <ProgressBar fx:id="subtitleTotalProgressBar" maxWidth="Infinity" prefHeight="8" progress="0" styleClass="total-progress-bar"/>
+                            </VBox>
                             
-                            <TextArea fx:id="subtitleLogArea" VBox.vgrow="ALWAYS" editable="false" wrapText="false" styleClass="log-area"/>
+                            <!-- Footer -->
+                            <HBox spacing="15" alignment="CENTER_LEFT" styleClass="preview-footer">
+                                <Label fx:id="subtitleStatsLabel" text="0 available | 0 languages" styleClass="stats-label"/>
+                                <Region HBox.hgrow="ALWAYS"/>
+                                <Button fx:id="autoSelectBestButton" text="⭐ Auto-Select Best" onAction="#handleAutoSelectBest" styleClass="secondary-button">
+                                    <tooltip>
+                                        <Tooltip text="Automatically select the highest-scored subtitle for each language"/>
+                                    </tooltip>
+                                </Button>
+                                <Label text="Output Mode:" styleClass="setting-label"/>
+                                <ComboBox fx:id="subtitleOutputModeCombo" styleClass="quick-combo" prefWidth="180">
+                                    <tooltip>
+                                        <Tooltip text="External: Save .srt file next to video (no processing)&#10;Embed: Add subtitle track inside video (fast, no re-encode)&#10;Burn-in: Permanently overlay subtitles on video (slow, re-encodes)"/>
+                                    </tooltip>
+                                </ComboBox>
+                                <Button text="💾 Apply to File" onAction="#handleApplySubtitles" styleClass="primary-button" prefWidth="140">
+                                    <tooltip>
+                                        <Tooltip text="Apply selected subtitles to the currently selected file"/>
+                                    </tooltip>
+                                </Button>
+                                <Button text="🔄 Batch Apply All" onAction="#handleBatchApplySubtitles" styleClass="primary-button" style="-fx-background-color: #4a9eff;" prefWidth="160">
+                                    <tooltip>
+                                        <Tooltip text="Apply selected subtitles to ALL files in the queue that have results"/>
+                                    </tooltip>
+                                </Button>
+                            </HBox>
                         </VBox>
-                    </Tab>
-                </TabPane>
+                    </bottom>
+                </BorderPane>
+                
+                <!-- Sidebar: Logs Only -->
+                <HBox styleClass="subtitle-panel-wrapper">
+                    <!-- Toggle Button (Always Visible) -->
+                    <VBox styleClass="toggle-button-bar" alignment="TOP_CENTER">
+                        <Button fx:id="subtitleLogToggleButton" text="◀" onAction="#handleToggleSubtitleLogs" styleClass="panel-toggle-button">
+                            <tooltip>
+                                <Tooltip text="Hide panel"/>
+                            </tooltip>
+                        </Button>
+                    </VBox>
+                    
+                    <!-- Collapsible Panel Content -->
+                    <VBox fx:id="subtitleRightPanel" styleClass="right-panel-container" HBox.hgrow="ALWAYS" managed="true" visible="true">
+                        <TabPane fx:id="subtitleLogsTabPane" tabClosingPolicy="UNAVAILABLE" styleClass="info-tab-pane" VBox.vgrow="ALWAYS" managed="true" visible="true">
+                        <Tab text="📋 Logs" closable="false">
+                            <VBox spacing="10" styleClass="tab-content">
+                                <padding>
+                                    <Insets top="10" right="10" bottom="10" left="10"/>
+                                </padding>
+                                
+                                <HBox spacing="10" alignment="CENTER_LEFT">
+                                    <Label text="Log Level:" styleClass="info-title"/>
+                                    <ComboBox fx:id="subtitleLogLevelCombo" styleClass="log-level-combo"/>
+                                    <Region HBox.hgrow="ALWAYS"/>
+                                    <Button text="Clear" onAction="#handleClearLogs" styleClass="small-button"/>
+                                    <Button text="Export" onAction="#handleExportLogs" styleClass="small-button"/>
+                                </HBox>
+                                
+                                <TextArea fx:id="subtitleLogArea" VBox.vgrow="ALWAYS" editable="false" wrapText="false" styleClass="log-area"/>
+                            </VBox>
+                        </Tab>
+                    </TabPane>
+                    </VBox>
+                </HBox>
             </SplitPane>
             <!-- End Subtitle Mode Layout -->
             
@@ -704,7 +763,6 @@
                             <Label text="Provider Comparison:" styleClass="setting-label"/>
                             <ComboBox fx:id="previewProviderCombo" styleClass="preview-combo" prefWidth="200"/>
                             <Region HBox.hgrow="ALWAYS"/>
-                            <Label fx:id="renameProgressLabel" text="" styleClass="info-label"/>
                         </HBox>
                         
                         <Separator/>
@@ -737,25 +795,39 @@
                 </ScrollPane>
                 
                 <!-- Sidebar: Logs Only -->
-                <TabPane tabClosingPolicy="UNAVAILABLE" styleClass="info-tab-pane">
-                    <Tab text="📋 Logs" closable="false">
-                        <VBox spacing="10" styleClass="tab-content">
-                            <padding>
-                                <Insets top="10" right="10" bottom="10" left="10"/>
-                            </padding>
-                            
-                            <HBox spacing="10" alignment="CENTER_LEFT">
-                                <Label text="Log Level:" styleClass="info-title"/>
-                                <ComboBox fx:id="renamerLogLevelCombo" styleClass="log-level-combo"/>
-                                <Region HBox.hgrow="ALWAYS"/>
-                                <Button text="Clear" onAction="#handleClearLogs" styleClass="small-button"/>
-                                <Button text="Export" onAction="#handleExportLogs" styleClass="small-button"/>
-                            </HBox>
-                            
-                            <TextArea fx:id="renamerLogArea" VBox.vgrow="ALWAYS" editable="false" wrapText="false" styleClass="log-area"/>
-                        </VBox>
-                    </Tab>
-                </TabPane>
+                <HBox styleClass="renamer-panel-wrapper">
+                    <!-- Toggle Button (Always Visible) -->
+                    <VBox styleClass="toggle-button-bar" alignment="TOP_CENTER">
+                        <Button fx:id="renamerLogToggleButton" text="◀" onAction="#handleToggleRenamerLogs" styleClass="panel-toggle-button">
+                            <tooltip>
+                                <Tooltip text="Hide panel"/>
+                            </tooltip>
+                        </Button>
+                    </VBox>
+                    
+                    <!-- Collapsible Panel Content -->
+                    <VBox fx:id="renamerRightPanel" styleClass="right-panel-container" HBox.hgrow="ALWAYS" managed="true" visible="true">
+                        <TabPane fx:id="renamerLogsTabPane" tabClosingPolicy="UNAVAILABLE" styleClass="info-tab-pane" VBox.vgrow="ALWAYS" managed="true" visible="true">
+                        <Tab text="📋 Logs" closable="false">
+                            <VBox spacing="10" styleClass="tab-content">
+                                <padding>
+                                    <Insets top="10" right="10" bottom="10" left="10"/>
+                                </padding>
+                                
+                                <HBox spacing="10" alignment="CENTER_LEFT">
+                                    <Label text="Log Level:" styleClass="info-title"/>
+                                    <ComboBox fx:id="renamerLogLevelCombo" styleClass="log-level-combo"/>
+                                    <Region HBox.hgrow="ALWAYS"/>
+                                    <Button text="Clear" onAction="#handleClearLogs" styleClass="small-button"/>
+                                    <Button text="Export" onAction="#handleExportLogs" styleClass="small-button"/>
+                                </HBox>
+                                
+                                <TextArea fx:id="renamerLogArea" VBox.vgrow="ALWAYS" editable="false" wrapText="false" styleClass="log-area"/>
+                            </VBox>
+                        </Tab>
+                    </TabPane>
+                    </VBox>
+                </HBox>
             </SplitPane>
             <!-- End Renamer Mode Layout -->
             

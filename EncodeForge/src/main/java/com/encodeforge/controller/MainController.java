@@ -1,5 +1,3 @@
-@Deprecated // This file is deprecated and will be removed in a future version
-
 package com.encodeforge.controller;
 
 import com.encodeforge.model.ConversionJob;
@@ -22,6 +20,7 @@ import javafx.scene.control.Tooltip;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.Dragboard;
 import javafx.scene.input.TransferMode;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 import javafx.stage.Modality;
@@ -46,8 +45,8 @@ import java.util.concurrent.TimeoutException;
 /**
  * Main window controller for the modernized UI
  */
-public class LegacyMainController {
-    private static final Logger logger = LoggerFactory.getLogger(LegacyMainController.class);
+public class MainController {
+    private static final Logger logger = LoggerFactory.getLogger(MainController.class);
     
     private final PythonBridge pythonBridge;
     // Separate queues for different states
@@ -56,12 +55,14 @@ public class LegacyMainController {
     private final ObservableList<ConversionJob> completedFiles = FXCollections.observableArrayList();
     
     // Subtitle storage: Map of filename -> list of subtitles for that file
-    private final java.util.Map<String, ObservableList<SubtitleItem>> subtitlesByFile = new java.util.HashMap<>();
+    // Using ConcurrentHashMap for thread-safe parallel subtitle searches
+    private final java.util.Map<String, ObservableList<SubtitleItem>> subtitlesByFile = new java.util.concurrent.ConcurrentHashMap<>();
     private String currentlySelectedFile = null;
     
     // Subtitle search status tracking
     private enum SubtitleSearchStatus { NONE, SEARCHING, COMPLETED }
-    private final java.util.Map<String, SubtitleSearchStatus> subtitleSearchStatus = new java.util.HashMap<>();
+    // Using ConcurrentHashMap for thread-safe parallel status updates
+    private final java.util.Map<String, SubtitleSearchStatus> subtitleSearchStatus = new java.util.concurrent.ConcurrentHashMap<>();
     
     private final ConversionSettings settings;
     private boolean isProcessing = false;
@@ -195,9 +196,30 @@ public class LegacyMainController {
     @FXML private Button applyRenameButton;
     @FXML private Button formatPatternButton;
     @FXML private Label renamerSelectedFilesLabel;
-    @FXML private Label renameProgressLabel;
     @FXML private ComboBox<String> renamerLogLevelCombo;
     @FXML private TextArea renamerLogArea;
+    
+    // Subtitle Progress Bar Elements
+    @FXML private ProgressBar subtitleTotalProgressBar;
+    @FXML private Label subtitleProgressLabel;
+    @FXML private Label subtitleProgressStatusLabel;
+    
+    // Log Toggle Elements
+    @FXML private Button encoderLogToggleButton;
+    @FXML private VBox encoderRightPanel;
+    
+    @FXML private Button subtitleLogToggleButton;
+    @FXML private TabPane subtitleLogsTabPane;
+    @FXML private VBox subtitleRightPanel;
+    
+    @FXML private Button renamerLogToggleButton;
+    @FXML private TabPane renamerLogsTabPane;
+    @FXML private VBox renamerRightPanel;
+    
+    // Log panel visibility state
+    private boolean encoderLogsPanelVisible = true;
+    private boolean subtitleLogsPanelVisible = true;
+    private boolean renamerLogsPanelVisible = true;
     
     // Preview elements (now in separate mode layouts)
     @FXML private ComboBox<String> previewProviderCombo;
@@ -289,15 +311,15 @@ public class LegacyMainController {
         setupQuickSettings();
         setupPreviewTabs();
         setupSubtitleFileSelector();
+        setupSubtitleProgressBar();
         
         // Set default mode to encoder
         handleEncoderMode();
         
-        // Run checks in parallel for faster startup
-        CompletableFuture.runAsync(this::checkFFmpegAvailability);
-        CompletableFuture.runAsync(this::checkProviderStatus);
+        // Run consolidated status check for faster startup
+        CompletableFuture.runAsync(this::updateAllStatus);
         
-        logger.info("Main Controller initialized (async checks running)");
+        logger.info("Main Controller initialized (async status check running)");
     }
     
     private void setupSubtitleFileSelector() {
@@ -310,9 +332,21 @@ public class LegacyMainController {
                     // Extract base filename without status tags
                     String baseFileName = extractBaseFileName(newVal);
                     
+                    // Debug: Log what we're looking for
+                    logger.debug("Dropdown selection changed to: {} (base: {})", newVal, baseFileName);
+                    logger.debug("Available files in map: {}", subtitlesByFile.keySet());
+                    
                     // Update table to show subtitles for selected file
                     if (subtitlesByFile.containsKey(baseFileName) && availableSubtitlesTable != null) {
                         ObservableList<SubtitleItem> fileSubtitles = subtitlesByFile.get(baseFileName);
+                        logger.debug("Found {} subtitles for file: {}", fileSubtitles.size(), baseFileName);
+                        
+                        // Log first subtitle for verification
+                        if (!fileSubtitles.isEmpty()) {
+                            SubtitleItem first = fileSubtitles.get(0);
+                            logger.debug("First subtitle: {} from {}", first.getFormat(), first.getProvider());
+                        }
+                        
                         availableSubtitlesTable.setItems(fileSubtitles);
                         
                         // Update stats
@@ -324,6 +358,8 @@ public class LegacyMainController {
                             subtitleStatsLabel.setText(fileSubtitles.size() + " available | " + uniqueLangs + " language(s)");
                         }
                         log("Displaying subtitles for: " + baseFileName);
+                    } else {
+                        logger.warn("No subtitles found in map for: {}", baseFileName);
                     }
                 }
             });
@@ -1403,7 +1439,8 @@ public class LegacyMainController {
                 } else {
                     log("ERROR: Failed to save settings");
                 }
-                checkProviderStatus(); // Refresh provider status after settings change
+                // Refresh all provider status after settings change
+                CompletableFuture.runAsync(this::updateAllStatus);
             }
             
         } catch (IOException e) {
@@ -1566,7 +1603,7 @@ public class LegacyMainController {
     
     @FXML
     private void handleCheckFFmpeg() {
-        checkFFmpegAvailability();
+        CompletableFuture.runAsync(this::updateAllStatus);
     }
     
     @FXML
@@ -1820,49 +1857,57 @@ public class LegacyMainController {
         statusLabel.setText("Ready");
     }
     
-    private void checkFFmpegAvailability() {
+    /**
+     * Consolidated status check for all providers and services.
+     * Uses StatusManager to cache results and avoid redundant API calls.
+     * This replaces the old separate checkFFmpegAvailability() and checkProviderStatus() methods.
+     */
+    private void updateAllStatus() {
         new Thread(() -> {
             try {
-                JsonObject response = pythonBridge.checkFFmpeg();
-                Platform.runLater(() -> {
-                    if (response.has("status") && response.get("status").getAsString().equals("error")) {
+                logger.info("Starting consolidated status check");
+                
+                // First, sync settings with Python backend
+                try {
+                    JsonObject updateSettings = new JsonObject();
+                    updateSettings.addProperty("action", "update_settings");
+                    updateSettings.add("settings", settings.toJson());
+                    pythonBridge.sendCommand(updateSettings);
+                    logger.info("Settings synchronized with Python backend");
+                } catch (Exception e) {
+                    logger.error("Failed to sync settings with Python backend", e);
+                }
+                
+                // Get all status information in one call
+                JsonObject response = pythonBridge.getAllStatus();
+                
+                if (response.has("status") && response.get("status").getAsString().equals("error")) {
+                    logger.error("Error getting status: " + response.get("message").getAsString());
+                    Platform.runLater(() -> {
                         log("ERROR: " + response.get("message").getAsString());
-                        updateFFmpegStatus(false, "Not Found");
-                        return;
-                    }
-                    
-                    if (response.has("ffmpeg_available") && response.get("ffmpeg_available").getAsBoolean()) {
-                        String version = response.get("ffmpeg_version").getAsString();
-                        log("FFmpeg detected: " + version);
-                        
-                        // Update sidebar FFmpeg status
-                        updateFFmpegStatus(true, version);
-                        
-                        // Log hardware capabilities
-                        if (response.has("hardware_encoders")) {
-                            JsonArray encoders = response.getAsJsonArray("hardware_encoders");
-                            if (encoders.size() > 0) {
-                                log("Hardware encoders available: " + encoders.size());
-                            }
-                        }
-                        
-                        // Note: Encoder detection is now handled by Java HardwareDetector
-                        // No need to update encoder list from Python backend
-                    } else {
-                        log("WARNING: FFmpeg not detected");
-                        updateFFmpegStatus(false, "Not Found");
-                        showWarning("FFmpeg Not Found", 
-                            "FFmpeg could not be detected. Please install FFmpeg or set the path in Settings.");
-                    }
-                });
-            } catch (IOException | TimeoutException e) {
-                logger.error("Error checking FFmpeg", e);
+                        updateFFmpegStatus(false, "Error");
+                    });
+                    return;
+                }
+                
+                // Update StatusManager with the consolidated response
+                com.encodeforge.util.StatusManager.getInstance().updateFromResponse(response);
+                
+                // Update UI on JavaFX thread
                 Platform.runLater(() -> {
-                    log("ERROR checking FFmpeg: " + e.getMessage());
+                    updateUIFromStatus();
+                });
+                
+                logger.info("Consolidated status check completed successfully");
+                
+            } catch (IOException | TimeoutException e) {
+                logger.error("Error checking status", e);
+                Platform.runLater(() -> {
+                    log("ERROR checking status: " + e.getMessage());
                     updateFFmpegStatus(false, "Error");
                 });
             } catch (Exception e) {
-                logger.error("Unexpected error checking FFmpeg", e);
+                logger.error("Unexpected error checking status", e);
                 Platform.runLater(() -> {
                     log("ERROR: " + e.getMessage());
                     updateFFmpegStatus(false, "Error");
@@ -1871,123 +1916,152 @@ public class LegacyMainController {
         }).start();
     }
     
-    private void updateAvailableEncoders() {
-        new Thread(() -> {
-            try {
-                // Create request for available encoders
-                JsonObject request = new JsonObject();
-                request.addProperty("action", "get_available_encoders");
-                
-                JsonObject response = pythonBridge.sendCommand(request);
-                
-                Platform.runLater(() -> {
-                    if (response.has("status") && response.get("status").getAsString().equals("success")) {
-                        JsonObject encoderSupport = response.getAsJsonObject("encoder_support");
-                        
-                        // Store current selection to preserve it
-                        String currentSelection = quickCodecCombo != null ? quickCodecCombo.getValue() : null;
-                        
-                        // Build list of available encoders
-                        List<String> availableEncoders = new ArrayList<>();
-                        
-                        // Always add software encoders
-                        availableEncoders.add("Software H.264");
-                        availableEncoders.add("Software H.265");
-                        
-                        // Add hardware encoders if available
-                        boolean hasNvidiaH264 = false;
-                        boolean hasNvidiaH265 = false;
-                        
-                        if (encoderSupport.has("nvidia_h264") && encoderSupport.get("nvidia_h264").getAsBoolean()) {
-                            availableEncoders.add("H.264 NVENC (GPU)");
-                            hasNvidiaH264 = true;
-                        }
-                        if (encoderSupport.has("nvidia_h265") && encoderSupport.get("nvidia_h265").getAsBoolean()) {
-                            availableEncoders.add("H.265 NVENC (GPU)");
-                            hasNvidiaH265 = true;
-                        }
-                        if (encoderSupport.has("amd_h264") && encoderSupport.get("amd_h264").getAsBoolean()) {
-                            availableEncoders.add("H.264 AMF (GPU)");
-                        }
-                        if (encoderSupport.has("amd_h265") && encoderSupport.get("amd_h265").getAsBoolean()) {
-                            availableEncoders.add("H.265 AMF (GPU)");
-                        }
-                        if (encoderSupport.has("intel_h264") && encoderSupport.get("intel_h264").getAsBoolean()) {
-                            availableEncoders.add("H.264 Intel QSV (CPU)");
-                        }
-                        if (encoderSupport.has("intel_h265") && encoderSupport.get("intel_h265").getAsBoolean()) {
-                            availableEncoders.add("H.265 Intel QSV (CPU)");
-                        }
-                        if (encoderSupport.has("apple_h264") && encoderSupport.get("apple_h264").getAsBoolean()) {
-                            availableEncoders.add("H.264 VideoToolbox (GPU)");
-                        }
-                        if (encoderSupport.has("apple_h265") && encoderSupport.get("apple_h265").getAsBoolean()) {
-                            availableEncoders.add("H.265 VideoToolbox (GPU)");
-                        }
-                        
-                        // Always add copy option
-                        availableEncoders.add("Copy");
-                        
-                        // Update the ComboBox only if hardware options are different
-                        if (quickCodecCombo != null) {
-                            quickCodecCombo.setItems(FXCollections.observableArrayList(availableEncoders));
-                            
-                            // If current selection is still valid, keep it
-                            if (currentSelection != null && availableEncoders.contains(currentSelection)) {
-                                quickCodecCombo.setValue(currentSelection);
-                            } else if (!hasNvidiaH264 && !hasNvidiaH265 && currentSelection != null && 
-                                       (currentSelection.contains("NVENC") || currentSelection.contains("AMF"))) {
-                                // GPU was not detected but user had GPU selected - fallback to software
-                                quickCodecCombo.setValue("Software H.264");
-                                log("GPU encoder not available - using software encoding");
-                            } else if (currentSelection == null) {
-                                // First time setup - use recommended
-                                if (response.has("recommended_encoder")) {
-                                    String recommended = response.get("recommended_encoder").getAsString();
-                                    if (recommended.equals("h264_nvenc") && hasNvidiaH264) {
-                                        quickCodecCombo.setValue("H.264 NVENC (GPU)");
-                                    } else if (recommended.equals("h264_amf") && availableEncoders.contains("H.264 AMF (GPU)")) {
-                                        quickCodecCombo.setValue("H.264 AMF (GPU)");
-                                    } else if (recommended.equals("h264_qsv") && availableEncoders.contains("H.264 Intel QSV (CPU)")) {
-                                        quickCodecCombo.setValue("H.264 Intel QSV (CPU)");
-                                    } else {
-                                        quickCodecCombo.setValue("Software H.264");
-                                    }
-                                } else if (hasNvidiaH264) {
-                                    quickCodecCombo.setValue("H.264 NVENC (GPU)");
-                                } else {
-                                    quickCodecCombo.setValue("Software H.264");
-                                }
-                            }
-                        }
-                        
-                        // Log the available encoders
-                        log("Available encoders updated: " + availableEncoders.size() + " options");
-                        
-                        // Show hardware acceleration status
-                        boolean hasHardwareAccel = availableEncoders.stream()
-                            .anyMatch(encoder -> encoder.contains("NVENC") || encoder.contains("AMF") || 
-                                     encoder.contains("QSV") || encoder.contains("VideoToolbox"));
-                        
-                        if (hasHardwareAccel) {
-                            log("Hardware acceleration available");
-                        } else {
-                            log("No hardware acceleration available - using software encoding");
-                        }
-                        
-                    } else {
-                        logger.warn("Failed to get available encoders: " + response.get("message").getAsString());
-                        log("WARNING: Could not detect available encoders, using software fallback");
-                    }
-                });
-                
-            } catch (Exception e) {
-                logger.error("Error updating available encoders", e);
-                Platform.runLater(() -> {
-                    log("ERROR: Could not update encoder options - " + e.getMessage());
-                });
+    /**
+     * Update all UI elements based on the current StatusManager state.
+     * This method should be called on the JavaFX Application thread.
+     */
+    private void updateUIFromStatus() {
+        com.encodeforge.util.StatusManager statusMgr = com.encodeforge.util.StatusManager.getInstance();
+        
+        // Update FFmpeg status in sidebar
+        if (statusMgr.isFFmpegAvailable()) {
+            String version = statusMgr.getFFmpegVersion();
+            log("FFmpeg detected: " + version);
+            updateFFmpegStatus(true, version);
+        } else {
+            log("WARNING: FFmpeg not detected");
+            updateFFmpegStatus(false, "Not Found");
+            showWarning("FFmpeg Not Found", 
+                "FFmpeg could not be detected. Please install FFmpeg or set the path in Settings.");
+        }
+        
+        // Update Whisper status
+        if (statusMgr.isWhisperAvailable()) {
+            log("Whisper available: " + statusMgr.getWhisperVersion());
+            if (whisperStatusButton != null) {
+                whisperStatusButton.setText("🎤 Whisper ✓");
+                whisperStatusButton.getStyleClass().removeAll("error", "warning");
+                whisperStatusButton.getStyleClass().add("active");
             }
-        }).start();
+        } else {
+            if (whisperStatusButton != null) {
+                whisperStatusButton.setText("🎤 Whisper ✗");
+                whisperStatusButton.getStyleClass().removeAll("active");
+                whisperStatusButton.getStyleClass().add("warning");
+            }
+        }
+        
+        // Update OpenSubtitles status
+        if (statusMgr.isOpenSubtitlesAvailable()) {
+            if (openSubsStatusButton != null) {
+                String statusText = statusMgr.isOpenSubtitlesLoggedIn() ? "✓ (20/day)" : "✓ (5/day)";
+                openSubsStatusButton.setText("🎬 OpenSubs " + statusText);
+                openSubsStatusButton.getStyleClass().removeAll("error", "warning");
+                openSubsStatusButton.getStyleClass().add("active");
+            }
+        }
+        
+        // Update metadata provider status buttons
+        updateMetadataProviderButtons();
+        
+        // Log provider counts
+        int totalMetadataProviders = statusMgr.getTotalMetadataProviders();
+        log("=== Metadata Providers: " + totalMetadataProviders + "/10 available ===");
+        log("API Key Providers:");
+        if (statusMgr.isTmdbConfigured()) log("  ✓ TMDB (Movies & TV)");
+        else log("  ⚠️ TMDB (Movies & TV) - API key needed");
+        if (statusMgr.isTvdbConfigured()) log("  ✓ TVDB (TV Shows)");
+        else log("  ⚠️ TVDB (TV Shows) - API key needed");
+        if (statusMgr.isOmdbConfigured()) log("  ✓ OMDB (Movies & TV)");
+        else log("  ⚠️ OMDB (Movies & TV) - API key needed");
+        if (statusMgr.isTraktConfigured()) log("  ✓ Trakt (Movies & TV)");
+        else log("  ⚠️ Trakt (Movies & TV) - API key needed");
+        if (statusMgr.isFanartConfigured()) log("  ✓ Fanart.tv (Artwork)");
+        else log("  ⚠️ Fanart.tv (Artwork) - API key needed");
+        log("Free Providers (No API Key Required):");
+        log("  ✅ AniList (Anime) - always available");
+        log("  ✅ Kitsu (Anime) - always available");
+        log("  ✅ Jikan/MAL (Anime) - always available");
+        log("  ✅ TVmaze (TV Shows) - always available");
+    }
+    
+    /**
+     * Update metadata provider status buttons based on StatusManager
+     */
+    private void updateMetadataProviderButtons() {
+        com.encodeforge.util.StatusManager statusMgr = com.encodeforge.util.StatusManager.getInstance();
+        
+        // Update TMDB button
+        if (tmdbStatusButton != null) {
+            if (statusMgr.isTmdbConfigured()) {
+                tmdbStatusButton.setText("TMDB: Ready" + (settings.isTmdbValidated() ? " ✓" : ""));
+                tmdbStatusButton.getStyleClass().removeAll("error", "warning");
+                tmdbStatusButton.getStyleClass().add("active");
+            } else {
+                tmdbStatusButton.setText("TMDB: Not Setup");
+                tmdbStatusButton.getStyleClass().removeAll("active");
+                tmdbStatusButton.getStyleClass().add("warning");
+            }
+        }
+        
+        // Update TVDB button
+        if (tvdbStatusButton != null) {
+            if (statusMgr.isTvdbConfigured()) {
+                tvdbStatusButton.setText("TVDB: Ready" + (settings.isTvdbValidated() ? " ✓" : ""));
+                tvdbStatusButton.getStyleClass().removeAll("error", "warning");
+                tvdbStatusButton.getStyleClass().add("active");
+            } else {
+                tvdbStatusButton.setText("TVDB: Not Setup");
+                tvdbStatusButton.getStyleClass().removeAll("active");
+                tvdbStatusButton.getStyleClass().add("warning");
+            }
+        }
+        
+        // Update OMDB button
+        if (omdbStatusButton != null) {
+            if (statusMgr.isOmdbConfigured()) {
+                omdbStatusButton.setText("OMDB ✓");
+                omdbStatusButton.getStyleClass().removeAll("error", "warning");
+                omdbStatusButton.getStyleClass().add("active");
+            } else {
+                omdbStatusButton.setText("OMDB ⚠️");
+                omdbStatusButton.getStyleClass().removeAll("active");
+                omdbStatusButton.getStyleClass().add("warning");
+            }
+        }
+        
+        // Update Trakt button
+        if (traktStatusButton != null) {
+            if (statusMgr.isTraktConfigured()) {
+                traktStatusButton.setText("Trakt ✓");
+                traktStatusButton.getStyleClass().removeAll("error", "warning");
+                traktStatusButton.getStyleClass().add("active");
+            } else {
+                traktStatusButton.setText("Trakt ⚠️");
+                traktStatusButton.getStyleClass().removeAll("active");
+                traktStatusButton.getStyleClass().add("warning");
+            }
+        }
+        
+        // Update Fanart button
+        if (fanartStatusButton != null) {
+            if (statusMgr.isFanartConfigured()) {
+                fanartStatusButton.setText("Fanart ✓");
+                fanartStatusButton.getStyleClass().removeAll("error", "warning");
+                fanartStatusButton.getStyleClass().add("active");
+            } else {
+                fanartStatusButton.setText("Fanart ⚠️");
+                fanartStatusButton.getStyleClass().removeAll("active");
+                fanartStatusButton.getStyleClass().add("warning");
+            }
+        }
+        
+        // Update active provider label
+        int totalProviders = statusMgr.getTotalMetadataProviders();
+        if (activeProviderLabel != null) {
+            activeProviderLabel.setText(totalProviders + "/10 Providers Available");
+            activeProviderLabel.setStyle("-fx-text-fill: #4ec9b0; -fx-font-weight: bold;");
+        }
     }
     
     private void updateSettingsFromQuickUI() {
@@ -2627,241 +2701,6 @@ public class LegacyMainController {
         }
     }
     
-    private void checkProviderStatus() {
-        new Thread(() -> {
-            try {
-                // First, send current settings to Python backend
-                try {
-                    JsonObject updateSettings = new JsonObject();
-                    updateSettings.addProperty("action", "update_settings");
-                    updateSettings.add("settings", settings.toJson());
-                    pythonBridge.sendCommand(updateSettings);
-                    logger.info("Settings synchronized with Python backend");
-                } catch (Exception e) {
-                    logger.error("Failed to sync settings with Python backend", e);
-                }
-                
-                // Check FFmpeg status
-                JsonObject ffmpegResponse = pythonBridge.checkFFmpeg();
-                boolean ffmpegAvailable = ffmpegResponse.has("ffmpeg_available") && 
-                                         ffmpegResponse.get("ffmpeg_available").getAsBoolean();
-                
-                // Update sidebar FFmpeg status
-                Platform.runLater(() -> {
-                    if (ffmpegAvailable) {
-                        String version = ffmpegResponse.has("ffmpeg_version") ? 
-                            ffmpegResponse.get("ffmpeg_version").getAsString() : "Unknown";
-                        updateFFmpegStatus(true, version);
-                    } else {
-                        updateFFmpegStatus(false, "Not Found");
-                    }
-                });
-                
-                // Check Whisper status (for subtitle mode)
-                JsonObject whisperResponse = pythonBridge.checkWhisper();
-                boolean whisperAvailable = whisperResponse.has("whisper_available") && 
-                                          whisperResponse.get("whisper_available").getAsBoolean();
-                
-                logger.info("Whisper status: available={}", whisperAvailable);
-                
-                Platform.runLater(() -> {
-                    if (whisperStatusButton != null) {
-                        if (whisperAvailable) {
-                            whisperStatusButton.setText("🤖 Whisper: Ready ✓");
-                            whisperStatusButton.getStyleClass().removeAll("error", "warning");
-                            whisperStatusButton.getStyleClass().add("active");
-                            whisperStatusButton.setTooltip(new Tooltip(
-                                "✅ Whisper AI Available\n\n" +
-                                "Generate subtitles in 90+ languages using AI.\n" +
-                                "No API key or internet required!"
-                            ));
-                        } else {
-                            whisperStatusButton.setText("🤖 Whisper: Not Installed");
-                            whisperStatusButton.getStyleClass().removeAll("active");
-                            whisperStatusButton.getStyleClass().add("warning");
-                            whisperStatusButton.setTooltip(new Tooltip(
-                                "⚠️ Whisper Not Available\n\n" +
-                                "Install Whisper to generate subtitles using AI.\n" +
-                                "Click to see installation instructions in Settings."
-                            ));
-                        }
-                    }
-                });
-                
-                // Check OpenSubtitles status
-                JsonObject osResponse = pythonBridge.checkOpenSubtitles();
-                boolean osConfigured = osResponse.has("configured") && 
-                                      osResponse.get("configured").getAsBoolean();
-                boolean hasApiKey = osResponse.has("has_api_key") && 
-                                   osResponse.get("has_api_key").getAsBoolean();
-                
-                logger.info("OpenSubtitles status: configured={}, hasApiKey={}", osConfigured, hasApiKey);
-                
-                Platform.runLater(() -> {
-                    if (openSubsStatusButton != null) {
-                        if (osConfigured || hasApiKey) {
-                            openSubsStatusButton.setText("🌐 Subtitles: 9 Providers ✓");
-                            openSubsStatusButton.getStyleClass().removeAll("error", "warning");
-                            openSubsStatusButton.getStyleClass().add("active");
-                            openSubsStatusButton.setTooltip(new Tooltip(
-                                "✅ OpenSubtitles.com (search: unlimited, download: " + (hasApiKey ? "5/day" : "0/day") + ")\n" +
-                                "✅ Addic7ed (Movies, TV, Anime)\n" +
-                                "✅ SubDL (Movies & TV)\n" +
-                                "✅ Subf2m (Movies & TV)\n" +
-                                "✅ YIFY Subtitles (Movies)\n" +
-                                "✅ Podnapisi (All content, multilingual)\n" +
-                                "✅ SubDivX (Spanish only)\n" +
-                                "🎌 Kitsunekko (Anime - EN/JP)\n" +
-                                "🎌 Jimaku (Anime only, multilingual)\n\n" +
-                                "Ready to search! ✨"
-                            ));
-                        } else {
-                            openSubsStatusButton.setText("🌐 Subtitles: 8 Free Providers");
-                            openSubsStatusButton.getStyleClass().removeAll("error", "active");
-                            openSubsStatusButton.getStyleClass().add("warning");
-                            openSubsStatusButton.setTooltip(new Tooltip(
-                                "Using free providers (no OpenSubtitles API key):\n" +
-                                "✅ Addic7ed (Movies, TV, Anime)\n" +
-                                "✅ SubDL (Movies & TV)\n" +
-                                "✅ Subf2m (Movies & TV)\n" +
-                                "✅ YIFY Subtitles (Movies)\n" +
-                                "✅ Podnapisi (All content, multilingual)\n" +
-                                "✅ SubDivX (Spanish only)\n" +
-                                "🎌 Kitsunekko (Anime - EN/JP)\n" +
-                                "🎌 Jimaku (Anime only, multilingual)\n\n" +
-                                "💡 Get a FREE OpenSubtitles API key:\n" +
-                                "https://www.opensubtitles.com/en/consumers\n" +
-                                "Add it in Settings for 9 providers!"
-                            ));
-                        }
-                    }
-                });
-                
-                // Check metadata provider status from settings
-                boolean tmdbConfigured = settings.getTmdbApiKey() != null && !settings.getTmdbApiKey().isEmpty();
-                boolean tvdbConfigured = settings.getTvdbApiKey() != null && !settings.getTvdbApiKey().isEmpty();
-                boolean omdbConfigured = settings.getOmdbApiKey() != null && !settings.getOmdbApiKey().isEmpty();
-                boolean traktConfigured = settings.getTraktApiKey() != null && !settings.getTraktApiKey().isEmpty();
-                boolean fanartConfigured = settings.getFanartApiKey() != null && !settings.getFanartApiKey().isEmpty();
-                
-                // Count available providers (4 free + any configured with keys)
-                int availableProviders = 4;  // Always have: AniList, Kitsu, Jikan, TVmaze (free)
-                if (tmdbConfigured) availableProviders++;
-                if (tvdbConfigured) availableProviders++;
-                if (omdbConfigured) availableProviders++;
-                if (traktConfigured) availableProviders++;
-                if (fanartConfigured) availableProviders++;
-                
-                final int totalProviders = availableProviders;
-                
-                Platform.runLater(() -> {
-                    // Update TMDB button
-                    if (tmdbStatusButton != null) {
-                        if (tmdbConfigured) {
-                            tmdbStatusButton.setText("🎬 TMDB: Ready" + (settings.isTmdbValidated() ? " ✓" : ""));
-                            tmdbStatusButton.getStyleClass().removeAll("error", "warning");
-                            tmdbStatusButton.getStyleClass().add("active");
-                        } else {
-                            tmdbStatusButton.setText("🎬 TMDB: Not Setup");
-                            tmdbStatusButton.getStyleClass().removeAll("active");
-                            tmdbStatusButton.getStyleClass().add("warning");
-                        }
-                    }
-                    
-                    // Update TVDB button
-                    if (tvdbStatusButton != null) {
-                        if (tvdbConfigured) {
-                            tvdbStatusButton.setText("📺 TVDB ✓");
-                            tvdbStatusButton.getStyleClass().removeAll("error", "warning");
-                            tvdbStatusButton.getStyleClass().add("active");
-                        } else {
-                            tvdbStatusButton.setText("📺 TVDB ⚠️");
-                            tvdbStatusButton.getStyleClass().removeAll("active");
-                            tvdbStatusButton.getStyleClass().add("warning");
-                        }
-                    }
-                    
-                    // Update OMDB button
-                    if (omdbStatusButton != null) {
-                        if (omdbConfigured) {
-                            omdbStatusButton.setText("🎥 OMDB ✓");
-                            omdbStatusButton.getStyleClass().removeAll("error", "warning");
-                            omdbStatusButton.getStyleClass().add("active");
-                        } else {
-                            omdbStatusButton.setText("🎥 OMDB ⚠️");
-                            omdbStatusButton.getStyleClass().removeAll("active");
-                            omdbStatusButton.getStyleClass().add("warning");
-                        }
-                    }
-                    
-                    // Update Trakt button
-                    if (traktStatusButton != null) {
-                        if (traktConfigured) {
-                            traktStatusButton.setText("📊 Trakt ✓");
-                            traktStatusButton.getStyleClass().removeAll("error", "warning");
-                            traktStatusButton.getStyleClass().add("active");
-                        } else {
-                            traktStatusButton.setText("📊 Trakt ⚠️");
-                            traktStatusButton.getStyleClass().removeAll("active");
-                            traktStatusButton.getStyleClass().add("warning");
-                        }
-                    }
-                    
-                    // Update Fanart.tv button
-                    if (fanartStatusButton != null) {
-                        if (fanartConfigured) {
-                            fanartStatusButton.setText("🎨 Fanart ✓");
-                            fanartStatusButton.getStyleClass().removeAll("error", "warning");
-                            fanartStatusButton.getStyleClass().add("active");
-                        } else {
-                            fanartStatusButton.setText("🎨 Fanart ⚠️");
-                            fanartStatusButton.getStyleClass().removeAll("active");
-                            fanartStatusButton.getStyleClass().add("warning");
-                        }
-                    }
-                    
-                    // Update status label with provider count
-                    if (activeProviderLabel != null) {
-                        activeProviderLabel.setText("✅ " + totalProviders + "/10 Providers Available");
-                        activeProviderLabel.setStyle("-fx-text-fill: #4ec9b0; -fx-font-weight: bold;");
-                    }
-                    
-                    // Search button is always enabled since we have free providers (AniList)
-                    if (searchMetadataButton != null) {
-                        searchMetadataButton.setDisable(false);
-                    }
-                    
-                    // Apply button stays disabled until search results are loaded
-                    if (applyRenameButton != null) {
-                        applyRenameButton.setDisable(true);
-                    }
-                    
-                    // Log provider status
-                    log("=== Metadata Providers: " + totalProviders + "/10 available ===");
-                    log("API Key Providers (Free Keys Available):");
-                    if (tmdbConfigured) log("  ✓ TMDB (Movies & TV)" + (settings.isTmdbValidated() ? " - validated" : ""));
-                    else log("  ⚠️ TMDB (Movies & TV) - API key needed");
-                    if (tvdbConfigured) log("  ✓ TVDB (TV Shows)" + (settings.isTvdbValidated() ? " - validated" : ""));
-                    else log("  ⚠️ TVDB (TV Shows) - API key needed");
-                    if (omdbConfigured) log("  ✓ OMDB (Movies & TV)" + (settings.isOmdbValidated() ? " - validated" : ""));
-                    else log("  ⚠️ OMDB (Movies & TV) - API key needed");
-                    if (traktConfigured) log("  ✓ Trakt (Movies & TV)" + (settings.isTraktValidated() ? " - validated" : ""));
-                    else log("  ⚠️ Trakt (Movies & TV) - API key needed");
-                    if (fanartConfigured) log("  ✓ Fanart.tv (Artwork)");
-                    else log("  ⚠️ Fanart.tv (Artwork) - API key needed");
-                    log("Free Providers (No API Key Required):");
-                    log("  ✅ AniList (Anime) - always available");
-                    log("  ✅ Kitsu (Anime) - always available");
-                    log("  ✅ Jikan/MAL (Anime) - always available");
-                    log("  ✅ TVmaze (TV Shows) - always available");
-                });
-                
-            } catch (Exception e) {
-                logger.error("Error checking provider status", e);
-            }
-        }).start();
-    }
-    
     // ========== New Action Handlers ==========
     
     @FXML
@@ -2897,6 +2736,87 @@ public class LegacyMainController {
     @FXML
     private void handleConfigureAniList() {
         showInfo("AniList", "AniList does not require any configuration. It's ready to use!");
+    }
+    
+    /**
+     * Downloads and applies a single subtitle to a video file.
+     * Reusable method to avoid code duplication between single and batch apply operations.
+     * 
+     * @param subtitle The subtitle item to download and apply
+     * @param videoPath Path to the video file
+     * @param mode Apply mode: "external", "embed", or "burn-in"
+     * @param logPrefix Prefix for log messages (e.g., "  " for batch operations)
+     * @return true if successful, false otherwise
+     */
+    private boolean downloadAndApplySubtitle(SubtitleItem subtitle, String videoPath, String mode, String logPrefix) {
+        try {
+            Platform.runLater(() -> log(logPrefix + "➤ Processing " + subtitle.getLanguage() + " subtitle from " + subtitle.getProvider() + "..."));
+            
+            // Check if manual download only
+            if (subtitle.isManualDownloadOnly()) {
+                Platform.runLater(() -> {
+                    log(logPrefix + "⚠️ Manual download required for " + subtitle.getProvider());
+                    log(logPrefix + "Please download manually from: " + subtitle.getDownloadUrl());
+                });
+                return false;
+            }
+            
+            // Step 1: Download the subtitle
+            Platform.runLater(() -> log(logPrefix + "⬇️  Downloading from " + subtitle.getProvider() + "..."));
+            
+            JsonObject downloadRequest = new JsonObject();
+            downloadRequest.addProperty("action", "download_subtitle");
+            downloadRequest.addProperty("file_id", subtitle.getFileId());
+            downloadRequest.addProperty("provider", subtitle.getProvider());
+            downloadRequest.addProperty("video_path", videoPath);
+            downloadRequest.addProperty("language", subtitle.getLanguage());
+            downloadRequest.addProperty("download_url", subtitle.getDownloadUrl());
+            
+            JsonObject downloadResponse = pythonBridge.sendCommand(downloadRequest);
+            
+            // Check if download succeeded
+            if (!downloadResponse.has("status") || !"success".equals(downloadResponse.get("status").getAsString())) {
+                String errorMsg = downloadResponse.has("message") ? downloadResponse.get("message").getAsString() : "Download failed";
+                Platform.runLater(() -> log(logPrefix + "❌ Download failed: " + errorMsg));
+                return false;
+            }
+            
+            // Get the downloaded subtitle path
+            if (!downloadResponse.has("subtitle_path")) {
+                Platform.runLater(() -> log(logPrefix + "❌ Download response missing subtitle_path"));
+                return false;
+            }
+            
+            String subtitlePath = downloadResponse.get("subtitle_path").getAsString();
+            Platform.runLater(() -> log(logPrefix + "✅ Downloaded to: " + subtitlePath));
+            
+            // Step 2: Apply the subtitle
+            Platform.runLater(() -> log(logPrefix + "🔧 Applying subtitle in '" + mode + "' mode..."));
+            
+            JsonObject applyRequest = new JsonObject();
+            applyRequest.addProperty("action", "apply_subtitles");
+            applyRequest.addProperty("video_path", videoPath);
+            applyRequest.addProperty("subtitle_path", subtitlePath);
+            applyRequest.addProperty("mode", mode);
+            applyRequest.addProperty("language", subtitle.getLanguage());
+            
+            JsonObject applyResponse = pythonBridge.sendCommand(applyRequest);
+            
+            if (applyResponse.has("status") && "success".equals(applyResponse.get("status").getAsString())) {
+                String outputPath = applyResponse.has("output_path") ? applyResponse.get("output_path").getAsString() : "unknown";
+                Platform.runLater(() -> log(logPrefix + "✅ Success: " + outputPath));
+                return true;
+            } else {
+                String errorMsg = applyResponse.has("message") ? applyResponse.get("message").getAsString() : "Unknown error";
+                Platform.runLater(() -> log(logPrefix + "❌ Failed: " + errorMsg));
+                return false;
+            }
+            
+        } catch (Exception e) {
+            logger.error("Error processing subtitle", e);
+            Platform.runLater(() -> log(logPrefix + "❌ Error: " + e.getMessage()));
+            return false;
+        }
     }
     
     @FXML
@@ -2970,114 +2890,25 @@ public class LegacyMainController {
             int failCount = 0;
             
             for (SubtitleItem subtitle : selectedSubtitles) {
-                try {
-                    Platform.runLater(() -> log("Processing " + subtitle.getLanguage() + " subtitle from " + subtitle.getProvider() + "..."));
-                    
-                    // Check if manual download only
-                    if (subtitle.isManualDownloadOnly()) {
-                        Platform.runLater(() -> {
-                            log("⚠️ Manual download required for " + subtitle.getProvider());
-                            log("   Please download manually from: " + subtitle.getDownloadUrl());
-                            log("   Then use 'External File' option to apply it");
-                            showWarning("Manual Download Required",
-                                "The subtitle from " + subtitle.getProvider() + " requires manual download.\n\n" +
-                                "Steps:\n" +
-                                "1. Visit: " + subtitle.getDownloadUrl() + "\n" +
-                                "2. Download the subtitle file\n" +
-                                "3. Use 'External File' option in the Subtitles tab\n" +
-                                "4. Browse and select the downloaded file\n\n" +
-                                "We couldn't get a direct download link for this subtitle.");
-                        });
-                        failCount++;
-                        continue;
-                    }
-                    
-                    // Step 1: Download the subtitle
-                    Platform.runLater(() -> log("Downloading subtitle from " + subtitle.getProvider() + "..."));
-                    
-                    JsonObject downloadRequest = new JsonObject();
-                    downloadRequest.addProperty("action", "download_subtitle");
-                    downloadRequest.addProperty("file_id", subtitle.getFileId());
-                    downloadRequest.addProperty("provider", subtitle.getProvider());
-                    downloadRequest.addProperty("video_path", finalVideoPath);
-                    downloadRequest.addProperty("language", subtitle.getLanguage());
-                    downloadRequest.addProperty("download_url", subtitle.getDownloadUrl());
-                    
-                    JsonObject downloadResponse = pythonBridge.sendCommand(downloadRequest);
-                    
-                    // Check if download succeeded
-                    if (!downloadResponse.has("status") || !"success".equals(downloadResponse.get("status").getAsString())) {
-                        String errorMsg = downloadResponse.has("message") ? downloadResponse.get("message").getAsString() : "Download failed";
-                        boolean requiresManual = downloadResponse.has("requires_manual_download") && 
-                                                downloadResponse.get("requires_manual_download").getAsBoolean();
-                        
-                        // Check if message contains manual download instructions
-                        boolean hasManualInstructions = errorMsg.toLowerCase().contains("manual") || 
-                                                       errorMsg.toLowerCase().contains("visit:") ||
-                                                       errorMsg.toLowerCase().contains("please:");
-                        
-                        if (requiresManual || hasManualInstructions) {
-                            Platform.runLater(() -> {
-                                log("⚠️ Manual download required:");
-                                // Log the full message with line breaks
-                                for (String line : errorMsg.split("\n")) {
-                                    log("   " + line);
-                                }
-                                showWarning("Manual Download Required - " + subtitle.getProvider(), errorMsg);
-                            });
-                        } else {
-                            Platform.runLater(() -> {
-                                log("❌ Download failed: " + subtitle.getProvider());
-                                // Show detailed error in log
-                                for (String line : errorMsg.split("\n")) {
-                                    log("   " + line);
-                                }
-                                showError("Download Failed", 
-                                    "Failed to download from " + subtitle.getProvider() + ":\n\n" + errorMsg);
-                            });
-                        }
-                        failCount++;
-                        continue;
-                    }
-                    
-                    // Get the downloaded subtitle path - add null check
-                    if (!downloadResponse.has("subtitle_path")) {
-                        Platform.runLater(() -> {
-                            log("❌ Download response missing subtitle_path");
-                            log("   Response: " + downloadResponse.toString());
-                        });
-                        failCount++;
-                        continue;
-                    }
-                    
-                    String subtitlePath = downloadResponse.get("subtitle_path").getAsString();
-                    Platform.runLater(() -> log("✅ Downloaded to: " + subtitlePath));
-                    
-                    // Step 2: Apply the subtitle
-                    Platform.runLater(() -> log("Applying subtitle in '" + finalMode + "' mode..."));
-                    
-                    JsonObject applyRequest = new JsonObject();
-                    applyRequest.addProperty("action", "apply_subtitles");
-                    applyRequest.addProperty("video_path", finalVideoPath);
-                    applyRequest.addProperty("subtitle_path", subtitlePath);
-                    applyRequest.addProperty("mode", finalMode);
-                    applyRequest.addProperty("language", subtitle.getLanguage());
-                    
-                    JsonObject applyResponse = pythonBridge.sendCommand(applyRequest);
-                    
-                    if (applyResponse.has("status") && "success".equals(applyResponse.get("status").getAsString())) {
-                        String outputPath = applyResponse.has("output_path") ? applyResponse.get("output_path").getAsString() : "unknown";
-                        Platform.runLater(() -> log("✅ Success: " + outputPath));
-                        successCount++;
-                    } else {
-                        String errorMsg = applyResponse.has("message") ? applyResponse.get("message").getAsString() : "Unknown error";
-                        Platform.runLater(() -> log("❌ Failed: " + errorMsg));
-                        failCount++;
-                    }
-                    
-                } catch (Exception e) {
-                    logger.error("Error processing subtitle", e);
-                    Platform.runLater(() -> log("❌ Error: " + e.getMessage()));
+                // Show enhanced dialog for manual download in single-file mode
+                if (subtitle.isManualDownloadOnly()) {
+                    Platform.runLater(() -> {
+                        showWarning("Manual Download Required",
+                            "The subtitle from " + subtitle.getProvider() + " requires manual download.\n\n" +
+                            "Steps:\n" +
+                            "1. Visit: " + subtitle.getDownloadUrl() + "\n" +
+                            "2. Download the subtitle file\n" +
+                            "3. Use 'External File' option in the Subtitles tab\n" +
+                            "4. Browse and select the downloaded file\n\n" +
+                            "We couldn't get a direct download link for this subtitle.");
+                    });
+                }
+                
+                // Use consolidated download and apply method
+                boolean success = downloadAndApplySubtitle(subtitle, finalVideoPath, finalMode, "");
+                if (success) {
+                    successCount++;
+                } else {
                     failCount++;
                 }
             }
@@ -3223,75 +3054,11 @@ public class LegacyMainController {
                 
                 // Process each selected subtitle for this file
                 for (SubtitleItem subtitle : selectedSubtitles) {
-                    try {
-                        Platform.runLater(() -> log("  ➤ Processing " + subtitle.getLanguage() + " subtitle from " + subtitle.getProvider() + "..."));
-                        
-                        // Check if manual download only
-                        if (subtitle.isManualDownloadOnly()) {
-                            Platform.runLater(() -> {
-                                log("  ⚠️  Manual download required for " + subtitle.getProvider());
-                                log("     Please download manually from: " + subtitle.getDownloadUrl());
-                            });
-                            fileFailCount++;
-                            continue;
-                        }
-                        
-                        // Step 1: Download the subtitle
-                        Platform.runLater(() -> log("  ⬇️  Downloading from " + subtitle.getProvider() + "..."));
-                        
-                        JsonObject downloadRequest = new JsonObject();
-                        downloadRequest.addProperty("action", "download_subtitle");
-                        downloadRequest.addProperty("file_id", subtitle.getFileId());
-                        downloadRequest.addProperty("provider", subtitle.getProvider());
-                        downloadRequest.addProperty("video_path", videoPath);
-                        downloadRequest.addProperty("language", subtitle.getLanguage());
-                        downloadRequest.addProperty("download_url", subtitle.getDownloadUrl());
-                        
-                        JsonObject downloadResponse = pythonBridge.sendCommand(downloadRequest);
-                        
-                        // Check if download succeeded
-                        if (!downloadResponse.has("status") || !"success".equals(downloadResponse.get("status").getAsString())) {
-                            String errorMsg = downloadResponse.has("message") ? downloadResponse.get("message").getAsString() : "Download failed";
-                            Platform.runLater(() -> log("  ❌ Download failed: " + errorMsg));
-                            fileFailCount++;
-                            continue;
-                        }
-                        
-                        // Get the downloaded subtitle path
-                        if (!downloadResponse.has("subtitle_path")) {
-                            Platform.runLater(() -> log("  ❌ Download response missing subtitle_path"));
-                            fileFailCount++;
-                            continue;
-                        }
-                        
-                        String subtitlePath = downloadResponse.get("subtitle_path").getAsString();
-                        Platform.runLater(() -> log("  ✅ Downloaded to: " + subtitlePath));
-                        
-                        // Step 2: Apply the subtitle
-                        Platform.runLater(() -> log("  🔧 Applying subtitle in '" + finalMode + "' mode..."));
-                        
-                        JsonObject applyRequest = new JsonObject();
-                        applyRequest.addProperty("action", "apply_subtitles");
-                        applyRequest.addProperty("video_path", videoPath);
-                        applyRequest.addProperty("subtitle_path", subtitlePath);
-                        applyRequest.addProperty("mode", finalMode);
-                        applyRequest.addProperty("language", subtitle.getLanguage());
-                        
-                        JsonObject applyResponse = pythonBridge.sendCommand(applyRequest);
-                        
-                        if (applyResponse.has("status") && "success".equals(applyResponse.get("status").getAsString())) {
-                            String outputPath = applyResponse.has("output_path") ? applyResponse.get("output_path").getAsString() : "unknown";
-                            Platform.runLater(() -> log("  ✅ Success: " + outputPath));
-                            fileSuccessCount++;
-                        } else {
-                            String errorMsg = applyResponse.has("message") ? applyResponse.get("message").getAsString() : "Unknown error";
-                            Platform.runLater(() -> log("  ❌ Failed: " + errorMsg));
-                            fileFailCount++;
-                        }
-                        
-                    } catch (Exception e) {
-                        logger.error("Error processing subtitle for " + fileName, e);
-                        Platform.runLater(() -> log("  ❌ Error: " + e.getMessage()));
+                    // Use consolidated download and apply method (with "  " prefix for batch operations)
+                    boolean success = downloadAndApplySubtitle(subtitle, videoPath, finalMode, "  ");
+                    if (success) {
+                        fileSuccessCount++;
+                    } else {
                         fileFailCount++;
                     }
                 }
@@ -3699,7 +3466,7 @@ public class LegacyMainController {
             Platform.runLater(() -> availableSubtitlesTable.getItems().clear());
         }
         
-        // Process files sequentially (Python bridge can only handle one at a time)
+        // Use batch search API - Python handles parallel searching internally
         new Thread(() -> {
             try {
                 // Update settings once
@@ -3708,10 +3475,268 @@ public class LegacyMainController {
                 updateSettings.add("settings", settings.toJson());
                 pythonBridge.sendCommand(updateSettings);
                 
-                // Process each file sequentially
+                // Track how many files have completed
+                final int totalFilesToProcess = queuedFiles.size();
+                final java.util.concurrent.atomic.AtomicInteger filesCompleted = new java.util.concurrent.atomic.AtomicInteger(0);
+                
+                // Build files array for batch request
+                JsonArray filesArray = new JsonArray();
+                java.util.Map<String, String> fileIdToName = new java.util.concurrent.ConcurrentHashMap<>();
+                
+                int fileId = 0;
                 for (ConversionJob job : queuedFiles) {
-                    final String filePath = job.getInputPath();
-                    final String fileName = new File(filePath).getName();
+                    String filePath = job.getInputPath();
+                    String fileName = new File(filePath).getName();
+                    
+                    // Mark file as searching
+                    subtitleSearchStatus.put(fileName, SubtitleSearchStatus.SEARCHING);
+                    fileIdToName.put(String.valueOf(fileId), fileName);
+                    
+                    JsonObject fileInfo = new JsonObject();
+                    fileInfo.addProperty("file_id", String.valueOf(fileId));
+                    fileInfo.addProperty("file_name", fileName);
+                    fileInfo.addProperty("video_path", filePath);
+                    JsonArray langsArray = new JsonArray();
+                    for (String lang : selectedLanguages) {
+                        langsArray.add(lang);
+                    }
+                    fileInfo.add("languages", langsArray);
+                    filesArray.add(fileInfo);
+                    
+                    fileId++;
+                }
+                
+                Platform.runLater(() -> {
+                    updateSubtitleFileList();
+                    if (advancedSearch) {
+                        log("🔍 Advanced Search: Using multiple query variations for better results...");
+                    }
+                    log("🔄 Searching " + totalFilesToProcess + " file(s) in parallel...");
+                    
+                    // Initialize progress bar
+                    if (subtitleTotalProgressBar != null) {
+                        subtitleTotalProgressBar.setProgress(0.0);
+                    }
+                    if (subtitleProgressLabel != null) {
+                        subtitleProgressLabel.setText("0 / " + totalFilesToProcess + " files");
+                    }
+                    if (subtitleProgressStatusLabel != null) {
+                        subtitleProgressStatusLabel.setText("Searching...");
+                    }
+                });
+                
+                // Create batch search request
+                JsonObject request = new JsonObject();
+                request.addProperty("action", "batch_search_subtitles");
+                request.add("files", filesArray);
+                
+                // Send batch search with streaming callback
+                pythonBridge.sendStreamingCommand(request, response -> {
+                    Platform.runLater(() -> {
+                        try {
+                            // Check if this is a file-specific update (has file_id)
+                            if (response.has("file_id")) {
+                                String fid = response.get("file_id").getAsString();
+                                String fileName = fileIdToName.get(fid);
+                                
+                                if (fileName == null) {
+                                    logger.warn("Received response for unknown file_id: {}", fid);
+                                    return;
+                                }
+                                
+                                // Process progress/results for this specific file
+                                processFileSearchResponse(fileName, response, filesCompleted, totalFilesToProcess);
+                            } else if (response.has("complete") && response.get("complete").getAsBoolean()) {
+                                // Final batch completion message
+                                logger.info("Batch search completed");
+                                showFinalSubtitleSearchSummary();
+                            }
+                        } catch (Exception e) {
+                            logger.error("Error processing batch search response", e);
+                        }
+                    });
+                });
+                
+            } catch (Exception e) {
+                logger.error("Error in batch subtitle search", e);
+                Platform.runLater(() -> log("❌ Search failed: " + e.getMessage()));
+            }
+        }, "SubtitleSearch").start();
+    }
+    
+    /**
+     * Process search response for a specific file from batch search
+     */
+    private void processFileSearchResponse(String fileName, JsonObject response, 
+                                           java.util.concurrent.atomic.AtomicInteger filesCompleted,
+                                           int totalFilesToProcess) {
+        logger.debug("[processFileSearchResponse] Processing response for file: {}", fileName);
+        logger.debug("[processFileSearchResponse] Response keys: {}", response.keySet());
+        logger.debug("[processFileSearchResponse] Has subtitles: {}", response.has("subtitles"));
+        logger.debug("[processFileSearchResponse] Has status: {}, value: {}", 
+                    response.has("status"), response.has("status") ? response.get("status").getAsString() : "N/A");
+        
+        // Get or create subtitle list for this file
+        ObservableList<SubtitleItem> fileSubtitles = subtitlesByFile.computeIfAbsent(
+            fileName, k -> {
+                logger.debug("Creating new subtitle list for file: {}", k);
+                return FXCollections.synchronizedObservableList(FXCollections.observableArrayList());
+            }
+        );
+        
+        // Check for progress updates
+        if (response.has("progress")) {
+            String provider = response.has("provider") ? response.get("provider").getAsString() : "Unknown";
+            // Note: "provider_complete" means this provider finished, NOT the entire stream
+            boolean isComplete = response.has("provider_complete") && response.get("provider_complete").getAsBoolean();
+            
+            // Check if this progress update includes subtitle results
+            boolean hasSubtitles = response.has("subtitles") && 
+                                  response.get("subtitles").isJsonArray() && 
+                                  response.getAsJsonArray("subtitles").size() > 0;
+            
+            if (isComplete) {
+                log("[" + fileName + "] ✅ " + provider + " - search complete");
+                // If complete message has subtitles, process them
+                if (!hasSubtitles) {
+                    return;
+                }
+                logger.debug("Complete message includes {} subtitles for file: {}", 
+                           response.getAsJsonArray("subtitles").size(), fileName);
+            } else {
+                log("[" + fileName + "] 🔍 Searching " + provider + "...");
+                return;  // Return early for non-complete progress updates
+            }
+        }
+        
+        // Handle final results or incremental updates
+        if (response.has("status")) {
+            String status = response.get("status").getAsString();
+            
+            if ("success".equals(status) && response.has("subtitles")) {
+                JsonArray subtitles = response.getAsJsonArray("subtitles");
+                
+                // Add subtitles to this file's list
+                Set<String> seenFileIds = new HashSet<>();
+                for (int i = 0; i < subtitles.size(); i++) {
+                    JsonObject sub = subtitles.get(i).getAsJsonObject();
+                    String fileId = sub.has("file_id") ? sub.get("file_id").getAsString() : "";
+                    
+                    // Skip duplicates
+                    if (!fileId.isEmpty() && seenFileIds.contains(fileId)) {
+                        continue;
+                    }
+                    seenFileIds.add(fileId);
+                    
+                    String language = sub.has("language") ? sub.get("language").getAsString() : "unknown";
+                    String provider = sub.has("provider") ? sub.get("provider").getAsString() : "unknown";
+                    double score = sub.has("score") ? sub.get("score").getAsDouble() : 0.0;
+                    String format = sub.has("format") ? sub.get("format").getAsString() : "srt";
+                    String downloadUrl = sub.has("download_url") ? sub.get("download_url").getAsString() : "";
+                    boolean manualOnly = sub.has("manual_download_only") && sub.get("manual_download_only").getAsBoolean();
+                    
+                    SubtitleItem item = new SubtitleItem(false, language, provider, score, format, fileId, downloadUrl, manualOnly);
+                    fileSubtitles.add(item);
+                    logger.debug("[processFileSearchResponse] Added subtitle #{} for file {}: {} - {}", 
+                               i+1, fileName, provider, language);
+                }
+                
+                logger.debug("[processFileSearchResponse] File {} now has {} subtitles total", fileName, fileSubtitles.size());
+                logger.debug("[processFileSearchResponse] subtitlesByFile total entries: {}", subtitlesByFile.size());
+                
+                // Update display if this is the currently selected file
+                String baseCurrentFile = currentlySelectedFile != null ? extractBaseFileName(currentlySelectedFile) : null;
+                if (fileName.equals(baseCurrentFile) && availableSubtitlesTable != null) {
+                    availableSubtitlesTable.setItems(fileSubtitles);
+                    int uniqueLangs = fileSubtitles.stream()
+                        .map(SubtitleItem::getLanguage)
+                        .collect(java.util.stream.Collectors.toSet())
+                        .size();
+                    if (subtitleStatsLabel != null) {
+                        subtitleStatsLabel.setText(fileSubtitles.size() + " available | " + uniqueLangs + " language(s)");
+                    }
+                }
+                
+                // Check if this is the final result for this file
+                // Note: "file_complete" means this file is done, but stream continues
+                // "complete" means the entire batch is done
+                boolean isFinal = (response.has("file_complete") && response.get("file_complete").getAsBoolean()) ||
+                                 (response.has("complete") && response.get("complete").getAsBoolean());
+                if (isFinal) {
+                    int count = fileSubtitles.size();
+                    
+                    // Mark file as completed
+                    subtitleSearchStatus.put(fileName, SubtitleSearchStatus.COMPLETED);
+                    updateSubtitleFileList();
+                    
+                    // Log completion
+                    logger.debug("Search complete for file: {} ({} subtitles)", fileName, count);
+                    log("✅ [" + fileName + "] " + count + " subtitle(s) found");
+                    
+                    // Check if this was the last file to complete
+                    int completed = filesCompleted.incrementAndGet();
+                    
+                    // Update progress bar
+                    if (subtitleTotalProgressBar != null) {
+                        double progress = (double) completed / totalFilesToProcess;
+                        subtitleTotalProgressBar.setProgress(progress);
+                    }
+                    if (subtitleProgressLabel != null) {
+                        subtitleProgressLabel.setText(completed + " / " + totalFilesToProcess + " files");
+                    }
+                    
+                    if (completed == totalFilesToProcess) {
+                        showFinalSubtitleSearchSummary();
+                    }
+                }
+            } else if ("error".equals(status)) {
+                String errorMsg = response.has("message") ? response.get("message").getAsString() : "Search failed";
+                log("❌ [" + fileName + "] " + errorMsg);
+                
+                // Mark as completed even on error
+                subtitleSearchStatus.put(fileName, SubtitleSearchStatus.COMPLETED);
+                updateSubtitleFileList();
+                
+                int completed = filesCompleted.incrementAndGet();
+                
+                // Update progress bar
+                if (subtitleTotalProgressBar != null) {
+                    double progress = (double) completed / totalFilesToProcess;
+                    subtitleTotalProgressBar.setProgress(progress);
+                }
+                if (subtitleProgressLabel != null) {
+                    subtitleProgressLabel.setText(completed + " / " + totalFilesToProcess + " files");
+                }
+                
+                if (completed == totalFilesToProcess) {
+                    showFinalSubtitleSearchSummary();
+                }
+            }
+        }
+    }
+    
+    /**
+     * Initialize subtitle progress bar to Ready state
+     */
+    private void setupSubtitleProgressBar() {
+        if (subtitleTotalProgressBar != null) {
+            subtitleTotalProgressBar.setProgress(0.0);
+        }
+        if (subtitleProgressLabel != null) {
+            subtitleProgressLabel.setText("0 / 0 files");
+        }
+        if (subtitleProgressStatusLabel != null) {
+            subtitleProgressStatusLabel.setText("Ready");
+        }
+    }
+    
+    /**
+     * Search subtitles for a single file (called sequentially for each file)
+     */
+    private void searchSingleFile(String filePath, String fileName, List<String> selectedLanguages, 
+                                   boolean advancedSearch, java.util.concurrent.atomic.AtomicInteger filesCompleted,
+                                   int totalFilesToProcess) {
+        try {
                 
                 // Mark file as searching
                 subtitleSearchStatus.put(fileName, SubtitleSearchStatus.SEARCHING);
@@ -3751,14 +3776,18 @@ public class LegacyMainController {
                 }
                 request.add("languages", langsArray);
                 
-                // Initialize subtitle list for this file
-                if (!subtitlesByFile.containsKey(fileName)) {
-                    subtitlesByFile.put(fileName, FXCollections.observableArrayList());
-                }
-                final ObservableList<SubtitleItem> fileSubtitles = subtitlesByFile.get(fileName);
+                // Initialize subtitle list for this file (thread-safe with computeIfAbsent)
+                final ObservableList<SubtitleItem> fileSubtitles = subtitlesByFile.computeIfAbsent(
+                    fileName, k -> {
+                        logger.debug("Creating new subtitle list for file: {}", k);
+                        return FXCollections.synchronizedObservableList(FXCollections.observableArrayList());
+                    }
+                );
                 
-                // Track results for deduplication
-                final Set<String> seenFileIds = new HashSet<>();
+                logger.debug("Searching subtitles for: {} (list has {} existing items)", fileName, fileSubtitles.size());
+                
+                // Track results for deduplication (each thread gets its own set per file)
+                final Set<String> seenFileIds = java.util.Collections.synchronizedSet(new HashSet<>());
                 final java.util.concurrent.atomic.AtomicInteger totalCount = new java.util.concurrent.atomic.AtomicInteger(0);
                 
                 // Use streaming command with progress callback
@@ -3771,15 +3800,27 @@ public class LegacyMainController {
                                     String provider = response.has("provider") ? response.get("provider").getAsString() : "Unknown";
                                     boolean isComplete = response.has("complete") && response.get("complete").getAsBoolean();
                                     
+                                    // Check if this progress update includes subtitle results
+                                    boolean hasSubtitles = response.has("subtitles") && 
+                                                          response.get("subtitles").isJsonArray() && 
+                                                          response.getAsJsonArray("subtitles").size() > 0;
+                                    
                                     if (isComplete) {
                                         log("✅ " + provider + " - search complete");
+                                        // If complete message has subtitles, process them instead of returning early
+                                        if (!hasSubtitles) {
+                                            return;
+                                        }
+                                        logger.debug("Complete message includes {} subtitles - processing them now", 
+                                                   response.getAsJsonArray("subtitles").size());
+                                        // Fall through to process subtitles below
                                     } else {
                                         log("🔍 Searching " + provider + "...");
                                         if (subtitleStatsLabel != null) {
                                             subtitleStatsLabel.setText("Searching " + provider + " for " + fileName);
                                         }
+                                        return;  // Return early for non-complete progress updates
                                     }
-                                    return;
                                 }
                                 
                                 // Handle final results or incremental updates
@@ -3815,6 +3856,11 @@ public class LegacyMainController {
                                         
                                         totalCount.addAndGet(newCount);
                                         
+                                        if (newCount > 0) {
+                                            logger.debug("Added {} subtitles to list for file: {} (total now: {})", 
+                                                       newCount, fileName, fileSubtitles.size());
+                                        }
+                                        
                                         // Update display if this is the currently selected file
                                         // Need to extract base filename from currentlySelectedFile since it may have status tags
                                         String baseCurrentFile = currentlySelectedFile != null ? extractBaseFileName(currentlySelectedFile) : null;
@@ -3831,11 +3877,28 @@ public class LegacyMainController {
                                         boolean isFinal = response.has("complete") && response.get("complete").getAsBoolean();
                                         if (isFinal) {
                                             int count = totalCount.get();
-                                            log("Found " + count + " total subtitle(s)");
+                                            
+                                            // Mark file as completed NOW (not before the search finishes)
+                                            subtitleSearchStatus.put(fileName, SubtitleSearchStatus.COMPLETED);
+                                            
+                                            // Log completion
+                                            logger.debug("Stored {} subtitle(s) for file: {}", count, fileName);
+                                            log("✅ Search complete for: " + fileName + " (" + count + " result(s))");
+                                            
                                             if (count > 0) {
-                                                log("✅ Search complete! Results displayed in table.");
+                                                log("Results displayed in table.");
                                             } else {
                                                 log("⚠️ No subtitles found. Try AI generation instead.");
+                                            }
+                                            
+                                            // Update file selector with completion status
+                                            updateSubtitleFileList();
+                                            
+                                            // Check if this was the last file to complete
+                                            int completed = filesCompleted.incrementAndGet();
+                                            if (completed == totalFilesToProcess) {
+                                                // ALL files have completed - show final summary
+                                                showFinalSubtitleSearchSummary();
                                             }
                                         }
                                     } else if ("error".equals(status)) {
@@ -3843,6 +3906,15 @@ public class LegacyMainController {
                                         log("❌ Search failed: " + errorMsg);
                                         if (subtitleStatsLabel != null) {
                                             subtitleStatsLabel.setText("Search failed");
+                                        }
+                                        
+                                        // Mark as completed even on error and check if last file
+                                        subtitleSearchStatus.put(fileName, SubtitleSearchStatus.COMPLETED);
+                                        updateSubtitleFileList();
+                                        
+                                        int completed = filesCompleted.incrementAndGet();
+                                        if (completed == totalFilesToProcess) {
+                                            showFinalSubtitleSearchSummary();
                                         }
                                     }
                                 }
@@ -3903,6 +3975,17 @@ public class LegacyMainController {
                                 }
                                 log("⚠️ No subtitles found. Try AI generation instead.");
                             }
+                            
+                            // Mark file as completed (fallback path)
+                            subtitleSearchStatus.put(fileName, SubtitleSearchStatus.COMPLETED);
+                            updateSubtitleFileList();
+                            log("✅ Search complete for: " + fileName + " (" + count + " result(s))");
+                            
+                            // Check if this was the last file to complete
+                            int completed = filesCompleted.incrementAndGet();
+                            if (completed == totalFilesToProcess) {
+                                showFinalSubtitleSearchSummary();
+                            }
                         });
                     } else {
                         String errorMsg = response.has("message") ? response.get("message").getAsString() : "Search failed";
@@ -3911,99 +3994,85 @@ public class LegacyMainController {
                             if (subtitleStatsLabel != null) {
                                 subtitleStatsLabel.setText("Search failed");
                             }
+                            // Mark as completed even on error
+                            subtitleSearchStatus.put(fileName, SubtitleSearchStatus.COMPLETED);
+                            updateSubtitleFileList();
+                            
+                            // Check if this was the last file to complete
+                            int completed = filesCompleted.incrementAndGet();
+                            if (completed == totalFilesToProcess) {
+                                showFinalSubtitleSearchSummary();
+                            }
                         });
                     }
                 }
                 
-                // Mark file as completed
-                subtitleSearchStatus.put(fileName, SubtitleSearchStatus.COMPLETED);
+                // NOTE: Completion status is now set inside the streaming callback when search actually finishes
+                // This fixes the issue where status showed "completed" before search even started
+                // Final summary is also shown in the callback when ALL files complete
                 
-                // Log completion for this file
-                int subtitleCount = fileSubtitles != null ? fileSubtitles.size() : 0;
-                
-                // Debug: Verify the file was added to the map
-                logger.debug("Stored {} subtitle(s) for file: {}", subtitleCount, fileName);
-                logger.debug("Total files in subtitlesByFile map: {}", subtitlesByFile.size());
-                
-                Platform.runLater(() -> {
-                    log("✅ Search complete for: " + fileName + " (" + subtitleCount + " result(s))");
-                    // Update file selector with status
-                    updateSubtitleFileList();
-                    
-                    // Select first file if none selected or update current selection display
-                    if (currentlySelectedFile == null && !subtitleFileCombo.getItems().isEmpty()) {
-                        String firstItem = subtitleFileCombo.getItems().get(0);
-                        currentlySelectedFile = firstItem;
-                        subtitleFileCombo.setValue(firstItem);
-                        
-                        // Get the base filename without status tags
-                        String baseFileName = extractBaseFileName(firstItem);
-                        
-                        // Display subtitles for first file
-                        if (availableSubtitlesTable != null && subtitlesByFile.containsKey(baseFileName)) {
-                            availableSubtitlesTable.setItems(subtitlesByFile.get(baseFileName));
-                            
-                            // Update stats
-                            int uniqueLangs = fileSubtitles.stream()
-                                .map(SubtitleItem::getLanguage)
-                                .collect(java.util.stream.Collectors.toSet())
-                                .size();
-                            if (subtitleStatsLabel != null) {
-                                subtitleStatsLabel.setText(subtitleCount + " available | " + uniqueLangs + " language(s)");
-                            }
-                        }
-                    } else if (currentlySelectedFile != null) {
-                        // Update display if this is the currently selected file
-                        String baseCurrentFile = extractBaseFileName(currentlySelectedFile);
-                        if (baseCurrentFile.equals(fileName) && availableSubtitlesTable != null && fileSubtitles != null) {
-                            availableSubtitlesTable.setItems(fileSubtitles);
-                            int uniqueLangs = fileSubtitles.stream()
-                                .map(SubtitleItem::getLanguage)
-                                .collect(java.util.stream.Collectors.toSet())
-                                .size();
-                            if (subtitleStatsLabel != null) {
-                                subtitleStatsLabel.setText(subtitleCount + " available | " + uniqueLangs + " language(s)");
-                            }
-                        }
-                    }
-                });
-                } // End of for each file loop
-                
-                // All files processed - final summary
-                int totalFilesWithResults = 0;
-                int totalSubtitles = 0;
-                StringBuilder filesWithResults = new StringBuilder();
-                
-                for (java.util.Map.Entry<String, ObservableList<SubtitleItem>> entry : subtitlesByFile.entrySet()) {
-                    ObservableList<SubtitleItem> subs = entry.getValue();
-                    if (subs != null && !subs.isEmpty()) {
-                        totalFilesWithResults++;
-                        totalSubtitles += subs.size();
-                        filesWithResults.append("\n   • ").append(entry.getKey()).append(": ").append(subs.size()).append(" subtitle(s)");
-                    }
-                }
-                
-                logger.info("Search summary: {} files with results, {} total subtitles", totalFilesWithResults, totalSubtitles);
-                logger.info("Files with results: {}", filesWithResults.toString());
-                
-                final int finalTotalFiles = totalFilesWithResults;
-                final int finalTotalSubs = totalSubtitles;
-                final String finalFilesList = filesWithResults.toString();
-                
-                Platform.runLater(() -> {
-                    log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-                    log("🎉 Search complete! Found " + finalTotalSubs + " subtitle(s) across " + finalTotalFiles + " file(s)");
-                    if (!finalFilesList.isEmpty()) {
-                        log("Results breakdown:" + finalFilesList);
-                    }
-                    log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-                });
-                
-            } catch (Exception e) {
-                logger.error("Error in subtitle search", e);
-                Platform.runLater(() -> log("❌ Search error: " + e.getMessage()));
+        } catch (Exception e) {
+            logger.error("Error searching file: " + fileName, e);
+            Platform.runLater(() -> log("❌ Search error for " + fileName + ": " + e.getMessage()));
+            
+            // Mark as completed even on exception
+            subtitleSearchStatus.put(fileName, SubtitleSearchStatus.COMPLETED);
+            Platform.runLater(() -> updateSubtitleFileList());
+            
+            int completed = filesCompleted.incrementAndGet();
+            if (completed == totalFilesToProcess) {
+                Platform.runLater(() -> showFinalSubtitleSearchSummary());
             }
-        }, "SubtitleSearch").start();
+        }
+    }
+    
+    /**
+     * Show final summary when ALL subtitle searches have completed.
+     * Called from the streaming callback when the last file finishes.
+     */
+    private void showFinalSubtitleSearchSummary() {
+        Platform.runLater(() -> {
+            // Update progress status
+            if (subtitleProgressStatusLabel != null) {
+                subtitleProgressStatusLabel.setText("Complete");
+            }
+            
+            int totalFilesWithResults = 0;
+            int totalSubtitles = 0;
+            StringBuilder filesWithResults = new StringBuilder();
+            
+            for (java.util.Map.Entry<String, ObservableList<SubtitleItem>> entry : subtitlesByFile.entrySet()) {
+                ObservableList<SubtitleItem> subs = entry.getValue();
+                if (subs != null && !subs.isEmpty()) {
+                    totalFilesWithResults++;
+                    totalSubtitles += subs.size();
+                    filesWithResults.append("\n   • ").append(entry.getKey()).append(": ").append(subs.size()).append(" subtitle(s)");
+                }
+            }
+            
+            logger.info("Search summary: {} files with results, {} total subtitles", totalFilesWithResults, totalSubtitles);
+            logger.info("Files with results: {}", filesWithResults.toString());
+            
+            log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            log("🎉 Search complete! Found " + totalSubtitles + " subtitle(s) across " + totalFilesWithResults + " file(s)");
+            if (!filesWithResults.toString().isEmpty()) {
+                log("Results breakdown:" + filesWithResults.toString());
+            }
+            log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+            
+            // Update stats label for currently selected file
+            if (subtitleStatsLabel != null && currentlySelectedFile != null) {
+                String baseFileName = extractBaseFileName(currentlySelectedFile);
+                ObservableList<SubtitleItem> currentFileSubs = subtitlesByFile.get(baseFileName);
+                if (currentFileSubs != null) {
+                    int uniqueLangs = currentFileSubs.stream()
+                        .map(SubtitleItem::getLanguage)
+                        .collect(java.util.stream.Collectors.toSet())
+                        .size();
+                    subtitleStatsLabel.setText(currentFileSubs.size() + " available | " + uniqueLangs + " language(s)");
+                }
+            }
+        });
     }
     
     @FXML
@@ -4302,127 +4371,6 @@ public class LegacyMainController {
         }, "SubtitleGeneration").start();
     }
     
-    private void handleDownloadSubtitles() {
-        if (queuedFiles.isEmpty()) {
-            showWarning("No Files", "Please add files to the queue first.");
-            return;
-        }
-        
-        // Get selected languages
-        List<String> selectedLanguages = getSelectedLanguages();
-        
-        if (selectedLanguages.isEmpty()) {
-            showWarning("No Languages", "Please select at least one language.");
-            return;
-        }
-        
-        log("Downloading subtitles for " + queuedFiles.size() + " file(s) in " + selectedLanguages.size() + " language(s)...");
-        log("Languages: " + String.join(", ", selectedLanguages));
-        
-        // Process each queued file
-        new Thread(() -> {
-            int successCount = 0;
-            int failedCount = 0;
-            
-            for (ConversionJob job : queuedFiles) {
-                String filePath = job.getInputPath();
-                String fileName = new File(filePath).getName();
-                
-                Platform.runLater(() -> log("Downloading subtitles for: " + fileName));
-                
-                try {
-                    JsonObject request = new JsonObject();
-                    request.addProperty("action", "download_subtitles");
-                    request.addProperty("video_path", filePath);
-                    
-                    // Add languages as JSON array
-                    JsonArray langsArray = new JsonArray();
-                    for (String lang : selectedLanguages) {
-                        langsArray.add(lang);
-                    }
-                    request.add("languages", langsArray);
-                    
-                    // Update settings in Python backend
-                    JsonObject updateSettings = new JsonObject();
-                    updateSettings.addProperty("action", "update_settings");
-                    updateSettings.add("settings", settings.toJson());
-                    pythonBridge.sendCommand(updateSettings);
-                    
-                    // Download subtitles
-                    JsonObject response = pythonBridge.sendCommand(request);
-                    
-                    if (response.has("status") && "success".equals(response.get("status").getAsString())) {
-                        String message = response.has("message") ? 
-                            response.get("message").getAsString() : "Subtitles downloaded successfully";
-                        
-                        Platform.runLater(() -> {
-                            log("✅ Downloaded: " + fileName + " - " + message);
-                        });
-                        successCount++;
-                    } else {
-                        String errorMsg = response.has("message") ? 
-                            response.get("message").getAsString() : "Unknown error";
-                        
-                        // Check if it's an authentication error
-                        if (errorMsg.toLowerCase().contains("unauthorized") || 
-                            errorMsg.toLowerCase().contains("invalid api key") ||
-                            errorMsg.toLowerCase().contains("authentication") ||
-                            errorMsg.toLowerCase().contains("401")) {
-                            
-                            // Invalidate OpenSubtitles credentials
-                            settings.setOpensubtitlesValidated(false);
-                            settings.save();
-                            
-                            Platform.runLater(() -> {
-                                log("❌ Authentication Error: " + fileName + " - " + errorMsg);
-                                log("⚠️ OpenSubtitles validation invalidated. Please re-validate in Settings.");
-                                showError("Authentication Failed", 
-                                    "OpenSubtitles API authentication failed.\n\n" +
-                                    "Error: " + errorMsg + "\n\n" +
-                                    "Please go to Settings > Subtitles and re-validate your API key.");
-                            });
-                        } else {
-                            Platform.runLater(() -> {
-                                log("❌ Failed: " + fileName + " - " + errorMsg);
-                            });
-                        }
-                        failedCount++;
-                    }
-                    
-                } catch (TimeoutException e) {
-                    logger.error("Timeout downloading subtitles for: " + fileName, e);
-                    Platform.runLater(() -> {
-                        log("❌ Timeout: " + fileName + " - Operation timed out. Check network connection.");
-                    });
-                    failedCount++;
-                } catch (Exception e) {
-                    logger.error("Error downloading subtitles for: " + fileName, e);
-                    
-                    // Check if it's a connection/network error
-                    String errorMsg = e.getMessage();
-                    if (errorMsg != null && (errorMsg.contains("Connection") || errorMsg.contains("Network"))) {
-                        Platform.runLater(() -> {
-                            log("❌ Network Error: " + fileName + " - Check your internet connection");
-                        });
-                    } else {
-                        Platform.runLater(() -> {
-                            log("❌ Error: " + fileName + " - " + (errorMsg != null ? errorMsg : "Unknown error"));
-                        });
-                    }
-                    failedCount++;
-                }
-            }
-            
-            // Show completion message
-            final int finalSuccess = successCount;
-            final int finalFailed = failedCount;
-            Platform.runLater(() -> {
-                log("Subtitle download complete: " + finalSuccess + " success, " + finalFailed + " failed");
-            });
-            
-        }, "SubtitleDownload").start();
-    }
-    
     // ========================================
     // WINDOW CONTROL METHODS
     // ========================================
@@ -4640,7 +4588,7 @@ public class LegacyMainController {
                 icon.setIconSize(TOOLBAR_ICON_SIZE);
                 icon.setIconColor(javafx.scene.paint.Color.WHITE);
                 searchMetadataButton.setGraphic(icon);
-                searchMetadataButton.setText("🔍 Search");
+                searchMetadataButton.setText("Search");
             }
             
             // TMDB Status button
@@ -4650,7 +4598,7 @@ public class LegacyMainController {
                 icon.setIconSize(TOOLBAR_ICON_SIZE);
                 icon.setIconColor(javafx.scene.paint.Color.web("#a0a0a0"));
                 tmdbStatusButton.setGraphic(icon);
-                tmdbStatusButton.setText("🎬 TMDB: Not Setup");
+                tmdbStatusButton.setText("TMDB: Not Setup");
             }
             
             // Remove Queued button
@@ -4710,7 +4658,7 @@ public class LegacyMainController {
                 icon.setIconSize(TOOLBAR_ICON_SIZE);
                 icon.setIconColor(javafx.scene.paint.Color.WHITE);
                 applyRenameButton.setGraphic(icon);
-                applyRenameButton.setText("✅ Apply Changes");
+                applyRenameButton.setText("Apply Changes");
                 applyRenameButton.setDisable(true);  // Disabled until search results load
             }
             
@@ -4721,7 +4669,7 @@ public class LegacyMainController {
                 icon.setIconSize(TOOLBAR_ICON_SIZE);
                 icon.setIconColor(javafx.scene.paint.Color.web("#a0a0a0"));
                 tvdbStatusButton.setGraphic(icon);
-                tvdbStatusButton.setText("📺 TVDB");
+                tvdbStatusButton.setText("TVDB");
             }
             
             // OMDB Status button
@@ -4731,7 +4679,7 @@ public class LegacyMainController {
                 icon.setIconSize(TOOLBAR_ICON_SIZE);
                 icon.setIconColor(javafx.scene.paint.Color.web("#a0a0a0"));
                 omdbStatusButton.setGraphic(icon);
-                omdbStatusButton.setText("🎥 OMDB");
+                omdbStatusButton.setText("OMDB");
             }
             
             // Trakt Status button
@@ -4741,7 +4689,7 @@ public class LegacyMainController {
                 icon.setIconSize(TOOLBAR_ICON_SIZE);
                 icon.setIconColor(javafx.scene.paint.Color.web("#a0a0a0"));
                 traktStatusButton.setGraphic(icon);
-                traktStatusButton.setText("📊 Trakt");
+                traktStatusButton.setText("Trakt");
             }
             
             // Fanart.tv Status button
@@ -4751,7 +4699,7 @@ public class LegacyMainController {
                 icon.setIconSize(TOOLBAR_ICON_SIZE);
                 icon.setIconColor(javafx.scene.paint.Color.web("#a0a0a0"));
                 fanartStatusButton.setGraphic(icon);
-                fanartStatusButton.setText("🎨 Fanart");
+                fanartStatusButton.setText("Fanart");
             }
             
             // Format Pattern button
@@ -4771,7 +4719,7 @@ public class LegacyMainController {
                 icon.setIconSize(TOOLBAR_ICON_SIZE);
                 icon.setIconColor(javafx.scene.paint.Color.WHITE);
                 subtitleProcessButton.setGraphic(icon);
-                subtitleProcessButton.setText("Process Files");
+                subtitleProcessButton.setText("Search Subtitles");
             }
             
             logger.info("Toolbar icons initialized successfully");
@@ -5035,6 +4983,93 @@ public class LegacyMainController {
     private void handleClose() {
         if (primaryStage != null) {
             primaryStage.fireEvent(new javafx.stage.WindowEvent(primaryStage, javafx.stage.WindowEvent.WINDOW_CLOSE_REQUEST));
+        }
+    }
+    
+    /**
+     * Toggle encoder logs panel visibility
+     */
+    @FXML
+    private void handleToggleEncoderLogs() {
+        encoderLogsPanelVisible = !encoderLogsPanelVisible;
+        
+        if (encoderRightPanel != null) {
+            encoderRightPanel.setVisible(encoderLogsPanelVisible);
+            encoderRightPanel.setManaged(encoderLogsPanelVisible);
+        }
+        
+        if (encoderLogToggleButton != null) {
+            encoderLogToggleButton.setText(encoderLogsPanelVisible ? "◀" : "▶");
+            encoderLogToggleButton.setTooltip(new Tooltip(encoderLogsPanelVisible ? "Hide panel" : "Show panel"));
+        }
+        
+        // Force layout update by adjusting SplitPane divider
+        if (encoderModeLayout != null) {
+            Platform.runLater(() -> {
+                if (encoderLogsPanelVisible) {
+                    encoderModeLayout.setDividerPositions(0.60);
+                } else {
+                    encoderModeLayout.setDividerPositions(1.0);
+                }
+            });
+        }
+    }
+    
+    /**
+     * Toggle subtitle logs panel visibility
+     */
+    @FXML
+    private void handleToggleSubtitleLogs() {
+        subtitleLogsPanelVisible = !subtitleLogsPanelVisible;
+        
+        if (subtitleRightPanel != null) {
+            subtitleRightPanel.setVisible(subtitleLogsPanelVisible);
+            subtitleRightPanel.setManaged(subtitleLogsPanelVisible);
+        }
+        
+        if (subtitleLogToggleButton != null) {
+            subtitleLogToggleButton.setText(subtitleLogsPanelVisible ? "◀" : "▶");
+            subtitleLogToggleButton.setTooltip(new Tooltip(subtitleLogsPanelVisible ? "Hide panel" : "Show panel"));
+        }
+        
+        // Force layout update by adjusting SplitPane divider
+        if (subtitleModeLayout != null) {
+            Platform.runLater(() -> {
+                if (subtitleLogsPanelVisible) {
+                    subtitleModeLayout.setDividerPositions(0.75);
+                } else {
+                    subtitleModeLayout.setDividerPositions(1.0);
+                }
+            });
+        }
+    }
+    
+    /**
+     * Toggle renamer logs panel visibility
+     */
+    @FXML
+    private void handleToggleRenamerLogs() {
+        renamerLogsPanelVisible = !renamerLogsPanelVisible;
+        
+        if (renamerRightPanel != null) {
+            renamerRightPanel.setVisible(renamerLogsPanelVisible);
+            renamerRightPanel.setManaged(renamerLogsPanelVisible);
+        }
+        
+        if (renamerLogToggleButton != null) {
+            renamerLogToggleButton.setText(renamerLogsPanelVisible ? "◀" : "▶");
+            renamerLogToggleButton.setTooltip(new Tooltip(renamerLogsPanelVisible ? "Hide panel" : "Show panel"));
+        }
+        
+        // Force layout update by adjusting SplitPane divider
+        if (renamerModeLayout != null) {
+            Platform.runLater(() -> {
+                if (renamerLogsPanelVisible) {
+                    renamerModeLayout.setDividerPositions(0.75);
+                } else {
+                    renamerModeLayout.setDividerPositions(1.0);
+                }
+            });
         }
     }
     
