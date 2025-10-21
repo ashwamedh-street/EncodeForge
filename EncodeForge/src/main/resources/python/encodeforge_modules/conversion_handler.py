@@ -531,13 +531,14 @@ class ConversionHandler:
                     return {"status": "error", "message": f"Output file already exists: {output_path_obj}"}
             
             # Build FFmpeg command with progress output enabled
-            # Use -progress pipe:2 to force progress output to stderr even when piped
-            # According to FFmpeg docs, pipe:2 explicitly sends to stderr (fd 2)
+            # -nostdin prevents FFmpeg from waiting for stdin (critical for pipes)
+            # -progress - sends progress to stdout in key=value format
             cmd = [
                 self.settings.ffmpeg_path,
                 "-hide_banner",
-                "-loglevel", "error",  # Only errors to keep stderr clean
-                "-progress", "pipe:2",  # Force progress to stderr in key=value format
+                "-nostdin",  # CRITICAL: Prevent FFmpeg from reading stdin (prevents hanging)
+                "-loglevel", "info",  # Info level so we see what's happening
+                "-progress", "-",  # Send progress to stdout (not stderr)
                 "-i", str(input_file)
             ]
             
@@ -657,12 +658,21 @@ class ConversionHandler:
             stderr_lines = []
             
             if progress_callback and self.current_process:
-                # Read stderr for progress (from -stats) since FFmpeg outputs stats to stderr
-                logger.info("Starting stderr monitoring thread for progress...")
+                # Save PID immediately for state tracking
+                current_pid = self.current_process.pid
+                logger.info(f"FFmpeg PID: {current_pid}")
                 
-                def read_stderr():
-                    """Read stderr for progress data and errors"""
-                    logger.info("Stderr reading thread started")
+                # Update queue state with PID
+                if hasattr(self, '_file_queue') and self._file_queue and self._current_index < len(self._file_queue):
+                    self._file_queue[self._current_index]['pid'] = current_pid
+                    logger.debug(f"Updated queue entry with PID: {current_pid}")
+                
+                # -progress - sends to stdout, stderr has errors/info
+                logger.info("Starting progress monitoring threads...")
+                
+                def read_stdout():
+                    """Read stdout for progress data (-progress -)"""
+                    logger.info("Stdout thread started (progress data)")
                     progress_count = 0
                     last_progress_time = 0
                     last_progress_data = None
@@ -670,14 +680,13 @@ class ConversionHandler:
                     
                     while True:
                         if self.cancel_requested:
-                            logger.info("Cancel requested, stopping stderr thread")
+                            logger.info("Cancel requested, stopping stdout thread")
                             break
                         
-                        if self.current_process and self.current_process.stderr:
-                            line = self.current_process.stderr.readline()
+                        if self.current_process and self.current_process.stdout:
+                            line = self.current_process.stdout.readline()
                             if not line:
-                                logger.info("Stderr EOF reached")
-                                # Send final progress update
+                                logger.info("Stdout EOF reached")
                                 if last_progress_data:
                                     try:
                                         progress_callback(last_progress_data)
@@ -689,19 +698,18 @@ class ConversionHandler:
                             break
                         
                         line_count += 1
-                        stderr_lines.append(line)
+                        stdout_lines.append(line)
                         
-                        # DEBUG: Log every line to see what format FFmpeg is using
+                        # DEBUG: Log every line
                         if line.strip():
-                            logger.debug(f"STDERR LINE: {line.strip()}")
+                            logger.info(f"STDOUT: {line.strip()}")
                         
-                        # Parse progress data (both traditional and pipe formats)
+                        # Parse progress (key=value format from -progress -)
                         progress_info = self._parse_ffmpeg_progress(line.strip())
                         if progress_info:
                             last_progress_data = progress_info
                             current_time = time.time()
                             
-                            # Throttle to once every 2 seconds
                             if current_time - last_progress_time >= 2.0:
                                 last_progress_time = current_time
                                 progress_count += 1
@@ -710,48 +718,52 @@ class ConversionHandler:
                                     progress_callback(progress_info)
                                 except Exception as cb_error:
                                     logger.error(f"Error in progress callback: {cb_error}")
-                        else:
-                            # Log errors and important messages
-                            line_lower = line.lower().strip()
-                            if any(keyword in line_lower for keyword in ['error', 'failed', 'cannot', 'invalid']):
-                                logger.error(f"FFmpeg ERROR: {line.strip()}")
-                            elif 'warning' in line_lower:
-                                logger.warning(f"FFmpeg: {line.strip()}")
-                            elif 'stream mapping' in line_lower or line_lower.startswith('encoder'):
-                                logger.info(f"FFmpeg: {line.strip()}")
                     
-                    logger.info(f"Stderr thread finished: {line_count} lines read, {progress_count} progress updates sent")
+                    logger.info(f"Stdout thread finished: {line_count} lines, {progress_count} progress updates")
                 
-                # Start stderr reading thread
-                stderr_thread = threading.Thread(target=read_stderr, daemon=True)
-                stderr_thread.start()
-                logger.info("Stderr monitoring thread launched")
-                
-                # Read stdout (should be empty, but capture it anyway)
-                stdout_lines = []
-                while True:
-                    if self.cancel_requested:
-                        logger.info("Cancel requested, terminating process")
-                        self.current_process.terminate()
-                        break
+                def read_stderr():
+                    """Read stderr for errors/warnings/info"""
+                    logger.info("Stderr thread started (errors/info)")
+                    line_count = 0
                     
-                    if self.current_process and self.current_process.stdout:
-                        line = self.current_process.stdout.readline()
-                        if not line:
+                    while True:
+                        if self.cancel_requested:
                             break
-                        stdout_lines.append(line)
-                    else:
-                        break
+                        
+                        if self.current_process and self.current_process.stderr:
+                            line = self.current_process.stderr.readline()
+                            if not line:
+                                logger.info("Stderr EOF reached")
+                                break
+                        else:
+                            break
+                        
+                        line_count += 1
+                        stderr_lines.append(line)
+                        
+                        # DEBUG: Log every line
+                        if line.strip():
+                            logger.info(f"STDERR: {line.strip()}")
+                    
+                    logger.info(f"Stderr thread finished: {line_count} lines")
+                
+                # Start both threads
+                stdout_thread = threading.Thread(target=read_stdout, daemon=True)
+                stderr_thread = threading.Thread(target=read_stderr, daemon=True)
+                stdout_thread.start()
+                stderr_thread.start()
+                logger.info("Progress monitoring threads launched")
                 
                 # Wait for process to complete
                 logger.info("Waiting for FFmpeg process to complete...")
                 self.current_process.wait()
                 logger.info(f"FFmpeg process completed with return code: {self.current_process.returncode}")
                 
-                # Wait for stderr thread to finish
+                # Wait for threads
+                stdout_thread.join(timeout=2)
                 stderr_thread.join(timeout=2)
-                if stderr_thread.is_alive():
-                    logger.warning("Stderr thread still running after 2s timeout")
+                if stdout_thread.is_alive() or stderr_thread.is_alive():
+                    logger.warning("Monitoring threads still running after 2s timeout")
                 
                 stdout = ''.join(stdout_lines)
                 stderr = ''.join(stderr_lines)
