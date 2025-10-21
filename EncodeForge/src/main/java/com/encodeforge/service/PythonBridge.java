@@ -346,6 +346,16 @@ public class PythonBridge {
     }
     
     /**
+     * Check for ongoing conversion from previous session
+     * Returns queue information with file statuses: queued, processing, completed, failed
+     */
+    public JsonObject checkOngoingConversion() throws IOException, TimeoutException {
+        JsonObject command = new JsonObject();
+        command.addProperty("action", "check_ongoing_conversion");
+        return sendCommand(command);
+    }
+    
+    /**
      * Shutdown the Python process
      */
     public void shutdown() {

@@ -62,8 +62,12 @@ logger.setLevel(logging.DEBUG)
 try:
     from encodeforge_core import ConversionSettings, EncodeForgeCore  # type: ignore
     logger.info("Successfully imported encodeforge_core")
+    CORE_AVAILABLE = True
 except Exception as e:
     logger.error(f"Failed to import encodeforge_core: {e}", exc_info=True)
+    logger.error("This means conversions will not work properly!")
+    logger.error("Check that all required Python modules are available")
+    CORE_AVAILABLE = False
     # Create minimal fallback classes with required attributes
     class ConversionSettings:
         def __init__(self):
@@ -71,8 +75,8 @@ except Exception as e:
             self.ffmpeg_path = "ffmpeg"
             self.ffprobe_path = "ffprobe"
             
-            # Hardware acceleration
-            self.use_nvenc = True
+            # Hardware acceleration - start with all disabled, let Java set them
+            self.use_nvenc = False
             self.use_amf = False
             self.use_qsv = False
             self.use_videotoolbox = False
@@ -185,14 +189,20 @@ except Exception as e:
         def get_file_info(self, file_path):
             return {"status": "error", "message": "File info not available"}
         
-        def convert_files(self, file_paths, progress_callback=None):
-            return {"status": "error", "message": "Conversion not available", "total": 0, "success": [], "failed": []}
-
-        def cancel_current(self):
-            return {"status": "error", "message": "Cancel not available"}
-        
         def convert_file(self, file_path, output_path=None, progress_callback=None):
             return {"status": "error", "message": "Conversion not available"}
+        
+        def convert_files(self, file_paths, progress_callback=None):
+            logger.error("Using fallback EncodeForgeCore - real conversion not available")
+            logger.error("Hardware encoder settings:")
+            logger.error(f"  use_nvenc: {self.settings.use_nvenc}")
+            logger.error(f"  use_amf: {self.settings.use_amf}")
+            logger.error(f"  use_qsv: {self.settings.use_qsv}")
+            logger.error(f"  use_videotoolbox: {self.settings.use_videotoolbox}")
+            return {"status": "error", "message": "Conversion not available - core module not loaded"}
+        
+        def cancel_current(self):
+            return {"status": "error", "message": "Cancel not available - core module not loaded"}
         
         def apply_subtitles(self, video_path, subtitle_path, output_path=None, mode="external", language="eng"):
             return {"status": "error", "message": "Subtitle application not available"}
@@ -878,14 +888,12 @@ class FFmpegAPI:
             }
     
     def handle_shutdown(self) -> Dict:
-        """Handle application shutdown - terminate any running processes"""
+        """Handle application shutdown - save state but don't terminate processes"""
         try:
             logger.info("Handling application shutdown")
             
-            # Cancel any running conversions
-            if self.core:
-                result = self.core.cancel_current()
-                logger.info(f"Shutdown cancellation result: {result}")
+            logger.info("Java app closing - FFmpeg processes will continue in background")
+            logger.info("State file will persist for recovery on next startup")
             
             return {"status": "success", "message": "Shutdown handled"}
             
@@ -905,13 +913,18 @@ class FFmpegAPI:
         self.update_settings(settings_dict)
         
         # Reinitialize core with updated settings
-        self.core = EncodeForgeCore(self.settings)
+        if CORE_AVAILABLE:
+            self.core = EncodeForgeCore(self.settings)
+            logger.info("Using real EncodeForgeCore for conversion")
+        else:
+            self.core = EncodeForgeCore(self.settings)
+            logger.error("Using fallback EncodeForgeCore - conversions will fail")
         
         logger.info(f"Starting conversion of {len(file_paths)} files with settings: {settings_dict}")
         
         # Define progress callback that sends updates immediately
         def progress_callback(update: Dict):
-            logger.info(f"Progress update: {update}")
+            logger.info(f"Progress callback received: {update}")
             
             # Forward all progress fields to Java
             progress_update = {
@@ -927,7 +940,7 @@ class FFmpegAPI:
                 if field in update:
                     progress_update[field] = update[field]
             
-            logger.debug(f"Sending progress update with {len(progress_update)} fields")
+            logger.info(f"Sending progress update to Java: {progress_update}")
             self._send_response(progress_update)
         
         # Start conversion in a separate thread to allow stop commands
@@ -949,6 +962,7 @@ class FFmpegAPI:
     def _run_conversion(self, file_paths, progress_callback):
         """Run conversion in separate thread"""
         try:
+            logger.info(f"_run_conversion started with {len(file_paths)} files")
             if self.core is None:
                 logger.error("Core is not initialized")
                 error_result = {
@@ -958,12 +972,14 @@ class FFmpegAPI:
                 }
                 self._send_response(error_result)
                 return
-                
+            
+            logger.info("Calling self.core.convert_files with progress callback")
             result = self.core.convert_files(file_paths, progress_callback)
+            logger.info(f"convert_files returned: {result}")
             
             # Send final result
-            success_count = result.get("converted", 0)
-            total_count = result.get("total", 0)
+            success_count = int(result.get("converted", 0))
+            total_count = int(result.get("total", 0))
             failed_count = total_count - success_count
             
             final_result = {
@@ -1004,14 +1020,37 @@ class FFmpegAPI:
             
             if saved_state:
                 logger.info("Found ongoing conversion from previous session")
+                
+                # Extract queue information with proper defaults
+                queue = saved_state.get('queue', [])
+                if not isinstance(queue, list):
+                    queue = []
+                
+                queued_files = [f for f in queue if f.get('status') == 'queued']
+                processing_files = [f for f in queue if f.get('status') == 'processing']
+                completed_files = [f for f in queue if f.get('status') == 'completed']
+                failed_files = [f for f in queue if f.get('status') == 'failed']
+                
+                logger.info(f"Recovery state: {len(queued_files)} queued, "
+                          f"{len(processing_files)} processing, "
+                          f"{len(completed_files)} completed, "
+                          f"{len(failed_files)} failed")
+                
                 return {
                     "status": "ongoing",
                     "message": "Ongoing conversion detected",
+                    "queue": queue,  # Full queue with all file statuses
+                    "queued_files": queued_files,
+                    "processing_files": processing_files,
+                    "completed_files": completed_files,
+                    "failed_files": failed_files,
                     "current_file": saved_state.get('current_file', ''),
                     "current_index": saved_state.get('current_index', 0),
                     "total_files": saved_state.get('total_files', 0),
-                    "file_paths": saved_state.get('file_paths', []),
-                    "pid": saved_state.get('pid')
+                    "completed_count": saved_state.get('completed_count', 0),
+                    "failed_count": saved_state.get('failed_count', 0),
+                    "pid": saved_state.get('pid'),
+                    "timestamp": saved_state.get('timestamp')
                 }
             else:
                 return {
@@ -1020,7 +1059,7 @@ class FFmpegAPI:
                 }
                 
         except Exception as e:
-            logger.error(f"Error checking ongoing conversion: {e}")
+            logger.error(f"Error checking ongoing conversion: {e}", exc_info=True)
             return {
                 "status": "error",
                 "message": f"Failed to check ongoing conversion: {str(e)}"
@@ -1028,6 +1067,8 @@ class FFmpegAPI:
     
     def update_settings(self, settings_dict: Dict):
         """Update conversion settings from dictionary"""
+        logger.info(f"Updating settings with: {settings_dict}")
+        
         # FFmpeg paths
         if "ffmpeg_path" in settings_dict:
             self.settings.ffmpeg_path = settings_dict["ffmpeg_path"]
@@ -1037,10 +1078,16 @@ class FFmpegAPI:
         # Hardware acceleration
         if "use_nvenc" in settings_dict:
             self.settings.use_nvenc = settings_dict["use_nvenc"]
+            logger.info(f"Set use_nvenc = {self.settings.use_nvenc}")
         if "use_amf" in settings_dict:
             self.settings.use_amf = settings_dict["use_amf"]
+            logger.info(f"Set use_amf = {self.settings.use_amf}")
         if "use_qsv" in settings_dict:
             self.settings.use_qsv = settings_dict["use_qsv"]
+            logger.info(f"Set use_qsv = {self.settings.use_qsv}")
+        if "use_videotoolbox" in settings_dict:
+            self.settings.use_videotoolbox = settings_dict["use_videotoolbox"]
+            logger.info(f"Set use_videotoolbox = {self.settings.use_videotoolbox}")
         if "nvenc_preset" in settings_dict:
             self.settings.nvenc_preset = settings_dict["nvenc_preset"]
         if "nvenc_cq" in settings_dict:
@@ -1052,29 +1099,34 @@ class FFmpegAPI:
         # Video codec mapping from Java names to Python
         if "video_codec" in settings_dict:
             video_codec = settings_dict["video_codec"]
-            # Reset all hardware acceleration flags first
-            self.settings.use_nvenc = False
-            self.settings.use_amf = False
-            self.settings.use_qsv = False
-            self.settings.use_videotoolbox = False
-            
-            if "H.264 NVENC" in video_codec or "h264_nvenc" in video_codec.lower():
-                self.settings.use_nvenc = True
-                self.settings.nvenc_codec = "h264_nvenc"  # Explicitly set H.264
-                self.settings.video_codec_fallback = "libx264"
-            elif "H.265 NVENC" in video_codec or "hevc_nvenc" in video_codec.lower():
-                self.settings.use_nvenc = True
-                self.settings.nvenc_codec = "hevc_nvenc"  # Explicitly set H.265
-                self.settings.video_codec_fallback = "libx265"
-            elif "AMF" in video_codec or "amf" in video_codec.lower():
-                self.settings.use_amf = True
-                self.settings.video_codec_fallback = "libx264"
-            elif "QSV" in video_codec or "qsv" in video_codec.lower():
-                self.settings.use_qsv = True
-                self.settings.video_codec_fallback = "libx264"
+            if video_codec != "Auto (Best Available)":
+                # Reset all hardware acceleration flags first
+                self.settings.use_nvenc = False
+                self.settings.use_amf = False
+                self.settings.use_qsv = False
+                self.settings.use_videotoolbox = False
+                
+                if "H.264 NVENC" in video_codec or "h264_nvenc" in video_codec.lower():
+                    self.settings.use_nvenc = True
+                    self.settings.nvenc_codec = "h264_nvenc"  # Explicitly set H.264
+                    self.settings.video_codec_fallback = "libx264"
+                elif "H.265 NVENC" in video_codec or "hevc_nvenc" in video_codec.lower():
+                    self.settings.use_nvenc = True
+                    self.settings.nvenc_codec = "hevc_nvenc"  # Explicitly set H.265
+                    self.settings.video_codec_fallback = "libx265"
+                elif "AMF" in video_codec or "amf" in video_codec.lower():
+                    self.settings.use_amf = True
+                    self.settings.video_codec_fallback = "libx264"
+                elif "QSV" in video_codec or "qsv" in video_codec.lower():
+                    self.settings.use_qsv = True
+                    self.settings.video_codec_fallback = "libx264"
+                else:
+                    # Software encoding fallback
+                    self.settings.video_codec_fallback = "libx264"
             else:
-                # Software encoding fallback
+                # Auto mode - preserve individual hardware flags and set fallback
                 self.settings.video_codec_fallback = "libx264"
+                logger.info(f"Auto mode preserving hardware flags - NVENC: {self.settings.use_nvenc}, AMF: {self.settings.use_amf}, QSV: {self.settings.use_qsv}")
         
         # Video quality settings
         if "crf" in settings_dict:

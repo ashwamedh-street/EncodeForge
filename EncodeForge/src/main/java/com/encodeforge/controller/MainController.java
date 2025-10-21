@@ -5884,64 +5884,6 @@ public class MainController {
     }
     
     /**
-     * Check for ongoing conversions from a previous session and restore UI state
-     */
-    private void checkForOngoingConversions() {
-        try {
-            logger.info("Checking for ongoing conversions from previous session...");
-            
-            // Create request to check for ongoing conversions
-            JsonObject request = new JsonObject();
-            request.addProperty("action", "check_ongoing_conversion");
-            
-            // Send request to Python bridge
-            CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
-                try {
-                    return pythonBridge.sendCommand(request);
-                } catch (Exception e) {
-                    logger.error("Error sending command to Python bridge", e);
-                    return null;
-                }
-            });
-            
-            future.thenAccept(response -> {
-                if (response != null && "ongoing".equals(response.get("status").getAsString())) {
-                    logger.info("Found ongoing conversion from previous session");
-                    
-                    // Extract conversion details
-                    String currentFile = response.has("current_file") ? response.get("current_file").getAsString() : "";
-                    int currentIndex = response.has("current_index") ? response.get("current_index").getAsInt() : 0;
-                    int totalFiles = response.has("total_files") ? response.get("total_files").getAsInt() : 0;
-                    int pid = response.has("pid") ? response.get("pid").getAsInt() : 0;
-                    
-                    // Get file paths array
-                    List<String> filePaths = new ArrayList<>();
-                    if (response.has("file_paths")) {
-                        JsonArray filePathsArray = response.getAsJsonArray("file_paths");
-                        for (int i = 0; i < filePathsArray.size(); i++) {
-                            filePaths.add(filePathsArray.get(i).getAsString());
-                        }
-                    }
-                    
-                    // Restore UI state on JavaFX thread
-                    Platform.runLater(() -> {
-                        restoreConversionState(currentFile, currentIndex, totalFiles, filePaths, pid);
-                    });
-                    
-                } else {
-                    logger.debug("No ongoing conversions found from previous session");
-                }
-            }).exceptionally(throwable -> {
-                logger.error("Error checking for ongoing conversions", throwable);
-                return null;
-            });
-            
-        } catch (Exception e) {
-            logger.error("Failed to check for ongoing conversions", e);
-        }
-    }
-    
-    /**
      * Restore the UI state for an ongoing conversion
      */
     private void restoreConversionState(String currentFile, int currentIndex, int totalFiles, 
@@ -6055,6 +5997,132 @@ public class MainController {
                 logger.error("Failed to show notification", e);
             }
         });
+    }
+    
+    /**
+     * Check for ongoing conversions from previous session and recover queue
+     */
+    private void checkForOngoingConversions() {
+        try {
+            logger.info("Checking for ongoing conversions from previous session...");
+            
+            JsonObject response = pythonBridge.checkOngoingConversion();
+            
+            if (response == null || !response.has("status")) {
+                logger.warn("Invalid response from check_ongoing_conversion");
+                return;
+            }
+            
+            String status = response.get("status").getAsString();
+            
+            if ("ongoing".equals(status)) {
+                logger.info("Found ongoing conversion from previous session");
+                
+                // Extract queue information
+                if (!response.has("queue")) {
+                    logger.warn("Response missing queue information");
+                    return;
+                }
+                
+                JsonArray queue = response.getAsJsonArray("queue");
+                int queuedCount = 0;
+                int processingCount = 0;
+                int completedCount = 0;
+                int failedCount = 0;
+                
+                // Parse queue and populate lists
+                for (int i = 0; i < queue.size(); i++) {
+                    JsonObject fileEntry = queue.get(i).getAsJsonObject();
+                    
+                    String filePath = fileEntry.get("path").getAsString();
+                    String fileStatus = fileEntry.get("status").getAsString();
+                    String filename = fileEntry.get("filename").getAsString();
+                    
+                    ConversionJob job = new ConversionJob(filePath);
+                    
+                    // Set status and add to appropriate list based on status
+                    switch (fileStatus) {
+                        case "queued":
+                            job.setStatus("⏳ Queued");
+                            Platform.runLater(() -> queuedFiles.add(job));
+                            queuedCount++;
+                            break;
+                        
+                        case "processing":
+                            job.setStatus("⚡ Processing");
+                            if (fileEntry.has("progress")) {
+                                job.setProgress(fileEntry.get("progress").getAsDouble());
+                            }
+                            Platform.runLater(() -> processingFiles.add(job));
+                            processingCount++;
+                            break;
+                        
+                        case "completed":
+                            job.setStatus("✅ Completed");
+                            job.setProgress(100.0);
+                            if (fileEntry.has("output")) {
+                                job.setOutputPath(fileEntry.get("output").getAsString());
+                            }
+                            Platform.runLater(() -> completedFiles.add(job));
+                            completedCount++;
+                            break;
+                        
+                        case "failed":
+                            job.setStatus("❌ Failed");
+                            String errorMsg = fileEntry.has("error") ? fileEntry.get("error").getAsString() : "Unknown error";
+                            logger.warn("File {} failed: {}", filename, errorMsg);
+                            // Could add failed files to a list or just skip them
+                            failedCount++;
+                            break;
+                    }
+                }
+                
+                final int fQueuedCount = queuedCount;
+                final int fProcessingCount = processingCount;
+                final int fCompletedCount = completedCount;
+                final int fFailedCount = failedCount;
+                
+                // Update UI counts
+                Platform.runLater(() -> {
+                    updateQueueCounts();
+                    
+                    logger.info("Recovered conversion queue:");
+                    logger.info("  Queued: {}", fQueuedCount);
+                    logger.info("  Processing: {}", fProcessingCount);
+                    logger.info("  Completed: {}", fCompletedCount);
+                    logger.info("  Failed: {}", fFailedCount);
+                    
+                    // Show notification to user about recovered queue
+                    if (fQueuedCount > 0 || fProcessingCount > 0 || fCompletedCount > 0) {
+                        String message = String.format(
+                            "Recovered conversion queue from previous session:\n" +
+                            "• %d file(s) queued\n" +
+                            "• %d file(s) processing\n" +
+                            "• %d file(s) completed",
+                            fQueuedCount, fProcessingCount, fCompletedCount
+                        );
+                        
+                        if (fFailedCount > 0) {
+                            message += "\n• " + fFailedCount + " file(s) failed";
+                        }
+                        
+                        showInfo("Queue Recovered", message);
+                        log("📋 Recovered conversion queue from previous session");
+                        log("   Queued: " + fQueuedCount + ", Processing: " + fProcessingCount + 
+                            ", Completed: " + fCompletedCount + ", Failed: " + fFailedCount);
+                    }
+                });
+                
+            } else if ("none".equals(status)) {
+                logger.info("No ongoing conversions found from previous session");
+            } else if ("error".equals(status)) {
+                String errorMsg = response.has("message") ? response.get("message").getAsString() : "Unknown error";
+                logger.error("Error checking ongoing conversions: {}", errorMsg);
+            }
+            
+        } catch (Exception e) {
+            logger.error("Failed to check for ongoing conversions", e);
+        }
     }
     
     /**

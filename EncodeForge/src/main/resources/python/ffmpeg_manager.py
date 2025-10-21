@@ -702,7 +702,10 @@ class FFmpegManager:
         }
         
         if not self.ffmpeg_path:
+            logger.debug("No FFmpeg path available for hardware detection")
             return options
+        
+        logger.debug(f"Available encoders: {self.version_info.get('encoders', [])}")
         
         # Check for NVIDIA
         if "NVIDIA" not in " ".join(self.version_info.get("encoders", [])):
@@ -712,8 +715,9 @@ class FFmpegManager:
             options["decode"].append("cuvid")
             options["encode"].append("nvenc")
         
-        # Check for AMD
-        if "AMD" in " ".join(self.version_info.get("encoders", [])):
+        # Check for AMD (AMF encoders)
+        encoders_str = " ".join(self.version_info.get("encoders", []))
+        if "AMD" in encoders_str or "h264_amf" in encoders_str or "hevc_amf" in encoders_str:
             options["decode"].append("amf")
             options["encode"].append("amf")
         
@@ -727,6 +731,7 @@ class FFmpegManager:
             options["decode"].append("videotoolbox")
             options["encode"].append("videotoolbox")
         
+        logger.debug(f"Hardware acceleration options detected: {options}")
         return options
     
     def get_recommended_encoder(self, hardware_info: Optional[Dict[str, Any]] = None) -> str:
