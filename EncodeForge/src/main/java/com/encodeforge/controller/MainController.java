@@ -2105,7 +2105,7 @@ public class MainController {
                             job.setStatus("Encoding...");
                             job.setOperation("Encoding video...");
                             // Map backend progress (0-100) to frontend progress (6-100)
-                            double mappedProgress = Math.max(6.0, Math.min(100.0, 6.0 + (progress * 0.94)));
+                            mappedProgress = Math.max(6.0, Math.min(100.0, 6.0 + (progress * 0.94)));
                             job.setProgress(mappedProgress);
                             // Keep existing FPS, speed, ETA from update
                             break;
