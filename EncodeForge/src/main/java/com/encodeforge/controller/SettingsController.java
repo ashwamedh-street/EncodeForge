@@ -74,6 +74,7 @@ public class SettingsController {
     @FXML private Button autoDetectButton;
     @FXML private Button downloadFFmpegButton;
     @FXML private Label ffmpegVersionLabel;
+    @FXML private CheckBox useEmbeddedFFmpegCheck;
     
     // Video Settings
     @FXML private ComboBox<String> outputFormatCombo;
@@ -120,6 +121,7 @@ public class SettingsController {
     @FXML private TextField moviePatternField;
     @FXML private TextField animePatternField;
     @FXML private Button openPatternEditorButton;
+    @FXML private ComboBox<String> languagePreferenceCombo;
     
     // Output Settings
     @FXML private CheckBox copyMetadataCheck;
@@ -234,6 +236,13 @@ public class SettingsController {
                 "tiny", "base", "small", "medium", "large"));
             whisperModelCombo.setValue("base");
         }
+        
+        // Language preference
+        if (languagePreferenceCombo != null) {
+            languagePreferenceCombo.setItems(javafx.collections.FXCollections.observableArrayList(
+                "English", "Romanized Japanese (Romaji)", "Japanese", "Original Language"));
+            languagePreferenceCombo.setValue("English");
+        }
     }
     
     public void setDialogStage(Stage dialogStage) {
@@ -269,13 +278,28 @@ public class SettingsController {
         if (ffmpegVersionLabel != null) {
             if (statusMgr.isFFmpegAvailable()) {
                 String version = statusMgr.getFFmpegVersion();
-                ffmpegVersionLabel.setText("✅ FFmpeg detected: " + version);
+                String source = settings != null && settings.isUseEmbeddedFFmpeg() ? "Embedded" : "External";
+                ffmpegVersionLabel.setText("✅ FFmpeg (" + source + "): " + version);
                 ffmpegVersionLabel.setStyle("-fx-text-fill: #4ec9b0;");
                 logger.info("FFmpeg detected: {} at {}", version, settings != null ? settings.getFfmpegPath() : "unknown");
             } else {
                 ffmpegVersionLabel.setText("❌ FFmpeg not found");
                 ffmpegVersionLabel.setStyle("-fx-text-fill: #f48771;");
             }
+        }
+    }
+    
+    /**
+     * Update the state of FFmpeg path fields based on embedded checkbox
+     */
+    private void updateFFmpegFieldsState() {
+        boolean useEmbedded = useEmbeddedFFmpegCheck != null && useEmbeddedFFmpegCheck.isSelected();
+        
+        if (ffmpegPathField != null) {
+            ffmpegPathField.setDisable(useEmbedded);
+        }
+        if (ffprobePathField != null) {
+            ffprobePathField.setDisable(useEmbedded);
         }
     }
     
@@ -351,6 +375,13 @@ public class SettingsController {
         // Load settings into UI controls
         ffmpegPathField.setText(settings.getFfmpegPath());
         ffprobePathField.setText(settings.getFfprobePath());
+        useEmbeddedFFmpegCheck.setSelected(settings.isUseEmbeddedFFmpeg());
+        
+        // Set up embedded FFmpeg checkbox listener
+        if (useEmbeddedFFmpegCheck != null) {
+            useEmbeddedFFmpegCheck.setOnAction(e -> updateFFmpegFieldsState());
+            updateFFmpegFieldsState(); // Initial state
+        }
         
         deleteOriginalCheck.setSelected(settings.isDeleteOriginal());
         overwriteCheck.setSelected(settings.isOverwriteExisting());
@@ -412,6 +443,7 @@ public class SettingsController {
         // Save UI controls to settings
         settings.setFfmpegPath(ffmpegPathField.getText());
         settings.setFfprobePath(ffprobePathField.getText());
+        settings.setUseEmbeddedFFmpeg(useEmbeddedFFmpegCheck.isSelected());
         
         settings.setDeleteOriginal(deleteOriginalCheck.isSelected());
         settings.setOverwriteExisting(overwriteCheck.isSelected());

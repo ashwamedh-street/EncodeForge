@@ -9,7 +9,7 @@ import re
 import time
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +17,23 @@ logger = logging.getLogger(__name__)
 class BaseMetadataProvider(ABC):
     """Abstract base class for all metadata providers."""
 
-    def __init__(self, api_key: str = ""):
+    # Language preference constants
+    LANGUAGE_PREFERENCE_ENGLISH = "en"
+    LANGUAGE_PREFERENCE_ROMANJI = "x-jat"  # AniDB uses this for romanized Japanese
+    LANGUAGE_PREFERENCE_JAPANESE = "ja"
+    LANGUAGE_PREFERENCE_ORIGINAL = "original"  # Use original language
+    
+    # Available language preferences
+    AVAILABLE_LANGUAGES = {
+        LANGUAGE_PREFERENCE_ENGLISH: "English",
+        LANGUAGE_PREFERENCE_ROMANJI: "Romanized Japanese (Romaji)",
+        LANGUAGE_PREFERENCE_JAPANESE: "Japanese",
+        LANGUAGE_PREFERENCE_ORIGINAL: "Original Language"
+    }
+
+    def __init__(self, api_key: str = "", language_preference: str = LANGUAGE_PREFERENCE_ENGLISH):
         self.api_key = api_key
+        self.language_preference = language_preference
         self.last_request_time = 0
 
     @abstractmethod
@@ -165,4 +180,69 @@ class BaseMetadataProvider(ABC):
             'your name', 'weathering with you'
         ]
         return any(word in title.lower() for word in anime_keywords)
+    
+    def set_language_preference(self, language: str):
+        """Set the language preference for this provider"""
+        if language in self.AVAILABLE_LANGUAGES:
+            self.language_preference = language
+        else:
+            logger.warning(f"Unknown language preference: {language}, using English")
+            self.language_preference = self.LANGUAGE_PREFERENCE_ENGLISH
+    
+    def get_preferred_title(self, titles: Dict[str, str], fallback: str = "") -> str:
+        """
+        Get the preferred title based on language preference
+        
+        Args:
+            titles: Dictionary mapping language codes to titles
+            fallback: Fallback title if no preferred language found
+            
+        Returns:
+            The preferred title or fallback
+        """
+        if not titles:
+            return fallback
+        
+        # Try to get the preferred language
+        if self.language_preference in titles:
+            return titles[self.language_preference]
+        
+        # If original language requested, return the first available title
+        if self.language_preference == self.LANGUAGE_PREFERENCE_ORIGINAL:
+            return next(iter(titles.values()))
+        
+        # Fallback to English if available
+        if self.LANGUAGE_PREFERENCE_ENGLISH in titles:
+            return titles[self.LANGUAGE_PREFERENCE_ENGLISH]
+        
+        # Fallback to any available title
+        return next(iter(titles.values()))
+    
+    def get_preferred_episode_title(self, episode_titles: List[str], fallback: str = "") -> str:
+        """
+        Get the preferred episode title based on language preference
+        
+        Args:
+            episode_titles: List of episode titles in different languages
+            fallback: Fallback title if no preferred language found
+            
+        Returns:
+            The preferred episode title or fallback
+        """
+        if not episode_titles:
+            return fallback
+        
+        # For episode titles, we'll use a simple heuristic:
+        # English titles typically don't contain non-ASCII characters
+        if self.language_preference == self.LANGUAGE_PREFERENCE_ENGLISH:
+            for title in episode_titles:
+                if title and not any(ord(char) > 127 for char in title):
+                    return title.strip()
+        
+        # Return the first non-empty title
+        for title in episode_titles:
+            if title and title.strip():
+                return title.strip()
+        
+        return fallback
 

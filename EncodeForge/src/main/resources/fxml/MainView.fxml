@@ -33,6 +33,8 @@
                 <MenuItem text="Download FFmpeg..." onAction="#handleDownloadFFmpeg"/>
             </Menu>
             <Menu text="Help">
+                <MenuItem text="Check for Updates..." onAction="#handleCheckForUpdates"/>
+                <SeparatorMenuItem/>
                 <MenuItem text="Documentation" onAction="#handleDocumentation"/>
                 <MenuItem text="About" onAction="#handleAbout"/>
             </Menu>
@@ -82,12 +84,12 @@
                     </graphic>
                 </Button>
                 
-                <!-- Renamer Mode -->
+                <!-- Metadata Mode -->
                 <Button fx:id="renamerModeButton" onAction="#handleRenamerMode" styleClass="mode-button" maxWidth="Infinity">
                     <graphic>
                         <VBox alignment="CENTER" spacing="2">
                             <Label text="📁" styleClass="mode-icon"/>
-                            <Label text="Renamer" styleClass="mode-label"/>
+                            <Label text="Metadata" styleClass="mode-label"/>
                         </VBox>
                     </graphic>
                 </Button>
@@ -192,10 +194,11 @@
                         <Region HBox.hgrow="ALWAYS"/>
                         
                         <!-- Control Buttons -->
-                        <HBox spacing="10">
+                        <HBox spacing="10" alignment="CENTER_LEFT">
                             <Button fx:id="startButton" onAction="#handleStartProcessing" styleClass="toolbar-button, primary-button" disable="true" prefWidth="160"/>
                             <Button fx:id="pauseButton" onAction="#handlePause" styleClass="toolbar-button" disable="true" prefWidth="110"/>
                             <Button fx:id="stopButton" onAction="#handleStop" styleClass="toolbar-button" disable="true" prefWidth="110"/>
+                            <Label fx:id="statusLabel" text="Ready" styleClass="status-label" prefWidth="150"/>
                         </HBox>
                     </HBox>
                     
@@ -305,7 +308,7 @@
                     </HBox>
                 </VBox>
                 
-                <!-- Renamer Quick Settings -->
+                <!-- Metadata Quick Settings -->
                 <VBox fx:id="renamerQuickSettings" spacing="10" styleClass="quick-settings" managed="false" visible="false">
                     <padding>
                         <Insets top="15" right="15" bottom="15" left="15"/>
@@ -318,8 +321,6 @@
                             <HBox spacing="10" alignment="CENTER_LEFT">
                                 <Label text="Provider:" styleClass="setting-label"/>
                                 <ComboBox fx:id="quickRenameProviderCombo" styleClass="quick-combo" prefWidth="150"/>
-                                <Label text="Type:" styleClass="setting-label"/>
-                                <ComboBox fx:id="quickRenameTypeCombo" styleClass="quick-combo" prefWidth="140"/>
                                 <Button fx:id="formatPatternButton" onAction="#handleOpenFormatter" styleClass="small-button" prefWidth="160"/>
                             </HBox>
                         </VBox>
@@ -387,9 +388,9 @@
                             <VBox spacing="4" styleClass="settings-group">
                                 <Label text="Free Providers (No API Key)" styleClass="group-label"/>
                                 <HBox spacing="10">
-                                    <Label text="✅ AniList (Anime)" styleClass="info-label" style="-fx-text-fill: #4ec9b0; -fx-font-weight: bold;">
+                                    <Label text="✅ AniDB (Anime)" styleClass="info-label" style="-fx-text-fill: #4ec9b0; -fx-font-weight: bold;">
                                         <tooltip>
-                                            <Tooltip text="AniList - Always available, no configuration needed"/>
+                                            <Tooltip text="AniDB - Always available, no configuration needed"/>
                                         </tooltip>
                                     </Label>
                                     <Label text="✅ Kitsu (Anime)" styleClass="info-label" style="-fx-text-fill: #4ec9b0; -fx-font-weight: bold;">
@@ -478,8 +479,9 @@
                         <TableView fx:id="processingTable" VBox.vgrow="ALWAYS" styleClass="queue-table, processing-table">
                             <columns>
                                 <TableColumn fx:id="procStatusColumn" text="" prefWidth="35" minWidth="35" maxWidth="35"/>
-                                <TableColumn fx:id="procFileColumn" text="File Name" prefWidth="250"/>
-                                <TableColumn fx:id="procProgressColumn" text="Progress" prefWidth="110"/>
+                                <TableColumn fx:id="procFileColumn" text="File Name" prefWidth="200"/>
+                                <TableColumn fx:id="procOperationColumn" text="Status" prefWidth="150"/>
+                                <TableColumn fx:id="procProgressColumn" text="Progress" prefWidth="80"/>
                                 <TableColumn fx:id="procFpsColumn" text="FPS" prefWidth="60"/>
                                 <TableColumn fx:id="procSpeedColumn" text="Speed" prefWidth="70"/>
                                 <TableColumn fx:id="procEtaColumn" text="ETA" prefWidth="80"/>

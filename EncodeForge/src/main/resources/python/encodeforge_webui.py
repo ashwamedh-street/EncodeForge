@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import streamlit as st
-
 from ffmpeg_core import ConversionSettings, FFmpegCore
 
 # Setup logging
@@ -50,7 +49,7 @@ class FFmpegWebUI:
         st.sidebar.subheader("Operation Mode")
         mode = st.sidebar.radio(
             "Select Mode:",
-            ["Encoder", "Subtitle", "Renamer"],
+            ["Encoder", "Subtitle", "Metadata"],
             index=["encoder", "subtitle", "renamer"].index(st.session_state.mode)
         )
         st.session_state.mode = mode.lower()

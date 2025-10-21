@@ -14,6 +14,7 @@ set BUNDLE_DIR=python-bundle
 set REQUIREMENTS_FILE=requirements.txt
 set PYTHON_SCRIPTS_DIR=src\main\resources\python
 set OUTPUT_DIR=target\python-runtime
+set FFMPEG_OUTPUT_DIR=target\ffmpeg-runtime
 
 REM Check if Python 3.12 is available first
 py -3.12 --version >nul 2>&1
@@ -111,10 +112,49 @@ echo python scripts\ffmpeg_manager.py %%*
 REM Create a proper executable wrapper (batch file with .exe extension for compatibility)
 copy "%OUTPUT_DIR%\python_backend.bat" "%OUTPUT_DIR%\python_backend.exe" >nul
 
+REM Download and package FFmpeg
+echo.
+echo ========================================
+echo Downloading and packaging FFmpeg...
+echo ========================================
+
+if exist "%FFMPEG_OUTPUT_DIR%" rmdir /s /q "%FFMPEG_OUTPUT_DIR%"
+mkdir "%FFMPEG_OUTPUT_DIR%"
+
+REM Download FFmpeg for Windows
+echo Downloading FFmpeg for Windows...
+set FFMPEG_URL=https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
+set FFMPEG_ZIP=%FFMPEG_OUTPUT_DIR%\ffmpeg.zip
+
+REM Use PowerShell to download FFmpeg
+powershell -Command "& {[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -Uri '%FFMPEG_URL%' -OutFile '%FFMPEG_ZIP%'}"
+
+if exist "%FFMPEG_ZIP%" (
+    echo Extracting FFmpeg...
+    powershell -Command "Expand-Archive -Path '%FFMPEG_ZIP%' -DestinationPath '%FFMPEG_OUTPUT_DIR%' -Force"
+    
+    REM Find the extracted FFmpeg directory and move contents to root
+    for /d %%i in ("%FFMPEG_OUTPUT_DIR%\ffmpeg-*") do (
+        echo Moving FFmpeg files from %%i...
+        move "%%i\bin\*" "%FFMPEG_OUTPUT_DIR%\" >nul 2>&1
+        rmdir /s /q "%%i" >nul 2>&1
+    )
+    
+    REM Clean up zip file
+    del "%FFMPEG_ZIP%" >nul 2>&1
+    
+    echo FFmpeg packaged successfully!
+    echo FFmpeg files:
+    dir "%FFMPEG_OUTPUT_DIR%\*.exe" /b
+) else (
+    echo WARNING: Failed to download FFmpeg. You may need to install it manually.
+)
+
 echo.
 echo ========================================
 echo Python bundle created successfully!
 echo Location: %OUTPUT_DIR%
+echo FFmpeg location: %FFMPEG_OUTPUT_DIR%
 echo ========================================
 echo.
 echo Bundle contents:
@@ -123,6 +163,6 @@ dir "%OUTPUT_DIR%" /b
 echo.
 echo Next steps:
 echo 1. Run 'mvn clean package' to build the Java application
-echo 2. The Python bundle will be included in the JAR
+echo 2. The Python bundle and FFmpeg will be included in the JAR
 echo.
 pause

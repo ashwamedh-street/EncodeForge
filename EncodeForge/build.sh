@@ -93,12 +93,12 @@ create_portable_launcher() {
     cat > "$LAUNCHER_DIR/encode-forge.sh" << 'EOF'
 #!/bin/bash
 cd "$(dirname "$0")"
-java -jar encodeforge-1.0.0.jar "$@"
+java -jar encodeforge-0.3.0.jar "$@"
 EOF
     chmod +x "$LAUNCHER_DIR/encode-forge.sh"
     
     # Copy JAR to launcher directory
-    cp "$OUTPUT_DIR/encodeforge-1.0.0.jar" "$LAUNCHER_DIR/"
+    cp "$OUTPUT_DIR/encodeforge-0.3.0.jar" "$LAUNCHER_DIR/"
     echo "SUCCESS: Portable launcher created"
 }
 
@@ -163,8 +163,8 @@ esac
     echo ""
     echo "Generated files:"
 
-    if [ -f "$OUTPUT_DIR/encodeforge-1.0.0.jar" ]; then
-        echo "  - Universal JAR: $OUTPUT_DIR/encodeforge-1.0.0.jar"
+    if [ -f "$OUTPUT_DIR/encodeforge-0.3.0.jar" ]; then
+        echo "  - Universal JAR: $OUTPUT_DIR/encodeforge-0.3.0.jar"
     fi
 
     if [ -d "$DIST_DIR/windows" ]; then
@@ -194,6 +194,5 @@ esac
     echo "  Windows: EncodeForge.exe (installer) or encode-forge.sh (portable)"
     echo "  Linux: EncodeForge (AppImage) or encode-forge.sh (portable)"
     echo "  macOS: Encode Forge.app (in DMG) or encode-forge.sh (portable)"
-    echo "  Universal: java -jar encodeforge-1.0.0.jar"
+    echo "  Universal: java -jar encodeforge-0.3.0.jar"
     echo ""
-fi

@@ -11,7 +11,6 @@ import logging.handlers
 import os
 import sys
 import threading
-from pathlib import Path
 from typing import Dict
 
 # Force unbuffered output for real-time streaming
@@ -27,10 +26,11 @@ except AttributeError:
 # Also set environment for maximum responsiveness
 os.environ['PYTHONUNBUFFERED'] = '1'
 
-# Setup logging to file (not stdout, as that's used for JSON communication)
-# Use user's home directory for logs to match settings location
-log_dir = Path.home() / ".encodeforge" / "logs"
-log_dir.mkdir(parents=True, exist_ok=True)
+ # Setup logging to file (not stdout, as that's used for JSON communication)
+# Use unified application data directory for logs
+from path_manager import get_logs_dir
+
+log_dir = get_logs_dir()
 log_file = log_dir / 'encodeforge-api.log'
 
 # Create rotating file handler
@@ -60,10 +60,14 @@ logger.addHandler(handler)
 logger.setLevel(logging.DEBUG)
 
 try:
-    from ffmpeg_core import ConversionSettings, FFmpegCore  # type: ignore
-    logger.info("Successfully imported ffmpeg_core")
+    from encodeforge_core import ConversionSettings, EncodeForgeCore  # type: ignore
+    logger.info("Successfully imported encodeforge_core")
+    CORE_AVAILABLE = True
 except Exception as e:
-    logger.error(f"Failed to import ffmpeg_core: {e}", exc_info=True)
+    logger.error(f"Failed to import encodeforge_core: {e}", exc_info=True)
+    logger.error("This means conversions will not work properly!")
+    logger.error("Check that all required Python modules are available")
+    CORE_AVAILABLE = False
     # Create minimal fallback classes with required attributes
     class ConversionSettings:
         def __init__(self):
@@ -71,14 +75,19 @@ except Exception as e:
             self.ffmpeg_path = "ffmpeg"
             self.ffprobe_path = "ffprobe"
             
-            # Hardware acceleration
-            self.use_nvenc = True
+            # Hardware acceleration - start with all disabled, let Java set them
+            self.use_nvenc = False
             self.use_amf = False
             self.use_qsv = False
             self.use_videotoolbox = False
             self.nvenc_preset = "p4"
             self.nvenc_cq = 23
             self.nvenc_codec = "h264_nvenc"  # Default to H.264 NVENC
+            self.amf_qp = 23
+            self.amf_preset = "balanced"
+            self.qsv_quality = 23
+            self.qsv_preset = "medium"
+            self.videotoolbox_bitrate = "5M"
             
             # Video settings
             self.video_codec_fallback = "libx264"
@@ -132,12 +141,13 @@ except Exception as e:
         def delete_profile(self, name):
             return False
     
-    class FFmpegCore:
+    class EncodeForgeCore:
         def __init__(self, settings=None):
             self.settings = settings or ConversionSettings()
             self.profile_mgr = ProfileManager()
             # Add missing attributes for fallback
             self.ffmpeg_mgr = None
+            self.conversion_handler = None
         
         def check_ffmpeg(self):
             return {"status": "error", "message": "FFmpeg core not available"}
@@ -175,7 +185,7 @@ except Exception as e:
         def advanced_search_subtitles(self, video_path, languages, anilist_url=""):
             return {"status": "error", "message": "Advanced subtitle search not available"}
         
-        def rename_files(self, file_paths, dry_run=False):
+        def rename_files(self, file_paths, dry_run=False, create_backup=False):
             return {"status": "error", "message": "File renaming not available"}
         
         def scan_directory(self, directory, recursive=True):
@@ -184,14 +194,20 @@ except Exception as e:
         def get_file_info(self, file_path):
             return {"status": "error", "message": "File info not available"}
         
-        def convert_files(self, file_paths, progress_callback=None):
-            return {"status": "error", "message": "Conversion not available", "total": 0, "success": [], "failed": []}
-
-        def cancel_current(self):
-            return {"status": "error", "message": "Cancel not available"}
-        
         def convert_file(self, file_path, output_path=None, progress_callback=None):
             return {"status": "error", "message": "Conversion not available"}
+        
+        def convert_files(self, file_paths, progress_callback=None):
+            logger.error("Using fallback EncodeForgeCore - real conversion not available")
+            logger.error("Hardware encoder settings:")
+            logger.error(f"  use_nvenc: {self.settings.use_nvenc}")
+            logger.error(f"  use_amf: {self.settings.use_amf}")
+            logger.error(f"  use_qsv: {self.settings.use_qsv}")
+            logger.error(f"  use_videotoolbox: {self.settings.use_videotoolbox}")
+            return {"status": "error", "message": "Conversion not available - core module not loaded"}
+        
+        def cancel_current(self):
+            return {"status": "error", "message": "Cancel not available - core module not loaded"}
         
         def apply_subtitles(self, video_path, subtitle_path, output_path=None, mode="external", language="eng"):
             return {"status": "error", "message": "Subtitle application not available"}
@@ -207,6 +223,8 @@ class FFmpegAPI:
         self.core = None
         self.settings = ConversionSettings()
         self._stdout_lock = threading.Lock()  # Protect stdout writes from multiple threads
+        self.conversion_thread = None
+        self.conversion_result = None
     
     def _send_response(self, response: Dict):
         """Send JSON response to stdout (thread-safe)"""
@@ -233,12 +251,12 @@ class FFmpegAPI:
         try:
             # Initialize core if needed
             if self.core is None:
-                self.core = FFmpegCore(self.settings)
+                self.core = EncodeForgeCore(self.settings)
             
             # Route to appropriate handler
             if action == "check_ffmpeg":
                 if self.core is None:
-                    self.core = FFmpegCore(self.settings)
+                    self.core = EncodeForgeCore(self.settings)
                 return self.core.check_ffmpeg()
             
             elif action == "download_ffmpeg":
@@ -376,11 +394,12 @@ class FFmpegAPI:
             elif action == "rename_files":
                 file_paths = request.get("file_paths", [])
                 dry_run = request.get("dry_run", False)
+                create_backup = request.get("create_backup", False)
                 
                 if not file_paths:
                     return {"status": "error", "message": "file_paths required"}
                 
-                return self.core.rename_files(file_paths, dry_run)
+                return self.core.rename_files(file_paths, dry_run, create_backup)
             
             elif action == "scan_directory":
                 directory = request.get("directory")
@@ -414,14 +433,19 @@ class FFmpegAPI:
             elif action == "convert_files":
                 return self.handle_convert_files(request)
             
+            elif action == "check_ongoing_conversion":
+                return self.check_ongoing_conversion()
+            
             elif action == "stop_conversion":
                 # Force cancel current conversion
+                logger.info("Received stop_conversion command from Java")
                 try:
+                    logger.info("Calling core.cancel_current()...")
                     result = self.core.cancel_current()
                     logger.info(f"Stop conversion result: {result}")
                     return result
                 except Exception as e:
-                    logger.error(f"Error stopping conversion: {e}")
+                    logger.error(f"Error stopping conversion: {e}", exc_info=True)
                     return {"status": "error", "message": str(e)}
             
             elif action == "pause_conversion":
@@ -446,7 +470,7 @@ class FFmpegAPI:
                 settings = self.core.profile_mgr.load_profile(profile_name)
                 if settings:
                     self.settings = settings
-                    self.core = FFmpegCore(self.settings)
+                    self.core = EncodeForgeCore(self.settings)
                     return {"status": "success", "message": f"Loaded profile: {profile_name}"}
                 else:
                     return {"status": "error", "message": "Profile not found"}
@@ -493,7 +517,7 @@ class FFmpegAPI:
             
             # Ensure core is initialized
             if self.core is None:
-                self.core = FFmpegCore(self.settings)
+                self.core = EncodeForgeCore(self.settings)
             
             def progress_callback(progress_data: Dict):
                 """Send progress updates immediately as they come"""
@@ -529,7 +553,7 @@ class FFmpegAPI:
             
             # Ensure core is initialized
             if self.core is None:
-                self.core = FFmpegCore(self.settings)
+                self.core = EncodeForgeCore(self.settings)
             
             # Track completion
             completed_count = 0
@@ -642,7 +666,7 @@ class FFmpegAPI:
         """Get system capabilities"""
         # Ensure core is initialized
         if self.core is None:
-            self.core = FFmpegCore(self.settings)
+            self.core = EncodeForgeCore(self.settings)
         
         ffmpeg_status = self.core.check_ffmpeg()
         whisper_status = self.core.check_whisper()
@@ -723,7 +747,7 @@ class FFmpegAPI:
             
             # Ensure core is initialized
             if self.core is None:
-                self.core = FFmpegCore(self.settings)
+                self.core = EncodeForgeCore(self.settings)
             
             # Check FFmpeg status
             ffmpeg_status = self.core.check_ffmpeg()
@@ -798,7 +822,7 @@ class FFmpegAPI:
         try:
             # Ensure core is initialized
             if self.core is None:
-                self.core = FFmpegCore(self.settings)
+                self.core = EncodeForgeCore(self.settings)
             
             # Get hardware information
             if hasattr(self.core, 'ffmpeg_mgr') and self.core.ffmpeg_mgr:
@@ -869,14 +893,12 @@ class FFmpegAPI:
             }
     
     def handle_shutdown(self) -> Dict:
-        """Handle application shutdown - terminate any running processes"""
+        """Handle application shutdown - save state but don't terminate processes"""
         try:
             logger.info("Handling application shutdown")
             
-            # Cancel any running conversions
-            if self.core:
-                result = self.core.cancel_current()
-                logger.info(f"Shutdown cancellation result: {result}")
+            logger.info("Java app closing - FFmpeg processes will continue in background")
+            logger.info("State file will persist for recovery on next startup")
             
             return {"status": "success", "message": "Shutdown handled"}
             
@@ -896,13 +918,18 @@ class FFmpegAPI:
         self.update_settings(settings_dict)
         
         # Reinitialize core with updated settings
-        self.core = FFmpegCore(self.settings)
+        if CORE_AVAILABLE:
+            self.core = EncodeForgeCore(self.settings)
+            logger.info("Using real EncodeForgeCore for conversion")
+        else:
+            self.core = EncodeForgeCore(self.settings)
+            logger.error("Using fallback EncodeForgeCore - conversions will fail")
         
         logger.info(f"Starting conversion of {len(file_paths)} files with settings: {settings_dict}")
         
         # Define progress callback that sends updates immediately
         def progress_callback(update: Dict):
-            logger.info(f"Progress update: {update}")
+            logger.info(f"Progress callback received: {update}")
             
             # Forward all progress fields to Java
             progress_update = {
@@ -918,30 +945,135 @@ class FFmpegAPI:
                 if field in update:
                     progress_update[field] = update[field]
             
-            logger.debug(f"Sending progress update with {len(progress_update)} fields")
+            logger.info(f"Sending progress update to Java: {progress_update}")
             self._send_response(progress_update)
         
-        # Start conversion
+        # Start conversion in a separate thread to allow stop commands
+        self.conversion_thread = threading.Thread(
+            target=self._run_conversion,
+            args=(file_paths, progress_callback),
+            daemon=True
+        )
+        self.conversion_result = None
+        self.conversion_thread.start()
+        
+        # Return immediately - the conversion runs in background
+        # Progress updates will be sent via the callback
+        return {
+            "status": "started",
+            "message": f"Started conversion of {len(file_paths)} files"
+        }
+    
+    def _run_conversion(self, file_paths, progress_callback):
+        """Run conversion in separate thread"""
         try:
+            logger.info(f"_run_conversion started with {len(file_paths)} files")
+            if self.core is None:
+                logger.error("Core is not initialized")
+                error_result = {
+                    "type": "conversion_complete",
+                    "status": "error",
+                    "message": "Core not initialized"
+                }
+                self._send_response(error_result)
+                return
+            
+            logger.info("Calling self.core.convert_files with progress callback")
             result = self.core.convert_files(file_paths, progress_callback)
+            logger.info(f"convert_files returned: {result}")
             
             # Send final result
-            return {
+            success_count = int(result.get("converted", 0))
+            total_count = int(result.get("total", 0))
+            failed_count = total_count - success_count
+            
+            final_result = {
+                "type": "conversion_complete",
                 "status": result["status"],
-                "message": f"Converted {len(result['success'])}/{result['total']} files",
-                "success_count": len(result["success"]),
-                "failed_count": len(result["failed"]),
+                "message": f"Converted {success_count}/{total_count} files",
+                "success_count": success_count,
+                "failed_count": failed_count,
                 "details": result
             }
+            
+            logger.info(f"Conversion completed: {final_result}")
+            self._send_response(final_result)
+            self.conversion_result = final_result
+            
         except Exception as e:
             logger.error(f"Conversion error: {e}", exc_info=True)
-            return {
+            error_result = {
+                "type": "conversion_complete",
                 "status": "error",
                 "message": str(e)
+            }
+            self._send_response(error_result)
+            self.conversion_result = error_result
+    
+    def check_ongoing_conversion(self) -> Dict:
+        """Check if there's an ongoing conversion from a previous session"""
+        try:
+            # Initialize core if not already done
+            if not hasattr(self, 'core') or not self.core:
+                self.core = EncodeForgeCore(self.settings)
+            
+            # Check for saved process state
+            if hasattr(self.core, 'conversion_handler') and self.core.conversion_handler:
+                saved_state = self.core.conversion_handler.get_saved_process_state()
+            else:
+                saved_state = None
+            
+            if saved_state:
+                logger.info("Found ongoing conversion from previous session")
+                
+                # Extract queue information with proper defaults
+                queue = saved_state.get('queue', [])
+                if not isinstance(queue, list):
+                    queue = []
+                
+                queued_files = [f for f in queue if f.get('status') == 'queued']
+                processing_files = [f for f in queue if f.get('status') == 'processing']
+                completed_files = [f for f in queue if f.get('status') == 'completed']
+                failed_files = [f for f in queue if f.get('status') == 'failed']
+                
+                logger.info(f"Recovery state: {len(queued_files)} queued, "
+                          f"{len(processing_files)} processing, "
+                          f"{len(completed_files)} completed, "
+                          f"{len(failed_files)} failed")
+                
+                return {
+                    "status": "ongoing",
+                    "message": "Ongoing conversion detected",
+                    "queue": queue,  # Full queue with all file statuses
+                    "queued_files": queued_files,
+                    "processing_files": processing_files,
+                    "completed_files": completed_files,
+                    "failed_files": failed_files,
+                    "current_file": saved_state.get('current_file', ''),
+                    "current_index": saved_state.get('current_index', 0),
+                    "total_files": saved_state.get('total_files', 0),
+                    "completed_count": saved_state.get('completed_count', 0),
+                    "failed_count": saved_state.get('failed_count', 0),
+                    "pid": saved_state.get('pid'),
+                    "timestamp": saved_state.get('timestamp')
+                }
+            else:
+                return {
+                    "status": "none",
+                    "message": "No ongoing conversion found"
+                }
+                
+        except Exception as e:
+            logger.error(f"Error checking ongoing conversion: {e}", exc_info=True)
+            return {
+                "status": "error",
+                "message": f"Failed to check ongoing conversion: {str(e)}"
             }
     
     def update_settings(self, settings_dict: Dict):
         """Update conversion settings from dictionary"""
+        logger.info(f"Updating settings with: {settings_dict}")
+        
         # FFmpeg paths
         if "ffmpeg_path" in settings_dict:
             self.settings.ffmpeg_path = settings_dict["ffmpeg_path"]
@@ -951,14 +1083,30 @@ class FFmpegAPI:
         # Hardware acceleration
         if "use_nvenc" in settings_dict:
             self.settings.use_nvenc = settings_dict["use_nvenc"]
+            logger.info(f"Set use_nvenc = {self.settings.use_nvenc}")
         if "use_amf" in settings_dict:
             self.settings.use_amf = settings_dict["use_amf"]
+            logger.info(f"Set use_amf = {self.settings.use_amf}")
         if "use_qsv" in settings_dict:
             self.settings.use_qsv = settings_dict["use_qsv"]
+            logger.info(f"Set use_qsv = {self.settings.use_qsv}")
+        if "use_videotoolbox" in settings_dict:
+            self.settings.use_videotoolbox = settings_dict["use_videotoolbox"]
+            logger.info(f"Set use_videotoolbox = {self.settings.use_videotoolbox}")
         if "nvenc_preset" in settings_dict:
             self.settings.nvenc_preset = settings_dict["nvenc_preset"]
         if "nvenc_cq" in settings_dict:
             self.settings.nvenc_cq = settings_dict["nvenc_cq"]
+        if "amf_qp" in settings_dict:
+            self.settings.amf_qp = settings_dict["amf_qp"]
+        if "amf_preset" in settings_dict:
+            self.settings.amf_preset = settings_dict["amf_preset"]
+        if "qsv_quality" in settings_dict:
+            self.settings.qsv_quality = settings_dict["qsv_quality"]
+        if "qsv_preset" in settings_dict:
+            self.settings.qsv_preset = settings_dict["qsv_preset"]
+        if "videotoolbox_bitrate" in settings_dict:
+            self.settings.videotoolbox_bitrate = settings_dict["videotoolbox_bitrate"]
         if "hardware_decoding" in settings_dict:
             # Map hardware_decoding to use_nvenc for now
             self.settings.use_nvenc = settings_dict["hardware_decoding"]
@@ -966,29 +1114,34 @@ class FFmpegAPI:
         # Video codec mapping from Java names to Python
         if "video_codec" in settings_dict:
             video_codec = settings_dict["video_codec"]
-            # Reset all hardware acceleration flags first
-            self.settings.use_nvenc = False
-            self.settings.use_amf = False
-            self.settings.use_qsv = False
-            self.settings.use_videotoolbox = False
-            
-            if "H.264 NVENC" in video_codec or "h264_nvenc" in video_codec.lower():
-                self.settings.use_nvenc = True
-                self.settings.nvenc_codec = "h264_nvenc"  # Explicitly set H.264
-                self.settings.video_codec_fallback = "libx264"
-            elif "H.265 NVENC" in video_codec or "hevc_nvenc" in video_codec.lower():
-                self.settings.use_nvenc = True
-                self.settings.nvenc_codec = "hevc_nvenc"  # Explicitly set H.265
-                self.settings.video_codec_fallback = "libx265"
-            elif "AMF" in video_codec or "amf" in video_codec.lower():
-                self.settings.use_amf = True
-                self.settings.video_codec_fallback = "libx264"
-            elif "QSV" in video_codec or "qsv" in video_codec.lower():
-                self.settings.use_qsv = True
-                self.settings.video_codec_fallback = "libx264"
+            if video_codec != "Auto (Best Available)":
+                # Reset all hardware acceleration flags first
+                self.settings.use_nvenc = False
+                self.settings.use_amf = False
+                self.settings.use_qsv = False
+                self.settings.use_videotoolbox = False
+                
+                if "H.264 NVENC" in video_codec or "h264_nvenc" in video_codec.lower():
+                    self.settings.use_nvenc = True
+                    self.settings.nvenc_codec = "h264_nvenc"  # Explicitly set H.264
+                    self.settings.video_codec_fallback = "libx264"
+                elif "H.265 NVENC" in video_codec or "hevc_nvenc" in video_codec.lower():
+                    self.settings.use_nvenc = True
+                    self.settings.nvenc_codec = "hevc_nvenc"  # Explicitly set H.265
+                    self.settings.video_codec_fallback = "libx265"
+                elif "AMF" in video_codec or "amf" in video_codec.lower():
+                    self.settings.use_amf = True
+                    self.settings.video_codec_fallback = "libx264"
+                elif "QSV" in video_codec or "qsv" in video_codec.lower():
+                    self.settings.use_qsv = True
+                    self.settings.video_codec_fallback = "libx264"
+                else:
+                    # Software encoding fallback
+                    self.settings.video_codec_fallback = "libx264"
             else:
-                # Software encoding fallback
+                # Auto mode - preserve individual hardware flags and set fallback
                 self.settings.video_codec_fallback = "libx264"
+                logger.info(f"Auto mode preserving hardware flags - NVENC: {self.settings.use_nvenc}, AMF: {self.settings.use_amf}, QSV: {self.settings.use_qsv}")
         
         # Video quality settings
         if "crf" in settings_dict:
@@ -1084,7 +1237,7 @@ class FFmpegAPI:
             pass
         
         # Recreate core with new settings
-        self.core = FFmpegCore(self.settings)
+        self.core = EncodeForgeCore(self.settings)
     
     def settings_to_dict(self) -> Dict:
         """Convert settings to dictionary"""

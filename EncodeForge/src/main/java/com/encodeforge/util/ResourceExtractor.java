@@ -18,8 +18,8 @@ public class ResourceExtractor {
      * Extract Python runtime from JAR resources to temporary directory
      */
     public static void extractPythonRuntime() throws IOException {
-        // Create extraction directory in user's home or temp
-        Path baseDir = Paths.get(System.getProperty("user.home"), ".encodeforge");
+        // Create extraction directory in AppData/Local/EncodeForge/temp
+        Path baseDir = PathManager.getTempDir();
         extractedPythonDir = baseDir.resolve("python");
         
         // Create directories

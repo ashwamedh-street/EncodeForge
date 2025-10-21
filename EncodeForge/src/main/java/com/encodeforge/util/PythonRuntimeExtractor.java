@@ -67,6 +67,21 @@ public class PythonRuntimeExtractor {
                         }
                     }
                 }
+                
+                // Extract Python scripts from resources/python/
+                if (entryName.startsWith("python/") && !entry.isDirectory()) {
+                    String relativePath = entryName.substring("python/".length());
+                    Path targetFile = targetDir.resolve("scripts").resolve(relativePath);
+                    
+                    // Create parent directories
+                    Files.createDirectories(targetFile.getParent());
+                    
+                    // Extract file
+                    try (InputStream is = jarFile.getInputStream(entry)) {
+                        Files.copy(is, targetFile, StandardCopyOption.REPLACE_EXISTING);
+                        logger.debug("Extracted Python script: {}", relativePath);
+                    }
+                }
             }
         }
     }
@@ -111,7 +126,8 @@ public class PythonRuntimeExtractor {
             "ffmpeg_manager.py",
             "profile_manager.py",
             "subtitle_manager.py",
-            "metadata_grabber.py"
+            "metadata_grabber.py",
+            "path_manager.py"
         };
         
         Path scriptsDir = targetDir.resolve("scripts");
@@ -162,7 +178,7 @@ public class PythonRuntimeExtractor {
             "base_provider.py",
             "tmdb_provider.py",
             "tvdb_provider.py",
-            "anilist_provider.py",
+            "anidb_provider.py",
             "tvmaze_provider.py",
             "kitsu_provider.py",
             "jikan_provider.py",

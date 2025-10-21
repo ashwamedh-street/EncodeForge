@@ -4,6 +4,7 @@ import com.encodeforge.model.ConversionJob;
 import com.encodeforge.model.ConversionSettings;
 import com.encodeforge.service.PythonBridge;
 import com.encodeforge.util.HardwareDetector;
+import com.encodeforge.util.PathManager;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import javafx.application.Platform;
@@ -26,14 +27,19 @@ import javafx.stage.DirectoryChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.scene.input.MouseEvent;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import org.kordamp.ikonli.javafx.FontIcon;
 import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
+import java.io.File;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -179,7 +185,7 @@ public class MainController {
     @FXML private Button subtitleProcessButton;
     @FXML private Button advancedSearchButton;
     @FXML private Button autoSelectBestButton;
-    @FXML private TextField anilistUrlField;
+    @FXML private TextField anidbUrlField;
     @FXML private Label subtitleSelectedFilesLabel;
     @FXML private ComboBox<String> subtitleLogLevelCombo;
     @FXML private TextArea subtitleLogArea;
@@ -256,6 +262,7 @@ public class MainController {
     @FXML private TableView<ConversionJob> processingTable;
     @FXML private TableColumn<ConversionJob, String> procStatusColumn;
     @FXML private TableColumn<ConversionJob, String> procFileColumn;
+    @FXML private TableColumn<ConversionJob, String> procOperationColumn;
     @FXML private TableColumn<ConversionJob, Double> procProgressColumn;
     @FXML private TableColumn<ConversionJob, String> procFpsColumn;
     @FXML private TableColumn<ConversionJob, String> procSpeedColumn;
@@ -294,6 +301,9 @@ public class MainController {
         // Load settings from disk
         this.settings = ConversionSettings.load();
         logger.info("Settings loaded from: {}", ConversionSettings.getSettingsFilePath());
+        
+        // Setup embedded FFmpeg if available
+        pythonBridge.setupEmbeddedFFmpeg(settings);
     }
     
     @FXML
@@ -318,6 +328,9 @@ public class MainController {
         
         // Run consolidated status check for faster startup
         CompletableFuture.runAsync(this::updateAllStatus);
+        
+        // Check for ongoing conversions from previous session
+        CompletableFuture.runAsync(this::checkForOngoingConversions);
         
         logger.info("Main Controller initialized (async status check running)");
     }
@@ -443,12 +456,12 @@ public class MainController {
         showModeLayout(renamerModeLayout);
         updateModeButtonSelection(renamerModeButton);
         
-        // Immediately load files and show original names
+        // Show original filenames without searching
         if (!queuedFiles.isEmpty()) {
-            updateRenamePreview();
+            showOriginalFilenames();
         }
         updateSelectedFilesLabel();
-        log("Switched to renamer mode");
+        log("Switched to metadata mode");
     }
     
     private void updateModeButtonSelection(Button selectedButton) {
@@ -580,6 +593,7 @@ public class MainController {
         // Setup columns
         procStatusColumn.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty("⚡"));
         procFileColumn.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(new File(cd.getValue().getInputPath()).getName()));
+        procOperationColumn.setCellValueFactory(new PropertyValueFactory<>("operation"));
         procProgressColumn.setCellValueFactory(new PropertyValueFactory<>("progress"));
         procFpsColumn.setCellValueFactory(new PropertyValueFactory<>("fps"));
         procSpeedColumn.setCellValueFactory(new PropertyValueFactory<>("speed"));
@@ -944,6 +958,11 @@ public class MainController {
             updateSubtitleFileList();
         }
         
+        // Update metadata/renamer file list if in renamer mode
+        if ("renamer".equals(currentMode)) {
+            showOriginalFilenames();
+        }
+        
         if (added > 0) {
             log("Added " + added + " file(s) to queue" + (skipped > 0 ? " (" + skipped + " duplicate(s) skipped)" : ""));
         } else if (skipped > 0) {
@@ -1020,6 +1039,7 @@ public class MainController {
         for (ConversionJob job : queuedFiles) {
             filePaths.add(job.getInputPath());
             job.setStatus("⚡ Processing");
+            job.setOperation("Starting...");
             job.setProgress(0.0);
             job.setStartTime(System.currentTimeMillis());
             job.setFps("0");
@@ -1262,7 +1282,12 @@ public class MainController {
     
     private void performRename(List<String> filePaths) {
         isProcessing = true;
-        statusLabel.setText("Renaming files...");
+        log("Renaming files...");
+        
+        log("Starting rename process for " + filePaths.size() + " files");
+        for (int i = 0; i < filePaths.size(); i++) {
+            log("File " + (i + 1) + ": " + filePaths.get(i));
+        }
         
         new Thread(() -> {
             try {
@@ -1272,23 +1297,55 @@ public class MainController {
                 filePaths.forEach(filesArray::add);
                 request.add("file_paths", filesArray);
                 request.addProperty("dry_run", false);
+                request.addProperty("create_backup", createBackupCheck.isSelected());
                 
                 JsonObject response = pythonBridge.sendCommand(request);
                 
+                log("Python response received: " + response.toString());
+                
                 Platform.runLater(() -> {
                     if (response.get("status").getAsString().equals("success")) {
-                        int successCount = response.get("success_count").getAsInt();
-                        int failedCount = response.get("failed_count").getAsInt();
+                        int successCount = response.get("renamed").getAsInt();
+                        int totalCount = response.get("total").getAsInt();
+                        int failedCount = totalCount - successCount;
                         
                         log(String.format("Renamed %d file(s), %d failed", successCount, failedCount));
                         
-                        // Update queue
-                        for (ConversionJob job : queuedFiles) {
-                            if (filePaths.contains(job.getInputPath())) {
-                                job.setStatus("✅ Completed");
+                        // Update queue with new file paths
+                        JsonArray results = response.getAsJsonArray("results");
+                        for (int i = 0; i < results.size(); i++) {
+                            JsonObject result = results.get(i).getAsJsonObject();
+                            String originalPath = result.get("original").getAsString();
+                            String newPath = result.get("new_path").getAsString();
+                            boolean success = result.get("success").getAsBoolean();
+                            
+                            // Find and update the corresponding job
+                            for (ConversionJob job : queuedFiles) {
+                                if (job.getInputPath().equals(originalPath)) {
+                                    if (success && newPath != null && !newPath.isEmpty()) {
+                                        // Update the job with the new path
+                                        job.inputPathProperty().set(newPath);
+                                        // Update the filename to match the new path
+                                        File newFile = new File(newPath);
+                                        job.fileNameProperty().set(newFile.getName());
+                                        job.setStatus("✅ Renamed");
+                                    } else {
+                                        job.setStatus("❌ Rename Failed");
+                                    }
+                                    break;
+                                }
                             }
                         }
+                        
                         queuedTable.refresh();
+                        
+                        // Clear the rename preview lists since files have been renamed
+                        if (suggestedNamesListView != null) {
+                            suggestedNamesListView.getItems().clear();
+                        }
+                        if (originalNamesListView != null) {
+                            originalNamesListView.getItems().clear();
+                        }
                         
                         showInfo("Rename Complete", 
                             String.format("Successfully renamed %d file(s).\n%d file(s) could not be renamed.", 
@@ -1309,6 +1366,173 @@ public class MainController {
                 });
             }
         }).start();
+    }
+    
+    private void performJavaRename() {
+        isProcessing = true;
+        log("Renaming files using Java implementation...");
+        
+        new Thread(() -> {
+            try {
+                List<String> backupData = new ArrayList<>();
+                int successCount = 0;
+                int failedCount = 0;
+                
+                // Get the suggested names from the UI
+                ObservableList<String> suggestedNames = suggestedNamesListView.getItems();
+                
+                if (suggestedNames.size() != queuedFiles.size()) {
+                    Platform.runLater(() -> {
+                        showError("Rename Error", "Mismatch between files and suggested names. Please refresh the rename preview.");
+                        isProcessing = false;
+                        resetProcessingState();
+                    });
+                    return;
+                }
+                
+                log("Starting rename process for " + queuedFiles.size() + " files");
+                
+                for (int i = 0; i < queuedFiles.size(); i++) {
+                    ConversionJob job = queuedFiles.get(i);
+                    String originalPath = job.getInputPath();
+                    String suggestedName = suggestedNames.get(i);
+                    
+                    try {
+                        File originalFile = new File(originalPath);
+                        if (!originalFile.exists()) {
+                            log("❌ File not found: " + originalFile.getName());
+                            failedCount++;
+                            continue;
+                        }
+                        
+                        // Extract extension from original file
+                        String extension = "";
+                        String originalName = originalFile.getName();
+                        int lastDot = originalName.lastIndexOf('.');
+                        if (lastDot > 0) {
+                            extension = originalName.substring(lastDot);
+                        }
+                        
+                        // Create new file path - check if suggested name already has extension
+                        String finalFileName;
+                        if (suggestedName.toLowerCase().endsWith(extension.toLowerCase())) {
+                            // Suggested name already includes the extension
+                            finalFileName = suggestedName;
+                        } else {
+                            // Add the extension to the suggested name
+                            finalFileName = suggestedName + extension;
+                        }
+                        
+                        File newFile = new File(originalFile.getParent(), finalFileName);
+                        
+                        // Check if file already has the correct name
+                        if (originalFile.getName().equals(newFile.getName())) {
+                            log("✅ File already correctly named: " + originalFile.getName());
+                            successCount++;
+                            continue;
+                        }
+                        
+                        // Check if target file already exists
+                        if (newFile.exists()) {
+                            log("❌ Target file already exists: " + newFile.getName());
+                            failedCount++;
+                            continue;
+                        }
+                        
+                        // Store backup information
+                        if (createBackupCheck.isSelected()) {
+                            backupData.add(String.format("%s -> %s", originalPath, newFile.getAbsolutePath()));
+                        }
+                        
+                        // Perform the rename
+                        boolean renamed = originalFile.renameTo(newFile);
+                        
+                        if (renamed) {
+                            log("✅ Renamed: " + originalFile.getName() + " -> " + newFile.getName());
+                            successCount++;
+                            
+                            // Update the job with new path on JavaFX thread
+                            final String newPath = newFile.getAbsolutePath();
+                            final String newFileName = newFile.getName();
+                            Platform.runLater(() -> {
+                                job.inputPathProperty().set(newPath);
+                                job.fileNameProperty().set(newFileName);
+                                job.setStatus("✅ Renamed");
+                            });
+                        } else {
+                            log("❌ Failed to rename: " + originalFile.getName());
+                            failedCount++;
+                            Platform.runLater(() -> job.setStatus("❌ Rename Failed"));
+                        }
+                        
+                    } catch (Exception e) {
+                        log("❌ Error renaming file: " + e.getMessage());
+                        failedCount++;
+                        Platform.runLater(() -> job.setStatus("❌ Rename Error"));
+                    }
+                }
+                
+                // Create backup file if requested
+                if (createBackupCheck.isSelected() && !backupData.isEmpty()) {
+                    try {
+                        createBackupFile(backupData);
+                        log("📝 Backup file created");
+                    } catch (Exception e) {
+                        log("⚠️ Failed to create backup file: " + e.getMessage());
+                    }
+                }
+                
+                final int finalSuccessCount = successCount;
+                final int finalFailedCount = failedCount;
+                
+                Platform.runLater(() -> {
+                    // Refresh the table to show updated file names
+                    queuedTable.refresh();
+                    
+                    // Update the original names list to show the new names, keep suggested names
+                    originalNamesListView.getItems().clear();
+                    for (ConversionJob job : queuedFiles) {
+                        originalNamesListView.getItems().add(job.getFileName());
+                    }
+                    
+                    log(String.format("✅ Rename complete: %d successful, %d failed", finalSuccessCount, finalFailedCount));
+                    
+                    showInfo("Rename Complete", 
+                        String.format("Successfully renamed %d file(s).\n%d file(s) could not be renamed.", 
+                            finalSuccessCount, finalFailedCount));
+                    
+                    isProcessing = false;
+                    resetProcessingState();
+                });
+                
+            } catch (Exception e) {
+                logger.error("Error during Java renaming", e);
+                Platform.runLater(() -> {
+                    showError("Rename Error", "Failed to rename files: " + e.getMessage());
+                    isProcessing = false;
+                    resetProcessingState();
+                });
+            }
+        }).start();
+    }
+    
+    private void createBackupFile(List<String> backupData) throws IOException {
+        // Create backup directory in AppData/Local/EncodeForge/backups
+        Path backupDir = PathManager.getBackupsDir();
+        
+        // Create backup file with timestamp
+        String timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+        Path backupFile = backupDir.resolve("rename_backup_" + timestamp + ".txt");
+        
+        // Write backup data
+        List<String> lines = new ArrayList<>();
+        lines.add("# EncodeForge Rename Backup - " + java.time.LocalDateTime.now());
+        lines.add("# Original Path -> New Path");
+        lines.add("");
+        lines.addAll(backupData);
+        
+        Files.write(backupFile, lines, StandardCharsets.UTF_8);
+        log("📝 Backup saved to: " + backupFile.toString());
     }
     
     @FXML
@@ -1352,7 +1576,24 @@ public class MainController {
         Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
         confirm.setTitle("Stop Processing");
         confirm.setHeaderText("Stop all operations?");
-        confirm.setContentText("This will cancel all ongoing operations. Progress will be lost.");
+        
+        // Create styled content
+        javafx.scene.layout.VBox contentBox = new javafx.scene.layout.VBox(8);
+        
+        javafx.scene.text.Text warningIcon = new javafx.scene.text.Text("⚠");
+        warningIcon.setStyle("-fx-fill: #ffb900; -fx-font-size: 16px; -fx-font-weight: bold;");
+        
+        javafx.scene.text.Text warningText = new javafx.scene.text.Text("This will cancel all ongoing operations. Progress will be lost.");
+        warningText.setStyle("-fx-fill: #ffffff; -fx-font-size: 12px;");
+        warningText.setWrappingWidth(400);
+        
+        contentBox.getChildren().addAll(warningIcon, warningText);
+        confirm.getDialogPane().setContent(contentBox);
+        
+        // Style the dialog
+        javafx.scene.control.DialogPane dialogPane = confirm.getDialogPane();
+        dialogPane.getStylesheets().add(getClass().getResource("/styles/application.css").toExternalForm());
+        dialogPane.getStyleClass().add("dialog-pane");
         
         Optional<ButtonType> result = confirm.showAndWait();
         if (result.isPresent() && result.get() == ButtonType.OK) {
@@ -1360,9 +1601,11 @@ public class MainController {
             
             // Best-effort cancel in backend
             try {
+                logger.info("Sending stop conversion command to Python bridge...");
                 pythonBridge.requestStopConversion();
+                logger.info("Stop conversion command sent successfully");
             } catch (Exception e) {
-                logger.warn("Stop command failed: {}", e.getMessage());
+                logger.error("Stop command failed: {}", e.getMessage(), e);
             }
 
             // Already updated in the earlier cancel logic
@@ -1623,16 +1866,46 @@ public class MainController {
     }
     
     @FXML
+    private void handleCheckForUpdates() {
+        com.encodeforge.util.UpdateChecker.checkAndShowUpdateDialog();
+    }
+    
+    @FXML
     private void handleAbout() {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("About");
         alert.setHeaderText("EncodeForge");
-        alert.setContentText(
-            "Version 0.1\n\n" +
-            "A modern, cross-platform media encoding, subtitle management, and file renaming tool.\n\n" +
-            "GitHub: https://github.com/SirStig/EncodeForge\n\n" +
-            "Settings Location:\n" + ConversionSettings.getSettingsFilePath()
+        
+        // Create styled content
+        javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(8);
+        
+        javafx.scene.text.Text versionText = new javafx.scene.text.Text("Version 0.3");
+        versionText.setStyle("-fx-fill: #16c60c; -fx-font-size: 14px; -fx-font-weight: bold;");
+        
+        javafx.scene.text.Text descriptionText = new javafx.scene.text.Text(
+            "A modern, cross-platform media encoding, subtitle management, and file renaming tool."
         );
+        descriptionText.setStyle("-fx-fill: #ffffff; -fx-font-size: 12px;");
+        descriptionText.setWrappingWidth(400);
+        
+        javafx.scene.control.Hyperlink githubLink = new javafx.scene.control.Hyperlink("GitHub: https://github.com/SirStig/EncodeForge");
+        githubLink.setStyle("-fx-text-fill: #0078d4; -fx-font-size: 12px;");
+        githubLink.setOnAction(e -> {
+            try {
+                java.awt.Desktop.getDesktop().browse(new java.net.URI("https://github.com/SirStig/EncodeForge"));
+            } catch (Exception ex) {
+                logger.error("Error opening GitHub URL", ex);
+            }
+        });
+        
+        content.getChildren().addAll(versionText, descriptionText, githubLink);
+        alert.getDialogPane().setContent(content);
+        
+        // Style the dialog
+        javafx.scene.control.DialogPane dialogPane = alert.getDialogPane();
+        dialogPane.getStylesheets().add(getClass().getResource("/styles/application.css").toExternalForm());
+        dialogPane.getStyleClass().add("dialog-pane");
+        
         alert.showAndWait();
     }
     
@@ -1642,7 +1915,24 @@ public class MainController {
             Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
             alert.setTitle("Exit");
             alert.setHeaderText("Conversions in progress");
-            alert.setContentText("Are you sure you want to exit?");
+            
+            // Create styled content
+            javafx.scene.layout.VBox contentBox = new javafx.scene.layout.VBox(8);
+            
+            javafx.scene.text.Text warningIcon = new javafx.scene.text.Text("⚠");
+            warningIcon.setStyle("-fx-fill: #ffb900; -fx-font-size: 16px; -fx-font-weight: bold;");
+            
+            javafx.scene.text.Text warningText = new javafx.scene.text.Text("Are you sure you want to exit?");
+            warningText.setStyle("-fx-fill: #ffffff; -fx-font-size: 12px;");
+            warningText.setWrappingWidth(400);
+            
+            contentBox.getChildren().addAll(warningIcon, warningText);
+            alert.getDialogPane().setContent(contentBox);
+            
+            // Style the dialog
+            javafx.scene.control.DialogPane dialogPane = alert.getDialogPane();
+            dialogPane.getStylesheets().add(getClass().getResource("/styles/application.css").toExternalForm());
+            dialogPane.getStyleClass().add("dialog-pane");
             
             Optional<ButtonType> result = alert.showAndWait();
             if (result.isEmpty() || result.get() != ButtonType.OK) {
@@ -1655,7 +1945,14 @@ public class MainController {
     
     private void handleProgressUpdate(JsonObject update) {
         Platform.runLater(() -> {
-            if (update.has("progress")) {
+            // Handle conversion completion message
+            if (update.has("type") && "conversion_complete".equals(update.get("type").getAsString())) {
+                handleConversionComplete(update);
+                return;
+            }
+            
+            // Handle progress updates (both old format and new format)
+            if (update.has("progress") || (update.has("type") && "progress".equals(update.get("type").getAsString()))) {
                 double progress = update.get("progress").getAsDouble();
                 String fileName = update.get("file").getAsString();
                 String status = update.has("status") ? update.get("status").getAsString() : "processing";
@@ -1667,6 +1964,24 @@ public class MainController {
                 
                 // Status with emoji
                 switch (status.toLowerCase()) {
+                    case "analyzing":
+                        statusText.append("🔍 Analyzing...");
+                        break;
+                    case "analyzing_subtitles":
+                        statusText.append("🔍 Analyzing subtitles...");
+                        break;
+                    case "converting_subtitles":
+                        statusText.append("📝 Converting subtitles...");
+                        break;
+                    case "preparing":
+                        statusText.append("⚙️ Preparing...");
+                        break;
+                    case "ready":
+                        statusText.append("⚡ Starting encoding...");
+                        break;
+                    case "progress":
+                        statusText.append("⚡ Encoding...");
+                        break;
                     case "starting":
                         statusText.append("🔄 Starting");
                         break;
@@ -1677,6 +1992,7 @@ public class MainController {
                         statusText.append("🔧 Finalizing");
                         break;
                     case "completed":
+                    case "complete":
                         statusText.append("✅ Completed");
                         break;
                     case "cancelled":
@@ -1729,16 +2045,79 @@ public class MainController {
                 
                 // Update job in processing list
                 ConversionJob job = processingFiles.stream()
-                    .filter(j -> j.getInputPath().equals(fileName))
+                    .filter(j -> new File(j.getInputPath()).getName().equals(fileName))
                     .findFirst()
                     .orElse(null);
                 
                 if (job != null) {
-                    if (progress >= 0) {
-                        job.setProgress(progress);
+                    String lowerStatus = status.toLowerCase();
+                    // Update job status based on the new status types
+                    switch (lowerStatus) {
+                        case "analyzing":
+                            job.setStatus("Analyzing...");
+                            job.setOperation("Analyzing video file...");
+                            job.setProgress(1.0); // Fixed progress for analyzing phase
+                            job.setFps("0");
+                            job.setSpeed("0x");
+                            job.setEta("Analyzing...");
+                            break;
+                        case "analyzing_subtitles":
+                            job.setStatus("Analyzing subtitles...");
+                            job.setOperation("Analyzing subtitle tracks...");
+                            job.setProgress(2.0); // Fixed progress for subtitle analysis
+                            job.setFps("0");
+                            job.setSpeed("0x");
+                            job.setEta("Analyzing...");
+                            break;
+                        case "converting_subtitles":
+                            job.setStatus("Converting subtitles...");
+                            job.setOperation("Converting subtitles...");
+                            job.setProgress(3.0); // Fixed progress for subtitle conversion
+                            job.setFps("0");
+                            job.setSpeed("0x");
+                            job.setEta("Converting...");
+                            break;
+                        case "preparing":
+                            job.setStatus("Preparing...");
+                            job.setOperation("Preparing conversion...");
+                            job.setProgress(4.0); // Fixed progress for preparation phase
+                            job.setFps("0");
+                            job.setSpeed("0x");
+                            job.setEta("Preparing...");
+                            break;
+                        case "ready":
+                            job.setStatus("Starting encoding...");
+                            job.setOperation("Starting encoding...");
+                            job.setProgress(5.0); // Fixed progress for ready phase
+                            job.setFps("0");
+                            job.setSpeed("0x");
+                            job.setEta("Starting...");
+                            break;
+                        case "progress":
+                            job.setStatus("Encoding...");
+                            job.setOperation("Encoding video...");
+                            // Map backend progress (0-100) to frontend progress (6-100)
+                            double mappedProgress = Math.max(6.0, Math.min(100.0, 6.0 + (progress * 0.94)));
+                            job.setProgress(mappedProgress);
+                            // Keep existing FPS, speed, ETA from update
+                            break;
+                        case "processing":
+                            job.setStatus("Encoding...");
+                            job.setOperation("Encoding video...");
+                            // Map backend progress (0-100) to frontend progress (6-100)
+                            mappedProgress = Math.max(6.0, Math.min(100.0, 6.0 + (progress * 0.94)));
+                            job.setProgress(mappedProgress);
+                            // Keep existing FPS, speed, ETA from update
+                            break;
+                        default:
+                            logger.debug("Unhandled status: '{}' - updating progress only", status);
+                            // For other statuses, update progress normally
+                            if (progress >= 0) {
+                                job.setProgress(progress);
+                            }
                     }
                     
-                    // Update real-time metrics
+                    // Update real-time metrics for encoding phase
                     if (update.has("fps")) {
                         job.setFps(String.format("%.1f", update.get("fps").getAsDouble()));
                     }
@@ -1749,9 +2128,13 @@ public class MainController {
                         job.setEta(update.get("eta").getAsString());
                     }
                     
+                    // Refresh the table to show updated values
+                    processingTable.refresh();
+                    
                     // Handle completion - move to completed list
-                    if (status.equals("completed")) {
+                    if (status.equals("completed") || status.equals("complete")) {
                         job.setStatus("✅ Completed");
+                        job.setOperation("Completed");
                         job.setProgress(100.0);
                         
                         // Calculate time taken
@@ -1847,6 +2230,46 @@ public class MainController {
                 }
             }
         });
+    }
+    
+    private void handleConversionComplete(JsonObject result) {
+        String status = result.get("status").getAsString();
+        String message = result.get("message").getAsString();
+        
+        log("Conversion completed: " + message);
+        
+        if ("success".equals(status)) {
+            // Move all processing jobs to completed
+            for (ConversionJob job : new ArrayList<>(processingFiles)) {
+                job.setStatus("✅ Completed");
+                job.setProgress(100.0);
+                
+                // Calculate time taken
+                long elapsedMs = System.currentTimeMillis() - job.getStartTime();
+                long minutes = elapsedMs / 60000;
+                long seconds = (elapsedMs % 60000) / 1000;
+                job.setEta(String.format("%dm %ds", minutes, seconds));
+                
+                processingFiles.remove(job);
+                completedFiles.add(job);
+            }
+            
+            updateQueueCounts();
+            showInfo("Conversion Complete", message);
+        } else {
+            // Handle error - move jobs back to queue
+            for (ConversionJob job : new ArrayList<>(processingFiles)) {
+                job.setStatus("⚠️ Failed");
+                job.setProgress(0.0);
+                processingFiles.remove(job);
+                queuedFiles.add(job);
+            }
+            
+            updateQueueCounts();
+            showError("Conversion Error", message);
+        }
+        
+        resetProcessingState();
     }
     
     private void resetProcessingState() {
@@ -1979,7 +2402,7 @@ public class MainController {
         if (statusMgr.isFanartConfigured()) log("  ✓ Fanart.tv (Artwork)");
         else log("  ⚠️ Fanart.tv (Artwork) - API key needed");
         log("Free Providers (No API Key Required):");
-        log("  ✅ AniList (Anime) - always available");
+        log("  ✅ AniDB (Anime) - always available");
         log("  ✅ Kitsu (Anime) - always available");
         log("  ✅ Jikan/MAL (Anime) - always available");
         log("  ✅ TVmaze (TV Shows) - always available");
@@ -2020,11 +2443,11 @@ public class MainController {
         // Update OMDB button
         if (omdbStatusButton != null) {
             if (statusMgr.isOmdbConfigured()) {
-                omdbStatusButton.setText("OMDB ✓");
+                omdbStatusButton.setText("OMDB: Ready");
                 omdbStatusButton.getStyleClass().removeAll("error", "warning");
                 omdbStatusButton.getStyleClass().add("active");
             } else {
-                omdbStatusButton.setText("OMDB ⚠️");
+                omdbStatusButton.setText("OMDB: Not Setup");
                 omdbStatusButton.getStyleClass().removeAll("active");
                 omdbStatusButton.getStyleClass().add("warning");
             }
@@ -2033,11 +2456,11 @@ public class MainController {
         // Update Trakt button
         if (traktStatusButton != null) {
             if (statusMgr.isTraktConfigured()) {
-                traktStatusButton.setText("Trakt ✓");
+                traktStatusButton.setText("Trakt: Ready");
                 traktStatusButton.getStyleClass().removeAll("error", "warning");
                 traktStatusButton.getStyleClass().add("active");
             } else {
-                traktStatusButton.setText("Trakt ⚠️");
+                traktStatusButton.setText("Trakt: Not Setup");
                 traktStatusButton.getStyleClass().removeAll("active");
                 traktStatusButton.getStyleClass().add("warning");
             }
@@ -2046,11 +2469,11 @@ public class MainController {
         // Update Fanart button
         if (fanartStatusButton != null) {
             if (statusMgr.isFanartConfigured()) {
-                fanartStatusButton.setText("Fanart ✓");
+                fanartStatusButton.setText("Fanart: Ready");
                 fanartStatusButton.getStyleClass().removeAll("error", "warning");
                 fanartStatusButton.getStyleClass().add("active");
             } else {
-                fanartStatusButton.setText("Fanart ⚠️");
+                fanartStatusButton.setText("Fanart: Not Setup");
                 fanartStatusButton.getStyleClass().removeAll("active");
                 fanartStatusButton.getStyleClass().add("warning");
             }
@@ -2075,21 +2498,65 @@ public class MainController {
             settings.setVideoCodec(selectedCodec);
             
             // Update hardware acceleration flags based on codec selection
-            if (selectedCodec.contains("NVENC")) {
+            if (selectedCodec.equals("Auto (Best Available)")) {
+                // Auto mode - detect and enable best available hardware encoder
+                List<String> availableEncoders = HardwareDetector.getAvailableEncoderList();
+                settings.setHardwareDecoding(true);
+                
+                // Reset all hardware flags first
+                settings.setUseNvenc(false);
+                settings.setUseAmf(false);
+                settings.setUseQsv(false);
+                settings.setUseVideotoolbox(false);
+                
+                // Enable the best available hardware encoder in order of preference
+                if (availableEncoders.stream().anyMatch(e -> e.contains("NVENC"))) {
+                    settings.setUseNvenc(true);
+                    logger.info("Auto mode: Enabled NVENC hardware encoding");
+                } else if (availableEncoders.stream().anyMatch(e -> e.contains("AMF"))) {
+                    settings.setUseAmf(true);
+                    logger.info("Auto mode: Enabled AMF hardware encoding");
+                } else if (availableEncoders.stream().anyMatch(e -> e.contains("QSV"))) {
+                    settings.setUseQsv(true);
+                    logger.info("Auto mode: Enabled QSV hardware encoding");
+                } else if (availableEncoders.stream().anyMatch(e -> e.contains("VideoToolbox"))) {
+                    settings.setUseVideotoolbox(true);
+                    logger.info("Auto mode: Enabled VideoToolbox hardware encoding");
+                } else {
+                    // No hardware encoders available, fall back to software
+                    settings.setHardwareDecoding(false);
+                    logger.info("Auto mode: No hardware encoders available, using software encoding");
+                }
+            } else if (selectedCodec.contains("NVENC")) {
                 settings.setUseNvenc(true);
+                settings.setUseAmf(false);
+                settings.setUseQsv(false);
+                settings.setUseVideotoolbox(false);
                 settings.setHardwareDecoding(true);
             } else if (selectedCodec.contains("AMF")) {
                 settings.setUseNvenc(false);
+                settings.setUseAmf(true);
+                settings.setUseQsv(false);
+                settings.setUseVideotoolbox(false);
                 settings.setHardwareDecoding(true);
             } else if (selectedCodec.contains("QSV")) {
                 settings.setUseNvenc(false);
+                settings.setUseAmf(false);
+                settings.setUseQsv(true);
+                settings.setUseVideotoolbox(false);
                 settings.setHardwareDecoding(true);
             } else if (selectedCodec.contains("VideoToolbox")) {
                 settings.setUseNvenc(false);
+                settings.setUseAmf(false);
+                settings.setUseQsv(false);
+                settings.setUseVideotoolbox(true);
                 settings.setHardwareDecoding(true);
             } else {
                 // Software encoding
                 settings.setUseNvenc(false);
+                settings.setUseAmf(false);
+                settings.setUseQsv(false);
+                settings.setUseVideotoolbox(false);
                 settings.setHardwareDecoding(false);
             }
         }
@@ -2263,6 +2730,33 @@ public class MainController {
         }
     }
     
+    /**
+     * Show original filenames without searching for metadata
+     * Called when entering metadata mode
+     */
+    private void showOriginalFilenames() {
+        if (originalNamesListView == null || suggestedNamesListView == null) {
+            return;
+        }
+        
+        // Clear existing lists
+        originalNamesListView.getItems().clear();
+        suggestedNamesListView.getItems().clear();
+        
+        // Show original filenames and leave suggested names blank
+        for (ConversionJob job : queuedFiles) {
+            originalNamesListView.getItems().add(job.getFileName());
+            suggestedNamesListView.getItems().add("");  // Blank until search
+        }
+        
+        // Disable apply button until search is done
+        if (applyRenameButton != null) {
+            applyRenameButton.setDisable(true);
+        }
+        
+        log("Showing " + queuedFiles.size() + " file(s) - click Search to fetch metadata");
+    }
+    
     private void updateRenamePreview() {
         if (originalNamesListView == null || suggestedNamesListView == null) {
             return;
@@ -2342,7 +2836,25 @@ public class MainController {
         Alert alert = new Alert(Alert.AlertType.ERROR);
         alert.setTitle(title);
         alert.setHeaderText(null);
-        alert.setContentText(content);
+        
+        // Create styled content
+        javafx.scene.layout.VBox contentBox = new javafx.scene.layout.VBox(8);
+        
+        javafx.scene.text.Text errorIcon = new javafx.scene.text.Text("✗");
+        errorIcon.setStyle("-fx-fill: #d13438; -fx-font-size: 16px; -fx-font-weight: bold;");
+        
+        javafx.scene.text.Text errorText = new javafx.scene.text.Text(content);
+        errorText.setStyle("-fx-fill: #ffffff; -fx-font-size: 12px;");
+        errorText.setWrappingWidth(400);
+        
+        contentBox.getChildren().addAll(errorIcon, errorText);
+        alert.getDialogPane().setContent(contentBox);
+        
+        // Style the dialog
+        javafx.scene.control.DialogPane dialogPane = alert.getDialogPane();
+        dialogPane.getStylesheets().add(getClass().getResource("/styles/application.css").toExternalForm());
+        dialogPane.getStyleClass().add("dialog-pane");
+        
         alert.showAndWait();
     }
     
@@ -2350,7 +2862,25 @@ public class MainController {
         Alert alert = new Alert(Alert.AlertType.WARNING);
         alert.setTitle(title);
         alert.setHeaderText(null);
-        alert.setContentText(content);
+        
+        // Create styled content
+        javafx.scene.layout.VBox contentBox = new javafx.scene.layout.VBox(8);
+        
+        javafx.scene.text.Text warningIcon = new javafx.scene.text.Text("⚠");
+        warningIcon.setStyle("-fx-fill: #ffb900; -fx-font-size: 16px; -fx-font-weight: bold;");
+        
+        javafx.scene.text.Text warningText = new javafx.scene.text.Text(content);
+        warningText.setStyle("-fx-fill: #ffffff; -fx-font-size: 12px;");
+        warningText.setWrappingWidth(400);
+        
+        contentBox.getChildren().addAll(warningIcon, warningText);
+        alert.getDialogPane().setContent(contentBox);
+        
+        // Style the dialog
+        javafx.scene.control.DialogPane dialogPane = alert.getDialogPane();
+        dialogPane.getStylesheets().add(getClass().getResource("/styles/application.css").toExternalForm());
+        dialogPane.getStyleClass().add("dialog-pane");
+        
         alert.showAndWait();
     }
     
@@ -2358,7 +2888,25 @@ public class MainController {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle(title);
         alert.setHeaderText(null);
-        alert.setContentText(content);
+        
+        // Create styled content
+        javafx.scene.layout.VBox contentBox = new javafx.scene.layout.VBox(8);
+        
+        javafx.scene.text.Text infoIcon = new javafx.scene.text.Text("ℹ");
+        infoIcon.setStyle("-fx-fill: #0078d4; -fx-font-size: 16px; -fx-font-weight: bold;");
+        
+        javafx.scene.text.Text infoText = new javafx.scene.text.Text(content);
+        infoText.setStyle("-fx-fill: #ffffff; -fx-font-size: 12px;");
+        infoText.setWrappingWidth(400);
+        
+        contentBox.getChildren().addAll(infoIcon, infoText);
+        alert.getDialogPane().setContent(contentBox);
+        
+        // Style the dialog
+        javafx.scene.control.DialogPane dialogPane = alert.getDialogPane();
+        dialogPane.getStylesheets().add(getClass().getResource("/styles/application.css").toExternalForm());
+        dialogPane.getStyleClass().add("dialog-pane");
+        
         alert.showAndWait();
     }
     
@@ -2662,7 +3210,7 @@ public class MainController {
         // Initialize renamer quick settings
         if (quickRenameProviderCombo != null) {
             quickRenameProviderCombo.setItems(FXCollections.observableArrayList(
-                "Automatic", "TMDB", "TVDB", "AniList"
+                "Automatic", "TMDB", "TVDB", "OMDB", "Trakt", "AniDB", "Kitsu", "Jikan/MAL", "TVmaze"
             ));
             quickRenameProviderCombo.setValue("Automatic");
         }
@@ -2679,12 +3227,16 @@ public class MainController {
     }
     
     private void setupPreviewTabs() {
-        // Initialize rename preview
+        // Initialize rename preview - starts empty, will be populated with providers that have results
         if (previewProviderCombo != null) {
-            previewProviderCombo.setItems(FXCollections.observableArrayList(
-                "TMDB", "TVDB", "AniList", "Automatic"
-            ));
-            previewProviderCombo.setValue("Automatic");
+            previewProviderCombo.setItems(FXCollections.observableArrayList());
+            previewProviderCombo.setPromptText("Search to see provider results");
+            // Add listener to switch between provider results
+            previewProviderCombo.valueProperty().addListener((obs, oldVal, newVal) -> {
+                if (newVal != null && !newVal.isEmpty()) {
+                    switchProviderView(newVal);
+                }
+            });
         }
         
         if (originalNamesListView != null) {
@@ -2698,6 +3250,258 @@ public class MainController {
         // Initialize subtitle preview
         if (subtitleFileCombo != null) {
             subtitleFileCombo.setItems(FXCollections.observableArrayList());
+        }
+    }
+    
+    // Store results per provider for comparison view
+    private java.util.Map<String, java.util.List<String>> providerResults = new java.util.HashMap<>();
+    
+    /**
+     * Store raw metadata for re-formatting when patterns change
+     */
+    private com.google.gson.JsonArray lastMetadataArray = null;
+    private com.google.gson.JsonObject lastProviderMetadata = null;
+    
+    /**
+     * Format metadata using user's pattern from settings
+     */
+    private String formatMetadata(com.google.gson.JsonObject metadata, ConversionJob job) {
+        if (metadata == null || metadata.isJsonNull() || metadata.entrySet().isEmpty()) {
+            return "";
+        }
+        
+        try {
+            // Log metadata for debugging
+            logger.debug("Formatting metadata: " + metadata.toString());
+            // Determine which pattern to use based on metadata content
+            String pattern = "";
+            String fileExtension = "";
+            
+            if (job != null) {
+                String fileName = job.getFileName();
+                int lastDot = fileName.lastIndexOf('.');
+                if (lastDot > 0) {
+                    fileExtension = fileName.substring(lastDot);
+                }
+            }
+            
+            // Check if it's a TV show (has season & episode) or movie
+            boolean isTV = metadata.has("season") && metadata.has("episode");
+            boolean isMovie = metadata.has("year") && !isTV;
+            
+            // Determine if it's anime (could be from AniDB, Kitsu, Jikan)
+            String source = metadata.has("source") ? metadata.get("source").getAsString() : "";
+            boolean isAnime = source.equals("anidb") || source.equals("kitsu") || source.equals("jikan");
+            
+            // Select appropriate pattern
+            // Priority: TV show pattern for anything with season/episode, then anime pattern for anime without seasons, then movie pattern
+            if (isTV && settings.getTvShowPattern() != null && !settings.getTvShowPattern().isEmpty()) {
+                pattern = settings.getTvShowPattern();
+            } else if (isAnime && !isTV && settings.getAnimePattern() != null && !settings.getAnimePattern().isEmpty()) {
+                // Only use anime pattern if it's anime but doesn't have season/episode info
+                pattern = settings.getAnimePattern();
+            } else if (isMovie && settings.getMoviePattern() != null && !settings.getMoviePattern().isEmpty()) {
+                pattern = settings.getMoviePattern();
+            } else {
+                // Fallback to default pattern
+                pattern = "{title} - S{season}E{episode} - {episodeTitle}";
+            }
+            
+            // Replace tokens with metadata values
+            String formatted = pattern;
+            
+            // {title} or {show_title} - TV show/anime title
+            if (metadata.has("show_title")) {
+                formatted = formatted.replace("{title}", metadata.get("show_title").getAsString());
+            } else if (metadata.has("title")) {
+                formatted = formatted.replace("{title}", metadata.get("title").getAsString());
+            } else {
+                formatted = formatted.replace("{title}", "Unknown");
+            }
+            
+            // {season} - Season number
+            if (metadata.has("season") && !metadata.get("season").isJsonNull()) {
+                int season = metadata.get("season").getAsInt();
+                formatted = formatted.replace("{season}", String.format("%02d", season));
+                formatted = formatted.replace("{s}", String.format("%02d", season));
+                formatted = formatted.replace("{S}", String.format("%02d", season));
+            } else {
+                formatted = formatted.replace("{season}", "00");
+                formatted = formatted.replace("{s}", "00");
+                formatted = formatted.replace("{S}", "00");
+            }
+            
+            // {episode} - Episode number
+            if (metadata.has("episode") && !metadata.get("episode").isJsonNull()) {
+                int episode = metadata.get("episode").getAsInt();
+                formatted = formatted.replace("{episode}", String.format("%02d", episode));
+                formatted = formatted.replace("{e}", String.format("%02d", episode));
+                formatted = formatted.replace("{E}", String.format("%02d", episode));
+            } else {
+                formatted = formatted.replace("{episode}", "00");
+                formatted = formatted.replace("{e}", "00");
+                formatted = formatted.replace("{E}", "00");
+            }
+            
+            // {episodeTitle} or {episode_title} - Episode title
+            if (metadata.has("episode_title") && !metadata.get("episode_title").isJsonNull()) {
+                String epTitle = metadata.get("episode_title").getAsString();
+                // Skip generic "Episode X" titles - they're not real episode titles
+                if (epTitle.isEmpty() || epTitle.matches("^Episode\\s+\\d+$")) {
+                    formatted = formatted.replace(" - {episodeTitle}", "");  // Remove the separator too
+                    formatted = formatted.replace(" - {episode_title}", "");
+                    formatted = formatted.replace("{episodeTitle}", "");
+                    formatted = formatted.replace("{episode_title}", "");
+                } else {
+                    formatted = formatted.replace("{episodeTitle}", epTitle);
+                    formatted = formatted.replace("{episode_title}", epTitle);
+                }
+            } else {
+                // No episode title available - remove it and the separator
+                formatted = formatted.replace(" - {episodeTitle}", "");
+                formatted = formatted.replace(" - {episode_title}", "");
+                formatted = formatted.replace("{episodeTitle}", "");
+                formatted = formatted.replace("{episode_title}", "");
+            }
+            
+            // {year} - Release year
+            if (metadata.has("year") && !metadata.get("year").isJsonNull()) {
+                formatted = formatted.replace("{year}", metadata.get("year").getAsString());
+            } else if (metadata.has("show_year") && !metadata.get("show_year").isJsonNull()) {
+                formatted = formatted.replace("{year}", metadata.get("show_year").getAsString());
+            } else {
+                formatted = formatted.replace("{year}", "");
+            }
+            
+            // Clean up extra spaces and dashes
+            formatted = formatted.replaceAll("\\s+-\\s+$", "");  // Remove trailing " - "
+            formatted = formatted.replaceAll("\\s+", " ");  // Collapse multiple spaces
+            formatted = formatted.trim();
+            
+            // Add file extension
+            if (!fileExtension.isEmpty()) {
+                formatted += fileExtension;
+            }
+            
+            return formatted;
+            
+        } catch (Exception e) {
+            logger.error("Error formatting metadata: " + e.getMessage(), e);
+            return "";
+        }
+    }
+    
+    /**
+     * Re-format existing metadata with new pattern when user changes patterns
+     */
+    private void reformatMetadataWithNewPattern() {
+        if (lastMetadataArray == null || lastProviderMetadata == null) {
+            return;
+        }
+        
+        Platform.runLater(() -> {
+            try {
+                // Settings object already updated by PatternEditorController, no need to reload
+                
+                ObservableList<String> originalNames = FXCollections.observableArrayList();
+                ObservableList<String> newNames = FXCollections.observableArrayList();
+                
+                int successCount = 0;
+                int errorCount = 0;
+                
+                // Clear and populate provider results map
+                providerResults.clear();
+                String mainProvider = null;
+                
+                // Format metadata from each provider using NEW pattern
+                if (lastProviderMetadata != null) {
+                    for (String providerName : lastProviderMetadata.keySet()) {
+                        com.google.gson.JsonArray metadataArrayForProvider = lastProviderMetadata.getAsJsonArray(providerName);
+                        java.util.List<String> formattedList = new java.util.ArrayList<>();
+                        
+                        for (int i = 0; i < metadataArrayForProvider.size(); i++) {
+                            com.google.gson.JsonObject meta = metadataArrayForProvider.get(i).getAsJsonObject();
+                            ConversionJob job = i < queuedFiles.size() ? queuedFiles.get(i) : null;
+                            String formatted = formatMetadata(meta, job);
+                            formattedList.add(formatted);
+                        }
+                        
+                        providerResults.put(providerName, formattedList);
+                    }
+                    
+                    // Repopulate provider comparison dropdown
+                    if (previewProviderCombo != null && !providerResults.isEmpty()) {
+                        ObservableList<String> availableProviders = FXCollections.observableArrayList(providerResults.keySet());
+                        previewProviderCombo.setItems(availableProviders);
+                    }
+                }
+                
+                // Re-format main list
+                for (int i = 0; i < queuedFiles.size() && i < lastMetadataArray.size(); i++) {
+                    ConversionJob job = queuedFiles.get(i);
+                    originalNames.add(job.getFileName());
+                    
+                    com.google.gson.JsonElement metadataElement = lastMetadataArray.get(i);
+                    
+                    // Format metadata using NEW pattern from settings
+                    String suggested = "";
+                    if (!metadataElement.isJsonNull() && metadataElement.isJsonObject()) {
+                        com.google.gson.JsonObject metadata = metadataElement.getAsJsonObject();
+                        suggested = formatMetadata(metadata, job);
+                    }
+                    
+                    if (suggested.isEmpty()) {
+                        newNames.add("");
+                        errorCount++;
+                    } else {
+                        newNames.add(suggested);
+                        successCount++;
+                    }
+                }
+                
+                if (originalNamesListView != null) {
+                    originalNamesListView.setItems(originalNames);
+                }
+                if (suggestedNamesListView != null) {
+                    suggestedNamesListView.setItems(newNames);
+                }
+                
+                // Auto-select the current provider in dropdown
+                String currentProvider = previewProviderCombo != null ? previewProviderCombo.getValue() : null;
+                if (currentProvider != null && providerResults.containsKey(currentProvider)) {
+                    suggestedNamesListView.setItems(FXCollections.observableArrayList(providerResults.get(currentProvider)));
+                }
+                
+                if (renameStatsLabel != null) {
+                    renameStatsLabel.setText(queuedFiles.size() + " files | " + successCount + " ready | " + errorCount + " errors");
+                }
+                
+                // Enable apply button if we have results
+                if (applyRenameButton != null) {
+                    applyRenameButton.setDisable(successCount == 0);
+                }
+                
+                log("✅ Filenames re-formatted with new pattern!");
+                
+            } catch (Exception e) {
+                logger.error("Error re-formatting metadata with new pattern", e);
+                showError("Format Error", "Could not re-format filenames: " + e.getMessage());
+            }
+        });
+    }
+    
+    private void switchProviderView(String provider) {
+        if (providerResults.containsKey(provider) && originalNamesListView != null && suggestedNamesListView != null) {
+            // Show results for selected provider
+            java.util.List<String> results = providerResults.get(provider);
+            suggestedNamesListView.getItems().clear();
+            suggestedNamesListView.getItems().addAll(results);
+            
+            if (activeProviderLabel != null) {
+                activeProviderLabel.setText("[" + provider + "]");
+            }
+            
+            log("Showing results from provider: " + provider);
         }
     }
     
@@ -2734,8 +3538,8 @@ public class MainController {
     }
     
     @FXML
-    private void handleConfigureAniList() {
-        showInfo("AniList", "AniList does not require any configuration. It's ready to use!");
+    private void handleConfigureAniDB() {
+        showInfo("AniDB", "AniDB does not require any configuration. It's ready to use!");
     }
     
     /**
@@ -3181,9 +3985,14 @@ public class MainController {
             // Show and wait
             patternStage.showAndWait();
             
-            // If saved, log success
+            // If saved, log success and re-format existing metadata
             if (controller.isSaved()) {
                 log("Format patterns updated successfully");
+                // Re-format existing metadata if we have it
+                if (lastMetadataArray != null && lastProviderMetadata != null) {
+                    log("Re-formatting filenames with new pattern...");
+                    reformatMetadataWithNewPattern();
+                }
             }
             
         } catch (Exception e) {
@@ -3238,6 +4047,12 @@ public class MainController {
             applyRenameButton.setDisable(true);
         }
         
+        // Get selected provider (no media type - always auto-detect)
+        String selectedProvider = (quickRenameProviderCombo != null) ? 
+            quickRenameProviderCombo.getValue() : "Automatic";
+        
+        log("Provider: " + selectedProvider + " | Searching all available providers...");
+        
         // Build request
         com.google.gson.JsonObject request = new com.google.gson.JsonObject();
         request.addProperty("action", "preview_rename");
@@ -3249,11 +4064,14 @@ public class MainController {
         }
         request.add("file_paths", filePaths);
         
-        // Add settings
+        // Add settings including selected provider and type
         com.google.gson.JsonObject settingsDict = new com.google.gson.JsonObject();
         ConversionSettings settings = ConversionSettings.load();
         settingsDict.addProperty("tmdb_api_key", settings.getTmdbApiKey());
         settingsDict.addProperty("tvdb_api_key", settings.getTvdbApiKey());
+        settingsDict.addProperty("omdb_api_key", settings.getOmdbApiKey());
+        settingsDict.addProperty("trakt_api_key", settings.getTraktApiKey());
+        settingsDict.addProperty("selected_provider", selectedProvider.toLowerCase());
         request.add("settings", settingsDict);
         
         // Send to Python backend asynchronously
@@ -3263,9 +4081,18 @@ public class MainController {
                 String status = jsonResponse.get("status").getAsString();
                 
                 if ("success".equals(status)) {
-                    com.google.gson.JsonArray suggestedNames = jsonResponse.getAsJsonArray("suggested_names");
-                    com.google.gson.JsonArray providers = jsonResponse.getAsJsonArray("providers");
-                    com.google.gson.JsonArray errors = jsonResponse.getAsJsonArray("errors");
+                // Backend now returns raw metadata instead of formatted names
+                com.google.gson.JsonArray metadataArray = jsonResponse.getAsJsonArray("metadata");
+                com.google.gson.JsonArray providers = jsonResponse.getAsJsonArray("providers");
+                com.google.gson.JsonArray errors = jsonResponse.getAsJsonArray("errors");
+                
+                // Get provider metadata for comparison view
+                com.google.gson.JsonObject providerMetadataJson = jsonResponse.has("provider_metadata") ? 
+                    jsonResponse.getAsJsonObject("provider_metadata") : null;
+                
+                // Store raw metadata for future re-formatting
+                lastMetadataArray = metadataArray;
+                lastProviderMetadata = providerMetadataJson;
                     
                     // Populate lists
                     Platform.runLater(() -> {
@@ -3275,18 +4102,65 @@ public class MainController {
                         int successCount = 0;
                         int errorCount = 0;
                         
-                        for (int i = 0; i < queuedFiles.size() && i < suggestedNames.size(); i++) {
+                        // Clear and populate provider results map
+                        providerResults.clear();
+                        String mainProvider = null;  // Track which provider gave us the main result
+                        
+                        // Format metadata from each provider using user's pattern
+                        if (providerMetadataJson != null) {
+                            for (String providerName : providerMetadataJson.keySet()) {
+                                com.google.gson.JsonArray metadataArrayForProvider = providerMetadataJson.getAsJsonArray(providerName);
+                                java.util.List<String> formattedList = new java.util.ArrayList<>();
+                                
+                                for (int i = 0; i < metadataArrayForProvider.size(); i++) {
+                                    com.google.gson.JsonObject meta = metadataArrayForProvider.get(i).getAsJsonObject();
+                                    ConversionJob job = i < queuedFiles.size() ? queuedFiles.get(i) : null;
+                                    String formatted = formatMetadata(meta, job);
+                                    formattedList.add(formatted);
+                                }
+                                
+                                providerResults.put(providerName, formattedList);
+                            }
+                            
+                            // Populate provider comparison dropdown with providers that have results
+                            if (previewProviderCombo != null && !providerResults.isEmpty()) {
+                                ObservableList<String> availableProviders = FXCollections.observableArrayList(providerResults.keySet());
+                                previewProviderCombo.setItems(availableProviders);
+                                log("Provider comparison available: " + String.join(", ", availableProviders));
+                            }
+                        }
+                        
+                        for (int i = 0; i < queuedFiles.size() && i < metadataArray.size(); i++) {
                             ConversionJob job = queuedFiles.get(i);
                             originalNames.add(job.getFileName());
                             
-                            String suggested = suggestedNames.get(i).getAsString();
+                            com.google.gson.JsonElement metadataElement = metadataArray.get(i);
                             String provider = providers.get(i).getAsString();
                             String error = errors.get(i).getAsString();
                             
-                            if (!error.isEmpty()) {
+                            // Format metadata using user's pattern from settings
+                            String suggested = "";
+                            if (!metadataElement.isJsonNull() && metadataElement.isJsonObject()) {
+                                com.google.gson.JsonObject metadata = metadataElement.getAsJsonObject();
+                                suggested = formatMetadata(metadata, job);
+                            }
+                            
+                            // Track the first successful provider (this is the one selected as best match)
+                            if (mainProvider == null && !provider.equals("None") && !suggested.isEmpty()) {
+                                mainProvider = provider;
+                            }
+                            
+                            // Only show error if it truly errored (not just "metadata not found")
+                            if (!error.isEmpty() && error.startsWith("❌ ERROR:")) {
+                                // For actual errors, show them in red/warning style
                                 newNames.add(error);
                                 errorCount++;
+                            } else if (suggested.isEmpty()) {
+                                // No metadata found, leave blank
+                                newNames.add("");
+                                errorCount++;
                             } else {
+                                // Valid suggestion - formatted using user's pattern
                                 newNames.add(suggested + " [via " + provider + "]");
                                 successCount++;
                             }
@@ -3297,6 +4171,15 @@ public class MainController {
                         }
                         if (suggestedNamesListView != null) {
                             suggestedNamesListView.setItems(newNames);
+                        }
+                        
+                        // Auto-select the provider that gave us the main result
+                        if (mainProvider != null && previewProviderCombo != null && providerResults.containsKey(mainProvider)) {
+                            previewProviderCombo.setValue(mainProvider);
+                            if (activeProviderLabel != null) {
+                                activeProviderLabel.setText("[" + mainProvider + "]");
+                            }
+                            log("Auto-selected provider: " + mainProvider);
                         }
                         
                         if (renameStatsLabel != null) {
@@ -3375,8 +4258,22 @@ public class MainController {
             if (createBackupCheck.isSelected()) {
                 log("📝 Creating backup of original filenames...");
             }
-            // TODO: Implement actual renaming via Python backend
-            showInfo("Rename Complete", "Files renamed successfully!");
+            
+            // Get file paths from the queued files (suggested names correspond to queued files in order)
+            List<String> filePaths = new ArrayList<>();
+            for (ConversionJob job : queuedFiles) {
+                filePaths.add(job.getInputPath());
+            }
+            
+            if (filePaths.isEmpty()) {
+                showWarning("No Files", "No files to rename.");
+                return;
+            }
+            
+            log("Found " + filePaths.size() + " files to rename");
+            
+            // Perform renaming directly in Java using already-fetched metadata
+            performJavaRename();
         }
     }
     
@@ -3756,11 +4653,11 @@ public class MainController {
                 if (advancedSearch) {
                     request.addProperty("action", "advanced_search_subtitles");
                     
-                    // Check if AniList URL is provided
-                    if (anilistUrlField != null && anilistUrlField.getText() != null && !anilistUrlField.getText().trim().isEmpty()) {
-                        final String anilistUrl = anilistUrlField.getText().trim();
-                        request.addProperty("anilist_url", anilistUrl);
-                        Platform.runLater(() -> log("Using AniList URL: " + anilistUrl));
+                    // Check if AniDB URL is provided
+                    if (anidbUrlField != null && anidbUrlField.getText() != null && !anidbUrlField.getText().trim().isEmpty()) {
+                        final String anidbUrl = anidbUrlField.getText().trim();
+                        request.addProperty("anidb_url", anidbUrl);
+                        Platform.runLater(() -> log("Using AniDB URL: " + anidbUrl));
                     }
                 } else {
                     request.addProperty("action", "search_subtitles");
@@ -4532,7 +5429,7 @@ public class MainController {
                 subtitleModeButton.setText("");  // Clear button text
             }
             
-            // Renamer Mode button - Create stacked icon-above-text layout
+            // Metadata Mode button - Create stacked icon-above-text layout
             if (renamerModeButton != null) {
                 org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
                     org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.EDIT);
@@ -4540,7 +5437,7 @@ public class MainController {
                 icon.setIconColor(javafx.scene.paint.Color.WHITE);
                 icon.getStyleClass().add("mode-icon");
                 
-                Label textLabel = new Label("Renamer");
+                Label textLabel = new Label("Metadata");
                 textLabel.getStyleClass().add("mode-label");
                 
                 javafx.scene.layout.VBox vbox = new javafx.scene.layout.VBox(2);
@@ -4641,14 +5538,14 @@ public class MainController {
                 configSubtitlesButton.setText("Subtitles");
             }
             
-            // Config Renamer button
+            // Config Metadata button
             if (configRenamerButton != null) {
                 org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
                     org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.EDIT);
                 icon.setIconSize(TOOLBAR_ICON_SIZE);
                 icon.setIconColor(javafx.scene.paint.Color.WHITE);
                 configRenamerButton.setGraphic(icon);
-                configRenamerButton.setText("Renamer");
+                configRenamerButton.setText("Metadata");
             }
             
             // Apply Rename button
@@ -5074,6 +5971,248 @@ public class MainController {
     }
     
     /**
+     * Restore the UI state for an ongoing conversion
+     */
+    private void restoreConversionState(String currentFile, int currentIndex, int totalFiles, 
+                                       List<String> filePaths, int pid) {
+        try {
+            logger.info("Restoring conversion state: {} ({}/{}) PID: {}", 
+                       currentFile, currentIndex, totalFiles, pid);
+            
+            // Switch to encoder mode if not already
+            if (!"encoder".equals(currentMode)) {
+                handleEncoderMode();
+            }
+            
+            // Clear existing queues
+            queuedFiles.clear();
+            processingFiles.clear();
+            
+            // Add files to appropriate queues based on current progress
+            for (int i = 0; i < filePaths.size(); i++) {
+                String filePath = filePaths.get(i);
+                File file = new File(filePath);
+                
+                if (!file.exists()) {
+                    logger.warn("File no longer exists: {}", filePath);
+                    continue;
+                }
+                
+                ConversionJob job = new ConversionJob(file.getAbsolutePath());
+                
+                if (i < currentIndex - 1) {
+                    // Files that were already processed (assume completed)
+                    job.setStatus("Completed");
+                    job.setProgress(100.0);
+                    completedFiles.add(job);
+                } else if (i == currentIndex - 1) {
+                    // Currently processing file
+                    job.setStatus("Processing");
+                    job.setProgress(0.0); // Will be updated by progress callbacks
+                    processingFiles.add(job);
+                } else {
+                    // Files still in queue
+                    job.setStatus("Queued");
+                    job.setProgress(0.0);
+                    queuedFiles.add(job);
+                }
+            }
+            
+            // Update UI elements
+            updateQueueCounts();
+            
+            // Set processing state
+            isProcessing = true;
+            updateControlButtons();
+            
+            // Update status
+            if (statusLabel != null) {
+                statusLabel.setText(String.format("Resumed: Processing %s (%d/%d)", 
+                                                 currentFile, currentIndex, totalFiles));
+            }
+            
+            // Show notification to user
+            showNotification("Conversion Resumed", 
+                           String.format("Resumed processing %s (%d/%d files)", 
+                                       currentFile, currentIndex, totalFiles));
+            
+            logger.info("Conversion state restored successfully");
+            
+        } catch (Exception e) {
+            logger.error("Failed to restore conversion state", e);
+        }
+    }
+    
+    
+    /**
+     * Update control button states based on processing status
+     */
+    private void updateControlButtons() {
+        Platform.runLater(() -> {
+            if (startButton != null) {
+                startButton.setDisable(isProcessing);
+            }
+            if (stopButton != null) {
+                stopButton.setDisable(!isProcessing);
+            }
+            if (pauseButton != null) {
+                pauseButton.setDisable(!isProcessing);
+            }
+        });
+    }
+    
+    /**
+     * Show a notification to the user
+     */
+    private void showNotification(String title, String message) {
+        Platform.runLater(() -> {
+            try {
+                Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                alert.setTitle(title);
+                alert.setHeaderText(null);
+                alert.setContentText(message);
+                alert.show();
+                
+                // Auto-close after 5 seconds
+                Timeline timeline = new Timeline(new KeyFrame(
+                    javafx.util.Duration.seconds(5),
+                    e -> alert.close()
+                ));
+                timeline.play();
+                
+            } catch (Exception e) {
+                logger.error("Failed to show notification", e);
+            }
+        });
+    }
+    
+    /**
+     * Check for ongoing conversions from previous session and recover queue
+     */
+    private void checkForOngoingConversions() {
+        try {
+            logger.info("Checking for ongoing conversions from previous session...");
+            
+            JsonObject response = pythonBridge.checkOngoingConversion();
+            
+            if (response == null || !response.has("status")) {
+                logger.warn("Invalid response from check_ongoing_conversion");
+                return;
+            }
+            
+            String status = response.get("status").getAsString();
+            
+            if ("ongoing".equals(status)) {
+                logger.info("Found ongoing conversion from previous session");
+                
+                // Extract queue information
+                if (!response.has("queue")) {
+                    logger.warn("Response missing queue information");
+                    return;
+                }
+                
+                JsonArray queue = response.getAsJsonArray("queue");
+                int queuedCount = 0;
+                int processingCount = 0;
+                int completedCount = 0;
+                int failedCount = 0;
+                
+                // Parse queue and populate lists
+                for (int i = 0; i < queue.size(); i++) {
+                    JsonObject fileEntry = queue.get(i).getAsJsonObject();
+                    
+                    String filePath = fileEntry.get("path").getAsString();
+                    String fileStatus = fileEntry.get("status").getAsString();
+                    String filename = fileEntry.get("filename").getAsString();
+                    
+                    ConversionJob job = new ConversionJob(filePath);
+                    
+                    // Set status and add to appropriate list based on status
+                    switch (fileStatus) {
+                        case "queued":
+                            job.setStatus("⏳ Queued");
+                            Platform.runLater(() -> queuedFiles.add(job));
+                            queuedCount++;
+                            break;
+                        
+                        case "processing":
+                            job.setStatus("⚡ Processing");
+                            if (fileEntry.has("progress")) {
+                                job.setProgress(fileEntry.get("progress").getAsDouble());
+                            }
+                            Platform.runLater(() -> processingFiles.add(job));
+                            processingCount++;
+                            break;
+                        
+                        case "completed":
+                            job.setStatus("✅ Completed");
+                            job.setProgress(100.0);
+                            if (fileEntry.has("output")) {
+                                job.setOutputPath(fileEntry.get("output").getAsString());
+                            }
+                            Platform.runLater(() -> completedFiles.add(job));
+                            completedCount++;
+                            break;
+                        
+                        case "failed":
+                            job.setStatus("❌ Failed");
+                            String errorMsg = fileEntry.has("error") ? fileEntry.get("error").getAsString() : "Unknown error";
+                            logger.warn("File {} failed: {}", filename, errorMsg);
+                            // Could add failed files to a list or just skip them
+                            failedCount++;
+                            break;
+                    }
+                }
+                
+                final int fQueuedCount = queuedCount;
+                final int fProcessingCount = processingCount;
+                final int fCompletedCount = completedCount;
+                final int fFailedCount = failedCount;
+                
+                // Update UI counts
+                Platform.runLater(() -> {
+                    updateQueueCounts();
+                    
+                    logger.info("Recovered conversion queue:");
+                    logger.info("  Queued: {}", fQueuedCount);
+                    logger.info("  Processing: {}", fProcessingCount);
+                    logger.info("  Completed: {}", fCompletedCount);
+                    logger.info("  Failed: {}", fFailedCount);
+                    
+                    // Show notification to user about recovered queue
+                    if (fQueuedCount > 0 || fProcessingCount > 0 || fCompletedCount > 0) {
+                        String message = String.format(
+                            "Recovered conversion queue from previous session:\n" +
+                            "• %d file(s) queued\n" +
+                            "• %d file(s) processing\n" +
+                            "• %d file(s) completed",
+                            fQueuedCount, fProcessingCount, fCompletedCount
+                        );
+                        
+                        if (fFailedCount > 0) {
+                            message += "\n• " + fFailedCount + " file(s) failed";
+                        }
+                        
+                        showInfo("Queue Recovered", message);
+                        log("📋 Recovered conversion queue from previous session");
+                        log("   Queued: " + fQueuedCount + ", Processing: " + fProcessingCount + 
+                            ", Completed: " + fCompletedCount + ", Failed: " + fFailedCount);
+                    }
+                });
+                
+            } else if ("none".equals(status)) {
+                logger.info("No ongoing conversions found from previous session");
+            } else if ("error".equals(status)) {
+                String errorMsg = response.has("message") ? response.get("message").getAsString() : "Unknown error";
+                logger.error("Error checking ongoing conversions: {}", errorMsg);
+            }
+            
+        } catch (Exception e) {
+            logger.error("Failed to check for ongoing conversions", e);
+        }
+    }
+    
+    /**
      * Inner class to represent a subtitle item in the table
      */
     public static class SubtitleItem {
@@ -5118,5 +6257,6 @@ public class MainController {
         public String getDownloadUrl() { return downloadUrl; }
         public boolean isManualDownloadOnly() { return manualDownloadOnly; }
     }
+    
     
 }

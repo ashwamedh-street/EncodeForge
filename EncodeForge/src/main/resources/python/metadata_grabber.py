@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from metadata_providers import (
-    AniListProvider,
+    AniDBProvider,
     JikanProvider,
     KitsuProvider,
     OMDBProvider,
@@ -28,7 +28,7 @@ class MetadataGrabber:
     Handles media metadata retrieval with multiple database providers
     
     FREE Providers (No API Key):
-    - AniList (Anime)
+    - AniDB (Anime)
     - Kitsu (Anime)
     - Jikan/MyAnimeList (Anime - read-only)
     - TVmaze (TV Shows)
@@ -55,7 +55,7 @@ class MetadataGrabber:
         self.trakt = TraktProvider(trakt_key) if trakt_key else None
         
         # Initialize free providers (no API key)
-        self.anilist = AniListProvider()
+        self.anidb = AniDBProvider()
         self.tvmaze = TVmazeProvider()
         self.kitsu = KitsuProvider()
         self.jikan = JikanProvider()
@@ -77,7 +77,7 @@ class MetadataGrabber:
         """
         return {
             # Always available (no key needed)
-            "anilist": True,
+            "anidb": True,
             "kitsu": True,
             "jikan": True,
             "tvmaze": True,
@@ -121,7 +121,7 @@ class MetadataGrabber:
         
         Returns: "movie", "tv", or "unknown"
         """
-        return self.anilist.detect_media_type(filename)
+        return self.anidb.detect_media_type(filename)
     
     def parse_tv_filename(self, filename: str) -> Optional[Dict]:
         """
@@ -129,7 +129,7 @@ class MetadataGrabber:
         
         Returns dict with: title, season, episode, or None
         """
-        return self.anilist.parse_tv_filename(filename)
+        return self.anidb.parse_tv_filename(filename)
     
     def parse_movie_filename(self, filename: str) -> Optional[Dict]:
         """
@@ -137,7 +137,7 @@ class MetadataGrabber:
         
         Returns dict with: title, year, or None
         """
-        return self.anilist.parse_movie_filename(filename)
+        return self.anidb.parse_movie_filename(filename)
     
     def search_tv_show(self, title: str, season: int = 1, episode: int = 1, provider: str = "auto") -> Optional[Dict]:
         """
@@ -150,11 +150,11 @@ class MetadataGrabber:
             provider: Specific provider to use, or "auto" for automatic selection
         
         Provider Priority:
-            - Anime: AniList, Kitsu, Jikan -> TMDB
+            - Anime: AniDB, Kitsu, Jikan -> TMDB
             - TV: TVDB, TVmaze, Trakt -> TMDB -> OMDB
         """
         # Detect if anime
-        is_anime = self.anilist.is_anime(title)
+        is_anime = self.anidb.is_anime(title)
         
         # Try specific provider if requested
         if provider != "auto":
@@ -162,8 +162,8 @@ class MetadataGrabber:
                 return self.tvdb.search_tv(title, season, episode)
             elif provider == "tvmaze":
                 return self.tvmaze.search_tv(title, season, episode)
-            elif provider == "anilist":
-                return self.anilist.search_tv(title, season, episode)
+            elif provider == "anidb":
+                return self.anidb.search_tv(title, season, episode)
             elif provider == "kitsu":
                 return self.kitsu.search_tv(title, season, episode)
             elif provider == "jikan":
@@ -178,7 +178,7 @@ class MetadataGrabber:
         # Auto mode - try providers based on content type
         if is_anime:
             # Try anime providers first (all free)
-            for provider_obj in [self.anilist, self.kitsu, self.jikan]:
+            for provider_obj in [self.anidb, self.kitsu, self.jikan]:
                 try:
                     result = provider_obj.search_tv(title, season, episode)
                     if result:
@@ -229,18 +229,18 @@ class MetadataGrabber:
             provider: Specific provider to use, or "auto" for automatic selection
         
         Provider Priority:
-            - Anime Movies: AniList, Kitsu, Jikan -> TMDB
+            - Anime Movies: AniDB, Kitsu, Jikan -> TMDB
             - Regular Movies: TMDB, Trakt, OMDB
         
         Returns dict with movie information or None
         """
         # Detect if anime movie
-        is_anime = self.anilist.is_anime(title)
+        is_anime = self.anidb.is_anime(title)
         
         # Try specific provider if requested
         if provider != "auto":
-            if provider == "anilist":
-                return self.anilist.search_movie(title, year)
+            if provider == "anidb":
+                return self.anidb.search_movie(title, year)
             elif provider == "kitsu":
                 return self.kitsu.search_movie(title, year)
             elif provider == "jikan":
@@ -255,7 +255,7 @@ class MetadataGrabber:
         # Auto mode - try providers based on content type
         if is_anime:
             # Try anime providers first (all free)
-            for provider_obj in [self.anilist, self.kitsu, self.jikan]:
+            for provider_obj in [self.anidb, self.kitsu, self.jikan]:
                 try:
                     result = provider_obj.search_movie(title, year)
                     if result:

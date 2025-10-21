@@ -55,6 +55,16 @@ class EncodeForgeCore:
         )
         self.profile_mgr = ProfileManager()
         
+        logger.info("Detecting FFmpeg during initialization...")
+        success, info = self.ffmpeg_mgr.detect_ffmpeg()
+        if success:
+            self.settings.ffmpeg_path = str(info["ffmpeg_path"])
+            self.settings.ffprobe_path = str(info["ffprobe_path"])
+            logger.info(f"FFmpeg detected: {info['ffmpeg_path']}")
+            logger.info(f"Available encoders: {info.get('encoders', [])}")
+        else:
+            logger.warning(f"FFmpeg not detected during init: {info.get('error', 'Unknown error')}")
+        
         # Initialize handlers
         self.file_handler = FileHandler(self.settings, self.ffmpeg_mgr)
         self.subtitle_handler = SubtitleHandler(self.settings, self.whisper_mgr, self.subtitle_providers)
@@ -187,9 +197,9 @@ class EncodeForgeCore:
         """Preview how files would be renamed"""
         return self.renaming_handler.preview_rename(file_paths, settings_dict)
     
-    def rename_files(self, file_paths: List[str], dry_run: bool = False) -> Dict:
+    def rename_files(self, file_paths: List[str], dry_run: bool = False, create_backup: bool = False) -> Dict:
         """Rename media files using metadata"""
-        return self.renaming_handler.rename_files(file_paths, dry_run)
+        return self.renaming_handler.rename_files(file_paths, dry_run, create_backup)
     
     # =======================
     # Conversion Operations

@@ -1,5 +1,6 @@
 package com.encodeforge.model;
 
+import com.encodeforge.util.PathManager;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
@@ -16,16 +17,17 @@ import java.nio.file.Paths;
 
 /**
  * Model for conversion settings that will be passed to Python backend
- * Settings are automatically persisted to ~/.encodeforge/settings.json
+ * Settings are automatically persisted to AppData/Local/EncodeForge/settings/settings.json
  */
 public class ConversionSettings {
     private static final Logger logger = LoggerFactory.getLogger(ConversionSettings.class);
-    private static final String SETTINGS_DIR = System.getProperty("user.home") + File.separator + ".encodeforge";
-    private static final String SETTINGS_FILE = SETTINGS_DIR + File.separator + "settings.json";
+    private static final Path SETTINGS_DIR = PathManager.getSettingsDir();
+    private static final Path SETTINGS_FILE = PathManager.getSettingsFile();
     
     // FFmpeg paths
     private String ffmpegPath = "ffmpeg";
     private String ffprobePath = "ffprobe";
+    private boolean useEmbeddedFFmpeg = true;  // Default to using embedded FFmpeg
     
     // General settings
     private String outputDirectory = "";
@@ -41,8 +43,22 @@ public class ConversionSettings {
     private String qualityPreset = "Medium";
     private int crfValue = 23;
     private boolean useNvenc = true;
+    private boolean useAmf = false;
+    private boolean useQsv = false;
+    private boolean useVideotoolbox = false;
     private String nvencPreset = "p4";
     private int nvencCq = 23;
+    
+    // AMF quality settings
+    private int amfQp = 23;
+    private String amfPreset = "balanced";
+    
+    // QSV quality settings
+    private int qsvQuality = 23;
+    private String qsvPreset = "medium";
+    
+    // VideoToolbox quality settings
+    private String videotoolboxBitrate = "5M";
     
     // Audio settings
     private String audioCodec = "copy";
@@ -90,6 +106,9 @@ public class ConversionSettings {
     private String animePattern = "{title} - {episode} - {episodeTitle}";
     private String customPattern = "";
     
+    // Language preference for metadata providers
+    private String languagePreference = "en";
+    
     // Advanced settings
     private String customFFmpegArgs = "";
     private boolean twoPassEncoding = false;
@@ -102,6 +121,9 @@ public class ConversionSettings {
     
     public String getFfprobePath() { return ffprobePath; }
     public void setFfprobePath(String ffprobePath) { this.ffprobePath = ffprobePath; }
+    
+    public boolean isUseEmbeddedFFmpeg() { return useEmbeddedFFmpeg; }
+    public void setUseEmbeddedFFmpeg(boolean useEmbeddedFFmpeg) { this.useEmbeddedFFmpeg = useEmbeddedFFmpeg; }
     
     public String getOutputDirectory() { return outputDirectory; }
     public void setOutputDirectory(String outputDirectory) { this.outputDirectory = outputDirectory; }
@@ -250,6 +272,9 @@ public class ConversionSettings {
     public String getCustomPattern() { return customPattern; }
     public void setCustomPattern(String customPattern) { this.customPattern = customPattern; }
     
+    public String getLanguagePreference() { return languagePreference; }
+    public void setLanguagePreference(String languagePreference) { this.languagePreference = languagePreference; }
+    
     /**
      * Restore default settings
      */
@@ -269,6 +294,11 @@ public class ConversionSettings {
         useNvenc = true;
         nvencPreset = "p4";
         nvencCq = 23;
+        amfQp = 23;
+        amfPreset = "balanced";
+        qsvQuality = 23;
+        qsvPreset = "medium";
+        videotoolboxBitrate = "5M";
         audioCodec = "copy";
         audioTrackSelection = "all";
         audioLanguages = "eng";
@@ -310,6 +340,7 @@ public class ConversionSettings {
         moviePattern = "{title} ({year})";
         animePattern = "{title} - {episode} - {episodeTitle}";
         customPattern = "";
+        languagePreference = "en";
     }
     
     /**
@@ -317,10 +348,8 @@ public class ConversionSettings {
      * @return ConversionSettings instance, either loaded from file or with defaults
      */
     public static ConversionSettings load() {
-        File settingsFile = new File(SETTINGS_FILE);
-        
-        if (settingsFile.exists()) {
-            try (FileReader reader = new FileReader(settingsFile)) {
+        if (Files.exists(SETTINGS_FILE)) {
+            try (FileReader reader = new FileReader(SETTINGS_FILE.toFile())) {
                 Gson gson = new Gson();
                 ConversionSettings settings = gson.fromJson(reader, ConversionSettings.class);
                 logger.info("Settings loaded from: {}", SETTINGS_FILE);
@@ -341,16 +370,12 @@ public class ConversionSettings {
      */
     public boolean save() {
         try {
-            // Create directory if it doesn't exist
-            Path settingsDir = Paths.get(SETTINGS_DIR);
-            if (!Files.exists(settingsDir)) {
-                Files.createDirectories(settingsDir);
-                logger.info("Created settings directory: {}", SETTINGS_DIR);
-            }
+            // Directory is already created by PathManager
+            logger.info("Settings directory: {}", SETTINGS_DIR);
             
             // Save settings as JSON
             Gson gson = new GsonBuilder().setPrettyPrinting().create();
-            try (FileWriter writer = new FileWriter(SETTINGS_FILE)) {
+            try (FileWriter writer = new FileWriter(SETTINGS_FILE.toFile())) {
                 gson.toJson(this, writer);
                 logger.info("Settings saved to: {}", SETTINGS_FILE);
                 return true;
@@ -367,7 +392,7 @@ public class ConversionSettings {
      * @return the full path to the settings file
      */
     public static String getSettingsFilePath() {
-        return SETTINGS_FILE;
+        return SETTINGS_FILE.toString();
     }
     
     /**
@@ -391,8 +416,16 @@ public class ConversionSettings {
         json.addProperty("video_codec", videoCodec);
         json.addProperty("hardware_decoding", hardwareDecoding);
         json.addProperty("use_nvenc", useNvenc);
+        json.addProperty("use_amf", useAmf);
+        json.addProperty("use_qsv", useQsv);
+        json.addProperty("use_videotoolbox", useVideotoolbox);
         json.addProperty("nvenc_preset", nvencPreset);
         json.addProperty("nvenc_cq", nvencCq);
+        json.addProperty("amf_qp", amfQp);
+        json.addProperty("amf_preset", amfPreset);
+        json.addProperty("qsv_quality", qsvQuality);
+        json.addProperty("qsv_preset", qsvPreset);
+        json.addProperty("videotoolbox_bitrate", videotoolboxBitrate);
         json.addProperty("quality_preset", qualityPreset.toLowerCase());
         json.addProperty("crf", crfValue);
         
@@ -450,4 +483,29 @@ public class ConversionSettings {
         
         return json;
     }
+    
+    // Getters and Setters for new hardware encoder flags
+    public boolean isUseAmf() { return useAmf; }
+    public void setUseAmf(boolean useAmf) { this.useAmf = useAmf; }
+    
+    public boolean isUseQsv() { return useQsv; }
+    public void setUseQsv(boolean useQsv) { this.useQsv = useQsv; }
+    
+    public boolean isUseVideotoolbox() { return useVideotoolbox; }
+    public void setUseVideotoolbox(boolean useVideotoolbox) { this.useVideotoolbox = useVideotoolbox; }
+    
+    public int getAmfQp() { return amfQp; }
+    public void setAmfQp(int amfQp) { this.amfQp = amfQp; }
+    
+    public String getAmfPreset() { return amfPreset; }
+    public void setAmfPreset(String amfPreset) { this.amfPreset = amfPreset; }
+    
+    public int getQsvQuality() { return qsvQuality; }
+    public void setQsvQuality(int qsvQuality) { this.qsvQuality = qsvQuality; }
+    
+    public String getQsvPreset() { return qsvPreset; }
+    public void setQsvPreset(String qsvPreset) { this.qsvPreset = qsvPreset; }
+    
+    public String getVideotoolboxBitrate() { return videotoolboxBitrate; }
+    public void setVideotoolboxBitrate(String videotoolboxBitrate) { this.videotoolboxBitrate = videotoolboxBitrate; }
 }

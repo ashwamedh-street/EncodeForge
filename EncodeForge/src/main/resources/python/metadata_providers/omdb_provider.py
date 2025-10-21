@@ -20,9 +20,9 @@ class OMDBProvider(BaseMetadataProvider):
 
     API_URL = "http://www.omdbapi.com/"
 
-    def __init__(self, api_key: str = ""):
-        super().__init__(api_key)
-        logger.info("OMDBProvider initialized")
+    def __init__(self, api_key: str = "", language_preference: str = "en"):
+        super().__init__(api_key, language_preference=language_preference)
+        logger.info(f"OMDBProvider initialized (Language: {self.AVAILABLE_LANGUAGES.get(self.language_preference, self.language_preference)})")
 
     def validate_api_key(self) -> Tuple[bool, str]:
         """Validate OMDB API key"""

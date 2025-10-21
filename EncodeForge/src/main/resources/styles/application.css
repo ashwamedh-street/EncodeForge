@@ -1086,6 +1086,105 @@
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.9), 35, 0, 0, 0);
 }
 
+/* ========================================
+   DIALOG STYLING ENHANCEMENTS
+   ======================================== */
+.dialog-pane .header-panel {
+    -fx-background-color: #252525;
+    -fx-border-color: transparent transparent #2d2d2d transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+.dialog-pane .header-panel .label {
+    -fx-text-fill: #ffffff;
+    -fx-font-family: "Segoe UI", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-size: 16px;
+    -fx-font-weight: 600;
+}
+
+.dialog-pane .content {
+    -fx-background-color: #1e1e1e;
+    -fx-padding: 20;
+}
+
+.dialog-pane .button-bar {
+    -fx-background-color: #252525;
+    -fx-border-color: #2d2d2d transparent transparent transparent;
+    -fx-border-width: 1 0 0 0;
+    -fx-padding: 15;
+}
+
+.dialog-pane .button-bar .button {
+    -fx-background-color: #2d2d2d;
+    -fx-text-fill: #ffffff;
+    -fx-border-color: #3a3a3a;
+    -fx-border-width: 1;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-padding: 6 12;
+    -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-size: 12px;
+    -fx-font-weight: 400;
+    -fx-min-height: 28;
+    -fx-pref-height: 28;
+}
+
+.dialog-pane .button-bar .button:hover {
+    -fx-background-color: #3a3a3a;
+    -fx-border-color: #0078d4;
+    -fx-effect: dropshadow(gaussian, rgba(0, 120, 212, 0.2), 4, 0, 0, 1);
+}
+
+.dialog-pane .button-bar .button:pressed {
+    -fx-background-color: #252525;
+    -fx-border-color: #0078d4;
+}
+
+.dialog-pane .button-bar .button:focused {
+    -fx-border-color: #0078d4;
+    -fx-border-width: 2;
+}
+
+/* Primary button styling for dialogs */
+.dialog-pane .button-bar .button.primary {
+    -fx-background-color: #0078d4;
+    -fx-text-fill: #ffffff;
+    -fx-border-color: #106ebe;
+    -fx-font-weight: 500;
+    -fx-effect: dropshadow(gaussian, rgba(0, 120, 212, 0.3), 4, 0, 0, 1);
+}
+
+.dialog-pane .button-bar .button.primary:hover {
+    -fx-background-color: #106ebe;
+    -fx-border-color: #005a9e;
+    -fx-effect: dropshadow(gaussian, rgba(0, 120, 212, 0.4), 6, 0, 0, 1);
+}
+
+.dialog-pane .button-bar .button.primary:pressed {
+    -fx-background-color: #005a9e;
+    -fx-border-color: #004578;
+}
+
+/* Danger button styling for dialogs */
+.dialog-pane .button-bar .button.danger {
+    -fx-background-color: #d13438;
+    -fx-text-fill: #ffffff;
+    -fx-border-color: #b71c1c;
+    -fx-font-weight: 500;
+    -fx-effect: dropshadow(gaussian, rgba(209, 52, 56, 0.3), 4, 0, 0, 1);
+}
+
+.dialog-pane .button-bar .button.danger:hover {
+    -fx-background-color: #b71c1c;
+    -fx-border-color: #a00000;
+    -fx-effect: dropshadow(gaussian, rgba(209, 52, 56, 0.4), 6, 0, 0, 1);
+}
+
+.dialog-pane .button-bar .button.danger:pressed {
+    -fx-background-color: #a00000;
+    -fx-border-color: #800000;
+}
+
 .category-list {
     -fx-background-color: #252525;
     -fx-border-color: transparent #2d2d2d transparent transparent;

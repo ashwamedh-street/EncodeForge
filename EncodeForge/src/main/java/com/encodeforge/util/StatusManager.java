@@ -39,7 +39,7 @@ public class StatusManager {
     private boolean fanartConfigured = false;
     
     // Free providers (always available)
-    private boolean anilistAvailable = true;
+    private boolean anidbAvailable = true;
     private boolean kitsuAvailable = true;
     private boolean jikanAvailable = true;
     private boolean tvmazeAvailable = true;
@@ -239,8 +239,8 @@ public class StatusManager {
     }
     
     // Free provider getters (always available)
-    public boolean isAnilistAvailable() {
-        return anilistAvailable;
+    public boolean isAnidbAvailable() {
+        return anidbAvailable;
     }
     
     public boolean isKitsuAvailable() {
@@ -271,7 +271,7 @@ public class StatusManager {
     public int getTotalMetadataProviders() {
         lock.readLock().lock();
         try {
-            int count = 4; // Always have: AniList, Kitsu, Jikan, TVmaze (free)
+            int count = 4; // Always have: AniDB, Kitsu, Jikan, TVmaze (free)
             if (tmdbConfigured) count++;
             if (tvdbConfigured) count++;
             if (omdbConfigured) count++;
