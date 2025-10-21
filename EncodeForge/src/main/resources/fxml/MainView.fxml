@@ -479,8 +479,9 @@
                         <TableView fx:id="processingTable" VBox.vgrow="ALWAYS" styleClass="queue-table, processing-table">
                             <columns>
                                 <TableColumn fx:id="procStatusColumn" text="" prefWidth="35" minWidth="35" maxWidth="35"/>
-                                <TableColumn fx:id="procFileColumn" text="File Name" prefWidth="250"/>
-                                <TableColumn fx:id="procProgressColumn" text="Progress" prefWidth="110"/>
+                                <TableColumn fx:id="procFileColumn" text="File Name" prefWidth="200"/>
+                                <TableColumn fx:id="procOperationColumn" text="Status" prefWidth="150"/>
+                                <TableColumn fx:id="procProgressColumn" text="Progress" prefWidth="80"/>
                                 <TableColumn fx:id="procFpsColumn" text="FPS" prefWidth="60"/>
                                 <TableColumn fx:id="procSpeedColumn" text="Speed" prefWidth="70"/>
                                 <TableColumn fx:id="procEtaColumn" text="ETA" prefWidth="80"/>

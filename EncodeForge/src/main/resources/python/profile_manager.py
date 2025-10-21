@@ -20,7 +20,8 @@ class ProfileManager:
     def __init__(self, profiles_dir: Optional[Path] = None):
         if profiles_dir is None:
             # Default to user's home directory
-            profiles_dir = Path.home() / ".encodeforge" / "profiles"
+            from path_manager import get_profiles_dir
+            profiles_dir = get_profiles_dir()
         
         self.profiles_dir = Path(profiles_dir)
         self.profiles_dir.mkdir(parents=True, exist_ok=True)
@@ -41,6 +42,9 @@ class ProfileManager:
         settings.use_nvenc = True
         settings.nvenc_preset = "p7"  # Slowest, best quality
         settings.nvenc_cq = 18  # High quality
+        settings.amf_qp = 18  # High quality for AMD
+        settings.qsv_quality = 18  # High quality for Intel
+        settings.videotoolbox_bitrate = "8M"  # High bitrate for Apple
         settings.output_format = "mp4"
         settings.audio_codec = "copy"
         settings.convert_subtitles = True
@@ -54,6 +58,9 @@ class ProfileManager:
         settings.use_nvenc = True
         settings.nvenc_preset = "p1"  # Fastest
         settings.nvenc_cq = 28  # Lower quality
+        settings.amf_qp = 28  # Lower quality for AMD
+        settings.qsv_quality = 28  # Lower quality for Intel
+        settings.videotoolbox_bitrate = "3M"  # Lower bitrate for Apple
         settings.output_format = "mp4"
         settings.audio_codec = "copy"
         settings.convert_subtitles = True
@@ -67,6 +74,9 @@ class ProfileManager:
         settings.use_nvenc = True
         settings.nvenc_preset = "p4"  # Balanced
         settings.nvenc_cq = 23  # Balanced quality
+        settings.amf_qp = 23  # Balanced quality for AMD
+        settings.qsv_quality = 23  # Balanced quality for Intel
+        settings.videotoolbox_bitrate = "5M"  # Balanced bitrate for Apple
         settings.output_format = "mp4"
         settings.audio_codec = "copy"
         settings.convert_subtitles = True
@@ -80,6 +90,9 @@ class ProfileManager:
         settings.use_nvenc = True
         settings.nvenc_preset = "p7"  # Slow for better compression
         settings.nvenc_cq = 30  # Lower quality = smaller files
+        settings.amf_qp = 30  # Lower quality for AMD
+        settings.qsv_quality = 30  # Lower quality for Intel
+        settings.videotoolbox_bitrate = "2M"  # Lower bitrate for Apple
         settings.output_format = "mp4"
         settings.audio_codec = "aac"  # Re-encode audio
         settings.audio_bitrate = "128k"  # Lower bitrate
@@ -94,6 +107,9 @@ class ProfileManager:
         settings.use_nvenc = True
         settings.nvenc_preset = "p7"
         settings.nvenc_cq = 15  # Very high quality
+        settings.amf_qp = 15  # Very high quality for AMD
+        settings.qsv_quality = 15  # Very high quality for Intel
+        settings.videotoolbox_bitrate = "10M"  # High bitrate for Apple
         settings.output_format = "mkv"  # MKV for better container support
         settings.audio_codec = "copy"
         settings.convert_subtitles = True

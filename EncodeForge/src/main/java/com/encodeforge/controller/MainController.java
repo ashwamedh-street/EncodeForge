@@ -4,6 +4,7 @@ import com.encodeforge.model.ConversionJob;
 import com.encodeforge.model.ConversionSettings;
 import com.encodeforge.service.PythonBridge;
 import com.encodeforge.util.HardwareDetector;
+import com.encodeforge.util.PathManager;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import javafx.application.Platform;
@@ -261,6 +262,7 @@ public class MainController {
     @FXML private TableView<ConversionJob> processingTable;
     @FXML private TableColumn<ConversionJob, String> procStatusColumn;
     @FXML private TableColumn<ConversionJob, String> procFileColumn;
+    @FXML private TableColumn<ConversionJob, String> procOperationColumn;
     @FXML private TableColumn<ConversionJob, Double> procProgressColumn;
     @FXML private TableColumn<ConversionJob, String> procFpsColumn;
     @FXML private TableColumn<ConversionJob, String> procSpeedColumn;
@@ -591,6 +593,7 @@ public class MainController {
         // Setup columns
         procStatusColumn.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty("⚡"));
         procFileColumn.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(new File(cd.getValue().getInputPath()).getName()));
+        procOperationColumn.setCellValueFactory(new PropertyValueFactory<>("operation"));
         procProgressColumn.setCellValueFactory(new PropertyValueFactory<>("progress"));
         procFpsColumn.setCellValueFactory(new PropertyValueFactory<>("fps"));
         procSpeedColumn.setCellValueFactory(new PropertyValueFactory<>("speed"));
@@ -1036,6 +1039,7 @@ public class MainController {
         for (ConversionJob job : queuedFiles) {
             filePaths.add(job.getInputPath());
             job.setStatus("⚡ Processing");
+            job.setOperation("Starting...");
             job.setProgress(0.0);
             job.setStartTime(System.currentTimeMillis());
             job.setFps("0");
@@ -1513,9 +1517,8 @@ public class MainController {
     }
     
     private void createBackupFile(List<String> backupData) throws IOException {
-        // Create backup directory in user's home/.encodeforge/backups
-        Path backupDir = Paths.get(System.getProperty("user.home"), ".encodeforge", "backups");
-        Files.createDirectories(backupDir);
+        // Create backup directory in AppData/Local/EncodeForge/backups
+        Path backupDir = PathManager.getBackupsDir();
         
         // Create backup file with timestamp
         String timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
@@ -1948,7 +1951,8 @@ public class MainController {
                 return;
             }
             
-            if (update.has("progress")) {
+            // Handle progress updates (both old format and new format)
+            if (update.has("progress") || (update.has("type") && "progress".equals(update.get("type").getAsString()))) {
                 double progress = update.get("progress").getAsDouble();
                 String fileName = update.get("file").getAsString();
                 String status = update.has("status") ? update.get("status").getAsString() : "processing";
@@ -1960,6 +1964,24 @@ public class MainController {
                 
                 // Status with emoji
                 switch (status.toLowerCase()) {
+                    case "analyzing":
+                        statusText.append("🔍 Analyzing...");
+                        break;
+                    case "analyzing_subtitles":
+                        statusText.append("🔍 Analyzing subtitles...");
+                        break;
+                    case "converting_subtitles":
+                        statusText.append("📝 Converting subtitles...");
+                        break;
+                    case "preparing":
+                        statusText.append("⚙️ Preparing...");
+                        break;
+                    case "ready":
+                        statusText.append("⚡ Starting encoding...");
+                        break;
+                    case "progress":
+                        statusText.append("⚡ Encoding...");
+                        break;
                     case "starting":
                         statusText.append("🔄 Starting");
                         break;
@@ -1970,6 +1992,7 @@ public class MainController {
                         statusText.append("🔧 Finalizing");
                         break;
                     case "completed":
+                    case "complete":
                         statusText.append("✅ Completed");
                         break;
                     case "cancelled":
@@ -2027,11 +2050,74 @@ public class MainController {
                     .orElse(null);
                 
                 if (job != null) {
-                    if (progress >= 0) {
-                        job.setProgress(progress);
+                    String lowerStatus = status.toLowerCase();
+                    // Update job status based on the new status types
+                    switch (lowerStatus) {
+                        case "analyzing":
+                            job.setStatus("Analyzing...");
+                            job.setOperation("Analyzing video file...");
+                            job.setProgress(1.0); // Fixed progress for analyzing phase
+                            job.setFps("0");
+                            job.setSpeed("0x");
+                            job.setEta("Analyzing...");
+                            break;
+                        case "analyzing_subtitles":
+                            job.setStatus("Analyzing subtitles...");
+                            job.setOperation("Analyzing subtitle tracks...");
+                            job.setProgress(2.0); // Fixed progress for subtitle analysis
+                            job.setFps("0");
+                            job.setSpeed("0x");
+                            job.setEta("Analyzing...");
+                            break;
+                        case "converting_subtitles":
+                            job.setStatus("Converting subtitles...");
+                            job.setOperation("Converting subtitles...");
+                            job.setProgress(3.0); // Fixed progress for subtitle conversion
+                            job.setFps("0");
+                            job.setSpeed("0x");
+                            job.setEta("Converting...");
+                            break;
+                        case "preparing":
+                            job.setStatus("Preparing...");
+                            job.setOperation("Preparing conversion...");
+                            job.setProgress(4.0); // Fixed progress for preparation phase
+                            job.setFps("0");
+                            job.setSpeed("0x");
+                            job.setEta("Preparing...");
+                            break;
+                        case "ready":
+                            job.setStatus("Starting encoding...");
+                            job.setOperation("Starting encoding...");
+                            job.setProgress(5.0); // Fixed progress for ready phase
+                            job.setFps("0");
+                            job.setSpeed("0x");
+                            job.setEta("Starting...");
+                            break;
+                        case "progress":
+                            job.setStatus("Encoding...");
+                            job.setOperation("Encoding video...");
+                            // Map backend progress (0-100) to frontend progress (6-100)
+                            double mappedProgress = Math.max(6.0, Math.min(100.0, 6.0 + (progress * 0.94)));
+                            job.setProgress(mappedProgress);
+                            // Keep existing FPS, speed, ETA from update
+                            break;
+                        case "processing":
+                            job.setStatus("Encoding...");
+                            job.setOperation("Encoding video...");
+                            // Map backend progress (0-100) to frontend progress (6-100)
+                            double mappedProgress = Math.max(6.0, Math.min(100.0, 6.0 + (progress * 0.94)));
+                            job.setProgress(mappedProgress);
+                            // Keep existing FPS, speed, ETA from update
+                            break;
+                        default:
+                            logger.debug("Unhandled status: '{}' - updating progress only", status);
+                            // For other statuses, update progress normally
+                            if (progress >= 0) {
+                                job.setProgress(progress);
+                            }
                     }
                     
-                    // Update real-time metrics
+                    // Update real-time metrics for encoding phase
                     if (update.has("fps")) {
                         job.setFps(String.format("%.1f", update.get("fps").getAsDouble()));
                     }
@@ -2046,8 +2132,9 @@ public class MainController {
                     processingTable.refresh();
                     
                     // Handle completion - move to completed list
-                    if (status.equals("completed")) {
+                    if (status.equals("completed") || status.equals("complete")) {
                         job.setStatus("✅ Completed");
+                        job.setOperation("Completed");
                         job.setProgress(100.0);
                         
                         // Calculate time taken
@@ -6170,5 +6257,6 @@ public class MainController {
         public String getDownloadUrl() { return downloadUrl; }
         public boolean isManualDownloadOnly() { return manualDownloadOnly; }
     }
+    
     
 }

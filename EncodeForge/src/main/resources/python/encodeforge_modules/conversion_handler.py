@@ -25,6 +25,7 @@ class ConversionHandler:
         self.ffmpeg_mgr = ffmpeg_mgr
         self.current_process: Optional[subprocess.Popen] = None
         self.cancel_requested: bool = False
+        self.current_output_path: Optional[str] = None  # Track current output file for cleanup
         
         # Queue state tracking for recovery
         self._file_queue: List[Dict] = []  # Full queue with status
@@ -288,6 +289,19 @@ class ConversionHandler:
         
         return 0.0  # Return 0 if duration cannot be determined
     
+    def _format_time(self, seconds: int) -> str:
+        """Format seconds into human-readable time string (e.g., '5m 30s' or '1h 23m')"""
+        if seconds < 60:
+            return f"{seconds}s"
+        elif seconds < 3600:
+            minutes = seconds // 60
+            secs = seconds % 60
+            return f"{minutes}m {secs}s"
+        else:
+            hours = seconds // 3600
+            minutes = (seconds % 3600) // 60
+            return f"{hours}h {minutes}m"
+    
     def _get_video_info(self, input_path: str) -> Dict:
         """Get video duration and frame count using ffprobe for accurate progress calculation"""
         try:
@@ -395,6 +409,83 @@ class ConversionHandler:
         
         return False
     
+    def _analyze_subtitle_tracks(self, input_path: str) -> List[Dict]:
+        """Analyze subtitle tracks and return their formats"""
+        try:
+            cmd = [
+                self.settings.ffprobe_path,
+                "-v", "quiet",
+                "-print_format", "json",
+                "-show_streams",
+                "-select_streams", "s",
+                input_path
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+            
+            if result.returncode == 0:
+                data = json.loads(result.stdout)
+                subtitle_tracks = []
+                for stream in data.get("streams", []):
+                    subtitle_tracks.append({
+                        "index": stream.get("index"),
+                        "codec": stream.get("codec_name"),
+                        "language": stream.get("tags", {}).get("language", "und"),
+                        "title": stream.get("tags", {}).get("title", "")
+                    })
+                return subtitle_tracks
+        except Exception as e:
+            logger.debug(f"Error analyzing subtitle tracks: {e}")
+        
+        return []
+    
+    def _extract_and_convert_subtitles(self, input_path: str, subtitle_tracks: List[Dict], output_dir: Path, progress_callback: Optional[Callable] = None) -> List[tuple]:
+        """Extract ASS/SSA subtitles and convert to SRT, return list of (index, path) tuples"""
+        converted_subs = []
+        
+        for i, track in enumerate(subtitle_tracks):
+            codec = track.get("codec", "")
+            index = track.get("index")
+            
+            # ASS/SSA subtitles need conversion
+            if codec in ["ass", "ssa"]:
+                try:
+                    # Send progress update
+                    if progress_callback:
+                        progress_callback({
+                            'file': Path(input_path).name,
+                            'status': 'converting_subtitles',
+                            'progress': int((i / len(subtitle_tracks)) * 100),
+                            'message': f'Converting subtitle track {index} from {codec.upper()} to SRT...'
+                        })
+                    
+                    temp_srt = output_dir / f"temp_subtitle_{index}.srt"
+                    
+                    cmd = [
+                        self.settings.ffmpeg_path,
+                        "-hide_banner",
+                        "-loglevel", "error",
+                        "-i", input_path,
+                        "-map", f"0:{index}",
+                        "-c:s", "srt",
+                        "-y", str(temp_srt)
+                    ]
+                    
+                    logger.info(f"Converting subtitle track {index} from {codec} to SRT...")
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)  # Increased timeout
+                    
+                    if result.returncode == 0 and temp_srt.exists():
+                        logger.info(f"✅ Converted subtitle track {index} from {codec} to SRT")
+                        converted_subs.append((index, temp_srt))
+                    else:
+                        logger.warning(f"❌ Failed to convert subtitle track {index}: {result.stderr}")
+                except subprocess.TimeoutExpired:
+                    logger.error(f"⏰ Timeout converting subtitle track {index} from {codec}")
+                except Exception as e:
+                    logger.warning(f"Error converting subtitle {index}: {e}")
+        
+        return converted_subs
+    
     def _retry_with_software_encoder(self, input_file: Path, output_path_obj: Path, 
                                      progress_callback: Optional[Callable] = None) -> Dict:
         """Retry conversion using software encoder as fallback"""
@@ -467,6 +558,9 @@ class ConversionHandler:
         progress_callback: Optional[Callable] = None
     ) -> Dict:
         """Convert a single video file with the current settings"""
+        # Initialize temp_subtitle_files list for cleanup
+        temp_subtitle_files = []
+        
         try:
             input_file = Path(input_path)
             
@@ -486,6 +580,15 @@ class ConversionHandler:
             
             # Set current file for progress tracking
             self._current_file = input_file.name
+            
+            # Send analysis progress update
+            if progress_callback:
+                progress_callback({
+                    'file': input_file.name,
+                    'status': 'analyzing',
+                    'progress': 0,
+                    'message': 'Analyzing video file...'
+                })
             
             # Get video info for progress calculation (duration, frames, fps)
             video_info = self._get_video_info(str(input_file))
@@ -530,21 +633,35 @@ class ConversionHandler:
                 if output_path_obj.exists() and not self.settings.overwrite_existing:
                     return {"status": "error", "message": f"Output file already exists: {output_path_obj}"}
             
+            # Store output path for cleanup on cancel
+            self.current_output_path = str(output_path_obj)
+            
             # Build FFmpeg command with progress output enabled
             # -nostdin prevents FFmpeg from waiting for stdin (critical for pipes)
             # -progress - sends progress to stdout in key=value format
+            # -flush_packets 1 reduces buffering delays
             cmd = [
                 self.settings.ffmpeg_path,
                 "-hide_banner",
                 "-nostdin",  # CRITICAL: Prevent FFmpeg from reading stdin (prevents hanging)
-                "-loglevel", "info",  # Info level so we see what's happening
+                "-loglevel", "error",  # Only errors to keep stderr clean
                 "-progress", "-",  # Send progress to stdout (not stderr)
+                "-flush_packets", "1",  # Flush output immediately to reduce buffering
                 "-i", str(input_file)
             ]
             
-            logger.info(f"FFmpeg command: {' '.join(cmd)}")
+            # Map streams explicitly to control what gets included
+            cmd.extend(["-map", "0:v:0"])  # First video stream
             
             # Select encoder based on pixel format
+            if progress_callback:
+                progress_callback({
+                    'file': input_file.name,
+                    'status': 'preparing',
+                    'progress': 10,
+                    'message': 'Selecting encoder and preparing conversion...'
+                })
+            
             encoder_info = self._select_best_encoder(is_10bit=is_10bit)
             logger.info(f"Using encoder: {encoder_info['codec']} ({encoder_info['type']})")
             
@@ -565,24 +682,22 @@ class ConversionHandler:
                     ])
                     logger.info(f"NVENC quality: preset={self.settings.nvenc_preset}, cq={self.settings.nvenc_cq}")
                 elif encoder_info["codec"].endswith("amf"):
-                    # Add QP values for all frame types to control quality (prevents massive file sizes)
+                    # Use constant QP mode for better quality control
+                    # CQP (Constant QP) mode prevents file size explosion
                     cmd.extend([
-                        "-quality", "balanced",
-                        "-rc", "vbr_latency",
-                        "-qp_i", "23",  # I-frame quality
-                        "-qp_p", "23",  # P-frame quality
-                        "-qp_b", "23"   # B-frame quality
+                        "-rc", "cqp",  # Constant QP mode
+                        "-qp", str(self.settings.amf_qp)    # Quality parameter from user settings
                     ])
-                    logger.info("AMF quality: balanced, QP=23 for all frame types")
+                    logger.info(f"AMF quality: CQP mode, QP={self.settings.amf_qp}")
                 elif encoder_info["codec"].endswith("qsv"):
                     cmd.extend([
-                        "-preset", "medium",
-                        "-global_quality", "23"
+                        "-preset", self.settings.qsv_preset,
+                        "-global_quality", str(self.settings.qsv_quality)
                     ])
-                    logger.info("QSV quality: medium preset, global_quality=23")
+                    logger.info(f"QSV quality: {self.settings.qsv_preset} preset, global_quality={self.settings.qsv_quality}")
                 elif encoder_info["codec"].endswith("videotoolbox"):
-                    cmd.extend(["-b:v", "5M"])
-                    logger.info("VideoToolbox bitrate: 5M")
+                    cmd.extend(["-b:v", self.settings.videotoolbox_bitrate])
+                    logger.info(f"VideoToolbox bitrate: {self.settings.videotoolbox_bitrate}")
             else:
                 cmd.extend([
                     "-c:v", encoder_info["codec"],
@@ -590,30 +705,94 @@ class ConversionHandler:
                     "-crf", str(self.settings.video_crf)
                 ])
             
-            # Audio codec
+            # Audio stream mapping and codec
+            # Map all audio streams by default (Java sends 'all' or 'first')
+            audio_selection = getattr(self.settings, 'audio_track_selection', 'all')
+            if audio_selection == "all":
+                cmd.extend(["-map", "0:a"])  # Include all audio streams
+                logger.info("Mapping: All audio tracks")
+            else:
+                cmd.extend(["-map", "0:a:0"])  # Only first audio stream
+                logger.info("Mapping: First audio track only")
+            
             if self.settings.audio_codec == "copy":
                 cmd.extend(["-c:a", "copy"])
             else:
                 cmd.extend(["-c:a", self.settings.audio_codec])
-                if self.settings.audio_bitrate:
+                if self.settings.audio_bitrate and self.settings.audio_bitrate != "Auto":
                     cmd.extend(["-b:a", self.settings.audio_bitrate])
             
-            # Subtitle handling
+            # Subtitle handling with comprehensive format support
+            temp_subtitle_files = []
+            subtitle_tracks = []  # Initialize to avoid unbound variable
             if self.settings.convert_subtitles:
-                # Handle "auto" subtitle format by choosing appropriate codec based on output format
-                if self.settings.subtitle_format == "auto":
-                    if self.settings.output_format.lower() in ["mp4", "m4v"]:
-                        subtitle_codec = "mov_text"  # MP4 compatible
-                    elif self.settings.output_format.lower() in ["mkv", "webm"]:
-                        subtitle_codec = "srt"  # MKV compatible
-                    else:
-                        subtitle_codec = "srt"  # Default fallback
-                else:
-                    subtitle_codec = self.settings.subtitle_format
+                # Send subtitle analysis progress update
+                if progress_callback:
+                    progress_callback({
+                        'file': input_file.name,
+                        'status': 'analyzing_subtitles',
+                        'progress': 5,
+                        'message': 'Analyzing subtitle tracks...'
+                    })
                 
-                cmd.extend(["-c:s", subtitle_codec])
+                # Analyze subtitle tracks
+                subtitle_tracks = self._analyze_subtitle_tracks(str(input_file))
+                
+                if subtitle_tracks:
+                    logger.info(f"Found {len(subtitle_tracks)} subtitle track(s)")
+                    
+                    # For MP4, handle different subtitle formats appropriately
+                    if self.settings.output_format.lower() in ["mp4", "m4v"]:
+                        # Check subtitle formats
+                        has_ass_ssa = any(t.get("codec") in ["ass", "ssa"] for t in subtitle_tracks)
+                        has_mov_text = any(t.get("codec") in ["mov_text", "text"] for t in subtitle_tracks)
+                        has_srt = any(t.get("codec") in ["srt", "subrip"] for t in subtitle_tracks)
+                        
+                        logger.info(f"Subtitle formats detected - ASS/SSA: {has_ass_ssa}, mov_text: {has_mov_text}, SRT: {has_srt}")
+                        
+                        if has_ass_ssa:
+                            logger.info("ASS/SSA subtitles detected, converting directly to mov_text...")
+                            
+                            # Send progress update
+                            if progress_callback:
+                                progress_callback({
+                                    'file': input_file.name,
+                                    'status': 'converting_subtitles',
+                                    'progress': 15,
+                                    'message': 'Converting ASS/SSA subtitles to mov_text...'
+                                })
+                            
+                            # Map all subtitle tracks directly and convert ASS/SSA to mov_text
+                            cmd.extend(["-map", "0:s?"])
+                            cmd.extend(["-c:s", "mov_text"])
+                            logger.info(f"Mapped {len(subtitle_tracks)} subtitle tracks, converting ASS/SSA to mov_text")
+                        else:
+                            # No ASS/SSA, map all subtitle tracks directly
+                            cmd.extend(["-map", "0:s?"])
+                            
+                            # For MP4, convert all subtitles to mov_text for compatibility
+                            if has_mov_text or has_srt:
+                                cmd.extend(["-c:s", "mov_text"])
+                                logger.info("Converting subtitles to mov_text for MP4 compatibility")
+                            else:
+                                cmd.extend(["-c:s", "mov_text"])
+                                logger.info("Converting all subtitles to mov_text for MP4")
+                    else:
+                        # MKV/WebM can handle most subtitle formats natively
+                        cmd.extend(["-map", "0:s?"])
+                        
+                        if self.settings.subtitle_format == "auto":
+                            cmd.extend(["-c:s", "copy"])
+                        else:
+                            cmd.extend(["-c:s", self.settings.subtitle_format])
+                        
+                        logger.info("Mapping all subtitle tracks (copy)")
+                else:
+                    # No subtitle tracks found, but user wants subtitles enabled
+                    logger.info("No subtitle tracks found in input file")
             else:
-                cmd.extend(["-sn"])  # No subtitles
+                cmd.extend(["-sn"])
+                logger.info("Subtitles disabled")
             
             # MP4 faststart
             if self.settings.use_faststart and self.settings.output_format in ["mp4", "m4v"]:
@@ -626,7 +805,27 @@ class ConversionHandler:
             # Output
             cmd.extend(["-y", str(output_path_obj)])
             
+            # Send final preparation progress update
+            if progress_callback:
+                progress_callback({
+                    'file': input_file.name,
+                    'status': 'ready',
+                    'progress': 20,
+                    'message': 'Starting video conversion...'
+                })
+            
             logger.info(f"Starting conversion: {input_file.name} -> {output_path_obj.name}")
+            logger.info(f"Full FFmpeg command: {' '.join(cmd)}")
+            
+            # Log subtitle handling details
+            if self.settings.convert_subtitles and subtitle_tracks:
+                logger.info("Subtitle conversion details:")
+                for i, track in enumerate(subtitle_tracks):
+                    logger.info(f"  Track {i}: {track.get('codec', 'unknown')} ({track.get('language', 'und')})")
+                if self.settings.output_format.lower() in ["mp4", "m4v"]:
+                    logger.info("  Target format: mov_text (MP4 compatibility)")
+                else:
+                    logger.info("  Target format: copy (MKV/WebM)")
             
             # Execute conversion
             # On Unix, start FFmpeg in its own process group so we can kill the entire tree
@@ -657,15 +856,19 @@ class ConversionHandler:
             stdout_lines = []
             stderr_lines = []
             
+            # Track conversion start time for duration calculation
+            conversion_start_time = time.time()
+            
             if progress_callback and self.current_process:
                 # Save PID immediately for state tracking
                 current_pid = self.current_process.pid
                 logger.info(f"FFmpeg PID: {current_pid}")
                 
-                # Update queue state with PID
-                if hasattr(self, '_file_queue') and self._file_queue and self._current_index < len(self._file_queue):
-                    self._file_queue[self._current_index]['pid'] = current_pid
-                    logger.debug(f"Updated queue entry with PID: {current_pid}")
+                # Save process state immediately after PID is available
+                # We need to reconstruct the file paths from the current context
+                # since we're inside convert_file, not convert_files
+                logger.debug("Saving process state with PID after process start")
+                # Note: This will be handled by the calling convert_files method
                 
                 # -progress - sends to stdout, stderr has errors/info
                 logger.info("Starting progress monitoring threads...")
@@ -677,6 +880,9 @@ class ConversionHandler:
                     last_progress_time = 0
                     last_progress_data = None
                     line_count = 0
+                    
+                    # Progress accumulation buffer
+                    progress_buffer = {}
                     
                     while True:
                         if self.cancel_requested:
@@ -700,30 +906,94 @@ class ConversionHandler:
                         line_count += 1
                         stdout_lines.append(line)
                         
-                        # DEBUG: Log every line
-                        if line.strip():
-                            logger.info(f"STDOUT: {line.strip()}")
+                        line_stripped = line.strip()
+                        if not line_stripped:
+                            continue
                         
-                        # Parse progress (key=value format from -progress -)
-                        progress_info = self._parse_ffmpeg_progress(line.strip())
-                        if progress_info:
-                            last_progress_data = progress_info
-                            current_time = time.time()
-                            
-                            if current_time - last_progress_time >= 2.0:
-                                last_progress_time = current_time
-                                progress_count += 1
-                                logger.info(f"✓ Progress: {progress_info.get('progress', 0)}% | FPS: {progress_info.get('fps', 'N/A')} | ETA: {progress_info.get('eta', 'N/A')}")
-                                try:
-                                    progress_callback(progress_info)
-                                except Exception as cb_error:
-                                    logger.error(f"Error in progress callback: {cb_error}")
+                        # Parse key=value format from -progress -
+                        if '=' in line_stripped:
+                            try:
+                                key, value = line_stripped.split('=', 1)
+                                progress_buffer[key] = value
+                                
+                                # When we see "progress=continue", we have a complete update
+                                if key == 'progress' and value == 'continue':
+                                    # Calculate metrics from accumulated buffer
+                                    try:
+                                        # Get raw values from FFmpeg
+                                        current_frame = int(progress_buffer.get('frame', 0))
+                                        encoding_fps = float(progress_buffer.get('fps', 0))
+                                        speed_str = progress_buffer.get('speed', '0x').replace('x', '').strip()
+                                        encoding_speed = float(speed_str) if speed_str else 0.0
+                                        
+                                        # Calculate progress percentage from frames (most reliable)
+                                        # This avoids the frozen out_time_us issue
+                                        if current_frame > 0 and video_info["total_frames"] > 0:
+                                            progress_pct = (current_frame / video_info["total_frames"]) * 100
+                                        else:
+                                            progress_pct = 0
+                                        
+                                        progress_pct = min(99.9, progress_pct)  # Cap at 99.9% until complete
+                                        
+                                        # Calculate current time from frames and source fps
+                                        # This gives us accurate time even when out_time_us freezes
+                                        current_time_seconds = current_frame / video_info["fps"] if video_info["fps"] > 0 else 0
+                                        
+                                        # Calculate ETA from frames and encoding fps
+                                        if encoding_fps > 0 and video_info["total_frames"] > 0:
+                                            remaining_frames = video_info["total_frames"] - current_frame
+                                            eta_seconds = remaining_frames / encoding_fps
+                                            eta_formatted = self._format_time(int(eta_seconds))
+                                        else:
+                                            eta_formatted = "Calculating..."
+                                        
+                                        # Calculate actual encoding speed from source fps vs encoding fps
+                                        if video_info["fps"] > 0 and encoding_fps > 0:
+                                            actual_speed = encoding_fps / video_info["fps"]
+                                            speed_formatted = f"{actual_speed:.2f}x"
+                                        else:
+                                            speed_formatted = f"{encoding_speed:.2f}x"  # Fallback to FFmpeg's reported speed
+                                        
+                                        # Build complete progress dict
+                                        progress_info = {
+                                            'file': input_file.name,
+                                            'status': 'processing',
+                                            'progress': float(progress_pct),
+                                            'fps': encoding_fps,
+                                            'speed': speed_formatted,
+                                            'eta': eta_formatted,
+                                            'frame': current_frame,
+                                            'total_frames': video_info["total_frames"],
+                                            'time': current_time_seconds
+                                        }
+                                        
+                                        last_progress_data = progress_info
+                                        
+                                        # Throttle updates to once every 0.2 seconds for smoother real-time updates
+                                        current_time = time.time()
+                                        if current_time - last_progress_time >= 0.2:
+                                            last_progress_time = current_time
+                                            progress_count += 1
+                                            logger.info(f"✓ Progress: {progress_pct:.1f}% | Frame: {current_frame}/{video_info['total_frames']} | FPS: {encoding_fps:.1f} | Speed: {speed_formatted} | ETA: {eta_formatted}")
+                                            try:
+                                                progress_callback(progress_info)
+                                            except Exception as cb_error:
+                                                logger.error(f"Error in progress callback: {cb_error}")
+                                        
+                                    except (ValueError, ZeroDivisionError) as e:
+                                        logger.debug(f"Error calculating progress metrics: {e}")
+                                    
+                                    # Clear buffer for next update
+                                    progress_buffer = {}
+                                    
+                            except ValueError:
+                                logger.debug(f"Could not parse key=value: {line_stripped}")
                     
                     logger.info(f"Stdout thread finished: {line_count} lines, {progress_count} progress updates")
                 
                 def read_stderr():
-                    """Read stderr for errors/warnings/info"""
-                    logger.info("Stderr thread started (errors/info)")
+                    """Read stderr for errors only (loglevel=error)"""
+                    logger.info("Stderr thread started (errors only)")
                     line_count = 0
                     
                     while True:
@@ -741,9 +1011,16 @@ class ConversionHandler:
                         line_count += 1
                         stderr_lines.append(line)
                         
-                        # DEBUG: Log every line
+                        # Only log errors (since loglevel=error)
                         if line.strip():
-                            logger.info(f"STDERR: {line.strip()}")
+                            error_line = line.strip()
+                            logger.error(f"FFmpeg ERROR: {error_line}")
+                            
+                            # Check for subtitle-specific errors
+                            if any(keyword in error_line.lower() for keyword in ['subtitle', 'mov_text', 'srt', 'ass', 'ssa']):
+                                logger.warning(f"Subtitle conversion error detected: {error_line}")
+                                if 'mov_text' in error_line.lower():
+                                    logger.warning("mov_text conversion failed - subtitles may not be included in output")
                     
                     logger.info(f"Stderr thread finished: {line_count} lines")
                 
@@ -774,13 +1051,54 @@ class ConversionHandler:
             # Check if cancelled
             if self.cancel_requested:
                 self.cancel_requested = False
+                # Clean up temporary subtitle files
+                for temp_file in temp_subtitle_files:
+                    try:
+                        if temp_file.exists():
+                            temp_file.unlink()
+                            logger.debug(f"Cleaned up temp subtitle: {temp_file.name}")
+                    except Exception as e:
+                        logger.debug(f"Could not delete temp subtitle {temp_file}: {e}")
                 return {"status": "cancelled", "message": "Conversion cancelled by user"}
             
             # Check result
             if self.current_process.returncode == 0:
                 # Verify output file
                 if output_path_obj.exists() and output_path_obj.stat().st_size > 0:
+                    # Calculate file size and conversion duration
+                    output_size = output_path_obj.stat().st_size
+                    output_size_mb = output_size / (1024 * 1024)
+                    input_size_mb = input_file.stat().st_size / (1024 * 1024)
+                    conversion_duration = time.time() - conversion_start_time if 'conversion_start_time' in locals() else 0
+                    
                     logger.info(f"✅ Conversion completed: {output_path_obj.name}")
+                    logger.info(f"   Input: {input_size_mb:.2f} MB → Output: {output_size_mb:.2f} MB ({(output_size_mb/input_size_mb)*100:.1f}%)")
+                    logger.info(f"   Duration: {self._format_time(int(conversion_duration))}")
+                    
+                    # Verify subtitle inclusion if subtitles were enabled
+                    if self.settings.convert_subtitles and subtitle_tracks:
+                        output_subtitle_tracks = self._analyze_subtitle_tracks(str(output_path_obj))
+                        if output_subtitle_tracks:
+                            logger.info(f"✅ Subtitles included: {len(output_subtitle_tracks)} track(s)")
+                            for i, track in enumerate(output_subtitle_tracks):
+                                logger.info(f"   Output track {i}: {track.get('codec', 'unknown')} ({track.get('language', 'und')})")
+                        else:
+                            logger.warning("⚠️ No subtitles found in output file - conversion may have failed")
+                    
+                    # Send completion progress callback
+                    if progress_callback:
+                        try:
+                            progress_callback({
+                                'file': input_file.name,
+                                'status': 'completed',
+                                'progress': 100,
+                                'output_size': output_size,
+                                'output_size_mb': f"{output_size_mb:.2f}",
+                                'duration_seconds': int(conversion_duration),
+                                'duration_formatted': self._format_time(int(conversion_duration))
+                            })
+                        except Exception as cb_error:
+                            logger.error(f"Error sending completion callback: {cb_error}")
                     
                     # Delete original if requested
                     if self.settings.delete_original and input_file != output_path_obj:
@@ -790,21 +1108,60 @@ class ConversionHandler:
                         except Exception as e:
                             logger.warning(f"Could not delete original file: {e}")
                     
+                    # Clean up temporary subtitle files
+                    for temp_file in temp_subtitle_files:
+                        try:
+                            if temp_file.exists():
+                                temp_file.unlink()
+                                logger.debug(f"Cleaned up temp subtitle: {temp_file.name}")
+                        except Exception as e:
+                            logger.debug(f"Could not delete temp subtitle {temp_file}: {e}")
+                    
+                    # Clear output path tracking on successful completion
+                    self.current_output_path = None
+                    
                     return {
                         "status": "success",
                         "message": "Conversion completed successfully",
                         "output_path": str(output_path_obj),
-                        "encoder": encoder_info["codec"]
+                        "encoder": encoder_info["codec"],
+                        "output_size": output_size,
+                        "output_size_mb": output_size_mb,
+                        "duration_seconds": conversion_duration
                     }
                 else:
+                    # Clean up temporary subtitle files on failure
+                    for temp_file in temp_subtitle_files:
+                        try:
+                            if temp_file.exists():
+                                temp_file.unlink()
+                                logger.debug(f"Cleaned up temp subtitle: {temp_file.name}")
+                        except Exception as e:
+                            logger.debug(f"Could not delete temp subtitle {temp_file}: {e}")
+                    
+                    # Clear output path tracking on error
+                    self.current_output_path = None
+                    
                     return {"status": "error", "message": "Output file is empty or missing"}
             else:
+                # Clean up temporary subtitle files on error
+                for temp_file in temp_subtitle_files:
+                    try:
+                        if temp_file.exists():
+                            temp_file.unlink()
+                            logger.debug(f"Cleaned up temp subtitle: {temp_file.name}")
+                    except Exception as e:
+                        logger.debug(f"Could not delete temp subtitle {temp_file}: {e}")
+                
                 # Check if it's a hardware encoder error
                 if encoder_info["type"] == "hardware" and self._is_hardware_encoder_error(stderr):
                     logger.warning("Hardware encoder failed, trying software fallback...")
                     return self._retry_with_software_encoder(input_file, output_path_obj, progress_callback)
                 else:
                     logger.error(f"Conversion failed: {stderr}")
+                    # Clear output path tracking on error
+                    self.current_output_path = None
+                    
                     return {
                         "status": "error",
                         "message": f"FFmpeg error: {stderr}"
@@ -812,6 +1169,17 @@ class ConversionHandler:
         
         except Exception as e:
             logger.error(f"Error during conversion: {e}", exc_info=True)
+            # Clean up temporary subtitle files on exception
+            for temp_file in temp_subtitle_files:
+                try:
+                    if temp_file.exists():
+                        temp_file.unlink()
+                        logger.debug(f"Cleaned up temp subtitle: {temp_file.name}")
+                except Exception as cleanup_error:
+                    logger.debug(f"Could not delete temp subtitle {temp_file}: {cleanup_error}")
+            # Clear output path tracking on exception
+            self.current_output_path = None
+            
             return {
                 "status": "error",
                 "message": f"Conversion error: {str(e)}"
@@ -853,6 +1221,15 @@ class ConversionHandler:
                 })
             
             result = self.convert_file(file_path, progress_callback=progress_callback)
+            
+            # Save process state with PID after conversion starts (if process is running)
+            if self.current_process:
+                try:
+                    current_pid = self.current_process.pid
+                    logger.info(f"Saving process state with PID: {current_pid}")
+                    self._save_process_state(file_paths, idx, total_files)
+                except Exception as e:
+                    logger.warning(f"Could not save process state with PID: {e}")
             results.append({
                 "input": file_path,
                 "result": result
@@ -946,6 +1323,10 @@ class ConversionHandler:
                 # Verify process is actually dead
                 if not self._is_process_running(pid):
                     logger.info("✓ Conversion cancelled successfully - process terminated")
+                    
+                    # Clean up incomplete output file
+                    self._cleanup_incomplete_file()
+                    
                     self._clear_process_state()
                     return {"status": "success", "message": "Conversion cancelled"}
                 else:
@@ -966,6 +1347,10 @@ class ConversionHandler:
                     time.sleep(0.5)
                     if not self._is_process_running(pid):
                         logger.warning("Process force killed")
+                        
+                        # Clean up incomplete output file
+                        self._cleanup_incomplete_file()
+                        
                         self._clear_process_state()
                         return {"status": "success", "message": "Conversion force killed"}
                     else:
@@ -979,9 +1364,27 @@ class ConversionHandler:
                 # Always reset the process reference and cancel flag
                 self.current_process = None
                 self.cancel_requested = False
+                self.current_output_path = None
         else:
             logger.info("No active conversion to cancel")
             return {"status": "success", "message": "No active conversion"}
+    
+    def _cleanup_incomplete_file(self):
+        """Clean up incomplete output file when conversion is cancelled"""
+        if self.current_output_path:
+            try:
+                output_file = Path(self.current_output_path)
+                if output_file.exists():
+                    file_size = output_file.stat().st_size
+                    logger.info(f"Cleaning up incomplete output file: {output_file} ({file_size} bytes)")
+                    output_file.unlink()
+                    logger.info(f"✓ Deleted incomplete file: {output_file}")
+                else:
+                    logger.debug(f"Output file doesn't exist, nothing to clean up: {output_file}")
+            except Exception as e:
+                logger.error(f"Failed to clean up incomplete file {self.current_output_path}: {e}")
+            finally:
+                self.current_output_path = None
     
     def _verify_file_integrity(self, input_path: str, output_path: str) -> Dict[str, Any]:
         """Verify the integrity of converted file"""
@@ -1028,15 +1431,9 @@ class ConversionHandler:
     
     def _get_process_state_file(self) -> Path:
         """Get the path to the process state file"""
-        # Use a temporary directory or user's app data directory
-        if os.name == 'nt':  # Windows
-            app_data = os.getenv('LOCALAPPDATA', os.path.expanduser('~'))
-            state_dir = Path(app_data) / '.encodeforge'
-        else:  # Unix-like
-            state_dir = Path.home() / '.encodeforge'
-        
-        state_dir.mkdir(exist_ok=True)
-        return state_dir / 'conversion_state.json'
+        # Use unified application data directory
+        from path_manager import get_conversion_state_file
+        return get_conversion_state_file()
     
     def _save_process_state(self, file_paths: List[str], current_index: int, total_files: int):
         """Save entire conversion queue state to disk for recovery"""
@@ -1061,7 +1458,15 @@ class ConversionHandler:
                 elif i == current_index - 1:
                     # Currently processing
                     file_entry["status"] = "processing"
-                    file_entry["pid"] = self.current_process.pid if self.current_process else None
+                    # Get PID with error handling
+                    if self.current_process:
+                        try:
+                            file_entry["pid"] = self.current_process.pid
+                        except Exception as e:
+                            logger.warning(f"Could not get PID for processing file: {e}")
+                            file_entry["pid"] = None
+                    else:
+                        file_entry["pid"] = None
                 else:
                     # Waiting to process
                     file_entry["status"] = "queued"
@@ -1075,9 +1480,19 @@ class ConversionHandler:
                 
                 queue.append(file_entry)
             
+            # Get PID with better error handling
+            current_pid = None
+            if self.current_process:
+                try:
+                    current_pid = self.current_process.pid
+                    logger.debug(f"Saving process state with PID: {current_pid}")
+                except Exception as e:
+                    logger.warning(f"Could not get PID from current_process: {e}")
+                    current_pid = None
+            
             state = {
                 'timestamp': time.time(),
-                'pid': self.current_process.pid if self.current_process else None,
+                'pid': current_pid,
                 'queue': queue,
                 'current_index': current_index,
                 'total_files': total_files,
@@ -1143,18 +1558,23 @@ class ConversionHandler:
             return None
     
     def _is_process_running(self, pid: int) -> bool:
-        """Check if a process with given PID is still running"""
+        """Check if a process with given PID is still running (cross-platform)"""
         try:
             if os.name == 'nt':  # Windows
+                # Use tasklist command to check if process exists
                 result = subprocess.run(['tasklist', '/FI', f'PID eq {pid}'], 
-                                      capture_output=True, text=True)
-                return str(pid) in result.stdout
-            else:  # Unix-like
+                                      capture_output=True, text=True, timeout=5)
+                return str(pid) in result.stdout and result.returncode == 0
+            else:  # Unix-like (Linux, macOS)
                 try:
-                    os.kill(pid, 0)  # Signal 0 just checks if process exists
+                    # Signal 0 just checks if process exists without killing it
+                    os.kill(pid, 0)
                     return True
-                except OSError:
+                except (OSError, ProcessLookupError):
                     return False
+        except subprocess.TimeoutExpired:
+            logger.debug(f"Timeout checking process {pid}")
+            return False
         except Exception as e:
             logger.debug(f"Error checking if process {pid} is running: {e}")
             return False

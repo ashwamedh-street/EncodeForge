@@ -850,7 +850,8 @@ class RenamingHandler:
         # Create backup file if requested and not dry run
         if create_backup and not dry_run and backup_data:
             try:
-                backup_dir = Path.home() / ".encodeforge" / "backups"
+                from path_manager import get_backups_dir
+                backup_dir = get_backups_dir()
                 backup_dir.mkdir(parents=True, exist_ok=True)
                 
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

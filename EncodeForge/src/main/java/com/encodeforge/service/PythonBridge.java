@@ -1,8 +1,10 @@
 package com.encodeforge.service;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.encodeforge.util.FFmpegRuntimeExtractor;
+import com.encodeforge.util.PathManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -539,8 +541,8 @@ public class PythonBridge {
             // Extract FFmpeg runtime
             String ffmpegRuntimeDir = System.getProperty("ffmpeg.runtime.dir");
             if (ffmpegRuntimeDir == null) {
-                // Create temporary directory for FFmpeg extraction
-                Path tempDir = Files.createTempDirectory("encodeforge-ffmpeg");
+                // Create temporary directory for FFmpeg extraction in unified temp location
+                Path tempDir = PathManager.createTempDirectory("encodeforge-ffmpeg");
                 tempDir.toFile().deleteOnExit();
                 ffmpegRuntimeDir = tempDir.toString();
                 System.setProperty("ffmpeg.runtime.dir", ffmpegRuntimeDir);
@@ -573,5 +575,7 @@ public class PythonBridge {
             settings.setUseEmbeddedFFmpeg(false);
         }
     }
+    
+    
 }
 

@@ -39,7 +39,8 @@ class WhisperManager:
             self.whisper_available = True
             
             # Check which models are downloaded
-            model_dir = Path.home() / ".cache" / "whisper"
+            from path_manager import get_models_dir
+            model_dir = get_models_dir() / "whisper"
             if model_dir.exists():
                 for model_file in model_dir.glob("*.pt"):
                     model_name = model_file.stem

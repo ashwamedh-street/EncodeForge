@@ -21,8 +21,13 @@ class ConversionSettings:
     nvenc_cq: int = 23
     nvenc_codec: str = "h264_nvenc"  # Default to H.264 NVENC
     use_amf: bool = False  # AMD
+    amf_qp: int = 23  # AMD quality parameter
+    amf_preset: str = "balanced"  # AMD preset
     use_qsv: bool = False  # Intel Quick Sync
+    qsv_quality: int = 23  # Intel quality parameter
+    qsv_preset: str = "medium"  # Intel preset
     use_videotoolbox: bool = False  # Apple
+    videotoolbox_bitrate: str = "5M"  # Apple bitrate
     
     # Subtitle options
     convert_subtitles: bool = True

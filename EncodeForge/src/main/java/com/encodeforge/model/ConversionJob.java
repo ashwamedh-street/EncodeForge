@@ -12,6 +12,7 @@ public class ConversionJob {
     private final StringProperty fileName;
     private final StringProperty status;
     private final StringProperty statusIcon;
+    private final StringProperty operation;
     private final DoubleProperty progress;
     private final StringProperty sizeString;
     private final LongProperty sizeBytes;
@@ -31,6 +32,7 @@ public class ConversionJob {
         this.fileName = new SimpleStringProperty(file.getName());
         this.status = new SimpleStringProperty("pending");
         this.statusIcon = new SimpleStringProperty("⏳");
+        this.operation = new SimpleStringProperty("Queued");
         this.progress = new SimpleDoubleProperty(0.0);
         this.sizeBytes = new SimpleLongProperty(file.length());
         this.sizeString = new SimpleStringProperty(formatSize(file.length()));
@@ -56,6 +58,7 @@ public class ConversionJob {
     public StringProperty fileNameProperty() { return fileName; }
     public StringProperty statusProperty() { return status; }
     public StringProperty statusIconProperty() { return statusIcon; }
+    public StringProperty operationProperty() { return operation; }
     public DoubleProperty progressProperty() { return progress; }
     public StringProperty sizeStringProperty() { return sizeString; }
     public LongProperty sizeBytesProperty() { return sizeBytes; }
@@ -71,6 +74,7 @@ public class ConversionJob {
     public String getFileName() { return fileName.get(); }
     public String getStatus() { return status.get(); }
     public String getStatusIcon() { return statusIcon.get(); }
+    public String getOperation() { return operation.get(); }
     public double getProgress() { return progress.get(); }
     public String getSizeString() { return sizeString.get(); }
     public long getSizeBytes() { return sizeBytes.get(); }
@@ -88,6 +92,8 @@ public class ConversionJob {
         this.status.set(status);
         updateStatusIcon();
     }
+    
+    public void setOperation(String operation) { this.operation.set(operation); }
     
     public void setProgress(double progress) { this.progress.set(progress); }
     
@@ -115,19 +121,34 @@ public class ConversionJob {
                 statusIcon.set("⏳");
                 break;
             case "processing":
+            case "⚡ Processing":
                 statusIcon.set("▶️");
                 break;
             case "completed":
+            case "✅ Completed":
                 statusIcon.set("✅");
                 break;
             case "error":
+            case "❌ Error":
                 statusIcon.set("❌");
                 break;
             case "paused":
+            case "⏸️ Paused":
                 statusIcon.set("⏸️");
                 break;
             default:
-                statusIcon.set("❓");
+                // For new status types, extract emoji from status string
+                if (currentStatus.startsWith("🔍")) {
+                    statusIcon.set("🔍");
+                } else if (currentStatus.startsWith("📝")) {
+                    statusIcon.set("📝");
+                } else if (currentStatus.startsWith("⚙️")) {
+                    statusIcon.set("⚙️");
+                } else if (currentStatus.startsWith("⚡")) {
+                    statusIcon.set("⚡");
+                } else {
+                    statusIcon.set("❓");
+                }
         }
     }
 }

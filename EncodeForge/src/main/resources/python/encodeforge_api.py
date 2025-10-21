@@ -11,7 +11,6 @@ import logging.handlers
 import os
 import sys
 import threading
-from pathlib import Path
 from typing import Dict
 
 # Force unbuffered output for real-time streaming
@@ -27,10 +26,11 @@ except AttributeError:
 # Also set environment for maximum responsiveness
 os.environ['PYTHONUNBUFFERED'] = '1'
 
-# Setup logging to file (not stdout, as that's used for JSON communication)
-# Use user's home directory for logs to match settings location
-log_dir = Path.home() / ".encodeforge" / "logs"
-log_dir.mkdir(parents=True, exist_ok=True)
+ # Setup logging to file (not stdout, as that's used for JSON communication)
+# Use unified application data directory for logs
+from path_manager import get_logs_dir
+
+log_dir = get_logs_dir()
 log_file = log_dir / 'encodeforge-api.log'
 
 # Create rotating file handler
@@ -83,6 +83,11 @@ except Exception as e:
             self.nvenc_preset = "p4"
             self.nvenc_cq = 23
             self.nvenc_codec = "h264_nvenc"  # Default to H.264 NVENC
+            self.amf_qp = 23
+            self.amf_preset = "balanced"
+            self.qsv_quality = 23
+            self.qsv_preset = "medium"
+            self.videotoolbox_bitrate = "5M"
             
             # Video settings
             self.video_codec_fallback = "libx264"
@@ -1092,6 +1097,16 @@ class FFmpegAPI:
             self.settings.nvenc_preset = settings_dict["nvenc_preset"]
         if "nvenc_cq" in settings_dict:
             self.settings.nvenc_cq = settings_dict["nvenc_cq"]
+        if "amf_qp" in settings_dict:
+            self.settings.amf_qp = settings_dict["amf_qp"]
+        if "amf_preset" in settings_dict:
+            self.settings.amf_preset = settings_dict["amf_preset"]
+        if "qsv_quality" in settings_dict:
+            self.settings.qsv_quality = settings_dict["qsv_quality"]
+        if "qsv_preset" in settings_dict:
+            self.settings.qsv_preset = settings_dict["qsv_preset"]
+        if "videotoolbox_bitrate" in settings_dict:
+            self.settings.videotoolbox_bitrate = settings_dict["videotoolbox_bitrate"]
         if "hardware_decoding" in settings_dict:
             # Map hardware_decoding to use_nvenc for now
             self.settings.use_nvenc = settings_dict["hardware_decoding"]

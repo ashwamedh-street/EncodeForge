@@ -49,7 +49,7 @@
                     <VBox spacing="10">
                         <Label text="Settings Location:" styleClass="setting-label"/>
                         <HBox spacing="10" alignment="CENTER_LEFT">
-                            <Label fx:id="settingsLocationLabel" text="~/.encodeforge/settings.json" styleClass="hint-label" HBox.hgrow="ALWAYS"/>
+                            <Label fx:id="settingsLocationLabel" text="AppData/Local/EncodeForge/settings/settings.json" styleClass="hint-label" HBox.hgrow="ALWAYS"/>
                             <Button fx:id="openSettingsFolderButton" onAction="#handleOpenSettingsFolder" styleClass="small-button"/>
                         </HBox>
                     </VBox>
