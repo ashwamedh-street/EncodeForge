@@ -6,7 +6,7 @@
 
     <groupId>com.encodeforge</groupId>
     <artifactId>encodeforge</artifactId>
-    <version>1.0.0</version>
+    <version>0.3.0</version>
     <packaging>jar</packaging>
 
     <name>Encode Forge</name>
@@ -99,6 +99,14 @@
                     <include>**/*</include>
                 </includes>
                 <targetPath>python-runtime</targetPath>
+            </resource>
+            <!-- Include FFmpeg binaries -->
+            <resource>
+                <directory>target/ffmpeg-runtime</directory>
+                <includes>
+                    <include>**/*</include>
+                </includes>
+                <targetPath>ffmpeg-runtime</targetPath>
             </resource>
         </resources>
 

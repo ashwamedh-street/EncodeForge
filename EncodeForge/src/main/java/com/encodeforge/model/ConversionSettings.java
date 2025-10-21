@@ -26,6 +26,7 @@ public class ConversionSettings {
     // FFmpeg paths
     private String ffmpegPath = "ffmpeg";
     private String ffprobePath = "ffprobe";
+    private boolean useEmbeddedFFmpeg = true;  // Default to using embedded FFmpeg
     
     // General settings
     private String outputDirectory = "";
@@ -90,6 +91,9 @@ public class ConversionSettings {
     private String animePattern = "{title} - {episode} - {episodeTitle}";
     private String customPattern = "";
     
+    // Language preference for metadata providers
+    private String languagePreference = "en";
+    
     // Advanced settings
     private String customFFmpegArgs = "";
     private boolean twoPassEncoding = false;
@@ -102,6 +106,9 @@ public class ConversionSettings {
     
     public String getFfprobePath() { return ffprobePath; }
     public void setFfprobePath(String ffprobePath) { this.ffprobePath = ffprobePath; }
+    
+    public boolean isUseEmbeddedFFmpeg() { return useEmbeddedFFmpeg; }
+    public void setUseEmbeddedFFmpeg(boolean useEmbeddedFFmpeg) { this.useEmbeddedFFmpeg = useEmbeddedFFmpeg; }
     
     public String getOutputDirectory() { return outputDirectory; }
     public void setOutputDirectory(String outputDirectory) { this.outputDirectory = outputDirectory; }
@@ -250,6 +257,9 @@ public class ConversionSettings {
     public String getCustomPattern() { return customPattern; }
     public void setCustomPattern(String customPattern) { this.customPattern = customPattern; }
     
+    public String getLanguagePreference() { return languagePreference; }
+    public void setLanguagePreference(String languagePreference) { this.languagePreference = languagePreference; }
+    
     /**
      * Restore default settings
      */
@@ -310,6 +320,7 @@ public class ConversionSettings {
         moviePattern = "{title} ({year})";
         animePattern = "{title} - {episode} - {episodeTitle}";
         customPattern = "";
+        languagePreference = "en";
     }
     
     /**

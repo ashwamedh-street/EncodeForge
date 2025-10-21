@@ -20,10 +20,10 @@ class TVDBProvider(BaseMetadataProvider):
 
     API_URL = "https://api4.thetvdb.com/v4"
 
-    def __init__(self, api_key: str = ""):
-        super().__init__(api_key)
+    def __init__(self, api_key: str = "", language_preference: str = "en"):
+        super().__init__(api_key, language_preference=language_preference)
         self.token = None
-        logger.info("TVDBProvider initialized")
+        logger.info(f"TVDBProvider initialized (Language: {self.AVAILABLE_LANGUAGES.get(self.language_preference, self.language_preference)})")
 
     def login(self) -> bool:
         """Login to TVDB and get JWT token"""

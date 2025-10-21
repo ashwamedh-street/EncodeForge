@@ -2,6 +2,7 @@ package com.encodeforge.service;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.encodeforge.util.FFmpegRuntimeExtractor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,6 +77,12 @@ public class PythonBridge {
         
         // Set environment variable for Python unbuffered mode
         pb.environment().put("PYTHONUNBUFFERED", "1");
+        
+        // Pass FFmpeg runtime directory to Python if available
+        String ffmpegRuntimeDir = System.getProperty("ffmpeg.runtime.dir");
+        if (ffmpegRuntimeDir != null) {
+            pb.environment().put("FFMPEG_RUNTIME_DIR", ffmpegRuntimeDir);
+        }
         
         // Merge error stream for easier handling
         pb.redirectErrorStream(true);
@@ -232,7 +239,7 @@ public class PythonBridge {
      * - FFmpeg availability and version
      * - Whisper availability and version
      * - OpenSubtitles configuration and login status
-     * - Metadata providers (TMDB, TVDB, OMDB, Trakt, Fanart, AniList, Kitsu, Jikan, TVmaze)
+     * - Metadata providers (TMDB, TVDB, OMDB, Trakt, Fanart, AniDB, Kitsu, Jikan, TVmaze)
      * - Subtitle providers count
      */
     public JsonObject getAllStatus() throws IOException, TimeoutException {
@@ -504,6 +511,56 @@ public class PythonBridge {
     
     public boolean isRunning() {
         return isRunning && pythonProcess != null && pythonProcess.isAlive();
+    }
+    
+    /**
+     * Extract FFmpeg runtime and update settings to use embedded FFmpeg if available
+     */
+    public void setupEmbeddedFFmpeg(com.encodeforge.model.ConversionSettings settings) {
+        try {
+            // Check if embedded FFmpeg is available
+            if (!FFmpegRuntimeExtractor.isEmbeddedFFmpegAvailable()) {
+                logger.info("Embedded FFmpeg not available, using system FFmpeg");
+                settings.setUseEmbeddedFFmpeg(false);
+                return;
+            }
+            
+            // Extract FFmpeg runtime
+            String ffmpegRuntimeDir = System.getProperty("ffmpeg.runtime.dir");
+            if (ffmpegRuntimeDir == null) {
+                // Create temporary directory for FFmpeg extraction
+                Path tempDir = Files.createTempDirectory("encodeforge-ffmpeg");
+                tempDir.toFile().deleteOnExit();
+                ffmpegRuntimeDir = tempDir.toString();
+                System.setProperty("ffmpeg.runtime.dir", ffmpegRuntimeDir);
+            }
+            
+            Path ffmpegRuntimePath = Paths.get(ffmpegRuntimeDir);
+            FFmpegRuntimeExtractor.extractFFmpegRuntime(ffmpegRuntimePath);
+            
+            // Update settings to use embedded FFmpeg
+            Path ffmpegPath = FFmpegRuntimeExtractor.getFFmpegExecutablePath(ffmpegRuntimePath);
+            Path ffprobePath = FFmpegRuntimeExtractor.getFFprobeExecutablePath(ffmpegRuntimePath);
+            
+            if (Files.exists(ffmpegPath) && Files.exists(ffprobePath)) {
+                settings.setFfmpegPath(ffmpegPath.toString());
+                settings.setFfprobePath(ffprobePath.toString());
+                settings.setUseEmbeddedFFmpeg(true);
+                
+                // Set environment variable for Python to find embedded FFmpeg
+                System.setProperty("ffmpeg.runtime.dir", ffmpegRuntimeDir);
+                
+                String version = FFmpegRuntimeExtractor.getEmbeddedFFmpegVersion(ffmpegRuntimePath);
+                logger.info("Using embedded FFmpeg: {} (version: {})", ffmpegPath, version);
+            } else {
+                logger.warn("Embedded FFmpeg extraction failed, falling back to system FFmpeg");
+                settings.setUseEmbeddedFFmpeg(false);
+            }
+            
+        } catch (Exception e) {
+            logger.error("Error setting up embedded FFmpeg", e);
+            settings.setUseEmbeddedFFmpeg(false);
+        }
     }
 }
 

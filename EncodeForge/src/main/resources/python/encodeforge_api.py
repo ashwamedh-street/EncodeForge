@@ -60,10 +60,10 @@ logger.addHandler(handler)
 logger.setLevel(logging.DEBUG)
 
 try:
-    from ffmpeg_core import ConversionSettings, FFmpegCore  # type: ignore
-    logger.info("Successfully imported ffmpeg_core")
+    from encodeforge_core import ConversionSettings, EncodeForgeCore  # type: ignore
+    logger.info("Successfully imported encodeforge_core")
 except Exception as e:
-    logger.error(f"Failed to import ffmpeg_core: {e}", exc_info=True)
+    logger.error(f"Failed to import encodeforge_core: {e}", exc_info=True)
     # Create minimal fallback classes with required attributes
     class ConversionSettings:
         def __init__(self):
@@ -132,12 +132,13 @@ except Exception as e:
         def delete_profile(self, name):
             return False
     
-    class FFmpegCore:
+    class EncodeForgeCore:
         def __init__(self, settings=None):
             self.settings = settings or ConversionSettings()
             self.profile_mgr = ProfileManager()
             # Add missing attributes for fallback
             self.ffmpeg_mgr = None
+            self.conversion_handler = None
         
         def check_ffmpeg(self):
             return {"status": "error", "message": "FFmpeg core not available"}
@@ -175,7 +176,7 @@ except Exception as e:
         def advanced_search_subtitles(self, video_path, languages, anilist_url=""):
             return {"status": "error", "message": "Advanced subtitle search not available"}
         
-        def rename_files(self, file_paths, dry_run=False):
+        def rename_files(self, file_paths, dry_run=False, create_backup=False):
             return {"status": "error", "message": "File renaming not available"}
         
         def scan_directory(self, directory, recursive=True):
@@ -207,6 +208,8 @@ class FFmpegAPI:
         self.core = None
         self.settings = ConversionSettings()
         self._stdout_lock = threading.Lock()  # Protect stdout writes from multiple threads
+        self.conversion_thread = None
+        self.conversion_result = None
     
     def _send_response(self, response: Dict):
         """Send JSON response to stdout (thread-safe)"""
@@ -233,12 +236,12 @@ class FFmpegAPI:
         try:
             # Initialize core if needed
             if self.core is None:
-                self.core = FFmpegCore(self.settings)
+                self.core = EncodeForgeCore(self.settings)
             
             # Route to appropriate handler
             if action == "check_ffmpeg":
                 if self.core is None:
-                    self.core = FFmpegCore(self.settings)
+                    self.core = EncodeForgeCore(self.settings)
                 return self.core.check_ffmpeg()
             
             elif action == "download_ffmpeg":
@@ -376,11 +379,12 @@ class FFmpegAPI:
             elif action == "rename_files":
                 file_paths = request.get("file_paths", [])
                 dry_run = request.get("dry_run", False)
+                create_backup = request.get("create_backup", False)
                 
                 if not file_paths:
                     return {"status": "error", "message": "file_paths required"}
                 
-                return self.core.rename_files(file_paths, dry_run)
+                return self.core.rename_files(file_paths, dry_run, create_backup)
             
             elif action == "scan_directory":
                 directory = request.get("directory")
@@ -414,14 +418,19 @@ class FFmpegAPI:
             elif action == "convert_files":
                 return self.handle_convert_files(request)
             
+            elif action == "check_ongoing_conversion":
+                return self.check_ongoing_conversion()
+            
             elif action == "stop_conversion":
                 # Force cancel current conversion
+                logger.info("Received stop_conversion command from Java")
                 try:
+                    logger.info("Calling core.cancel_current()...")
                     result = self.core.cancel_current()
                     logger.info(f"Stop conversion result: {result}")
                     return result
                 except Exception as e:
-                    logger.error(f"Error stopping conversion: {e}")
+                    logger.error(f"Error stopping conversion: {e}", exc_info=True)
                     return {"status": "error", "message": str(e)}
             
             elif action == "pause_conversion":
@@ -446,7 +455,7 @@ class FFmpegAPI:
                 settings = self.core.profile_mgr.load_profile(profile_name)
                 if settings:
                     self.settings = settings
-                    self.core = FFmpegCore(self.settings)
+                    self.core = EncodeForgeCore(self.settings)
                     return {"status": "success", "message": f"Loaded profile: {profile_name}"}
                 else:
                     return {"status": "error", "message": "Profile not found"}
@@ -493,7 +502,7 @@ class FFmpegAPI:
             
             # Ensure core is initialized
             if self.core is None:
-                self.core = FFmpegCore(self.settings)
+                self.core = EncodeForgeCore(self.settings)
             
             def progress_callback(progress_data: Dict):
                 """Send progress updates immediately as they come"""
@@ -529,7 +538,7 @@ class FFmpegAPI:
             
             # Ensure core is initialized
             if self.core is None:
-                self.core = FFmpegCore(self.settings)
+                self.core = EncodeForgeCore(self.settings)
             
             # Track completion
             completed_count = 0
@@ -642,7 +651,7 @@ class FFmpegAPI:
         """Get system capabilities"""
         # Ensure core is initialized
         if self.core is None:
-            self.core = FFmpegCore(self.settings)
+            self.core = EncodeForgeCore(self.settings)
         
         ffmpeg_status = self.core.check_ffmpeg()
         whisper_status = self.core.check_whisper()
@@ -723,7 +732,7 @@ class FFmpegAPI:
             
             # Ensure core is initialized
             if self.core is None:
-                self.core = FFmpegCore(self.settings)
+                self.core = EncodeForgeCore(self.settings)
             
             # Check FFmpeg status
             ffmpeg_status = self.core.check_ffmpeg()
@@ -798,7 +807,7 @@ class FFmpegAPI:
         try:
             # Ensure core is initialized
             if self.core is None:
-                self.core = FFmpegCore(self.settings)
+                self.core = EncodeForgeCore(self.settings)
             
             # Get hardware information
             if hasattr(self.core, 'ffmpeg_mgr') and self.core.ffmpeg_mgr:
@@ -896,7 +905,7 @@ class FFmpegAPI:
         self.update_settings(settings_dict)
         
         # Reinitialize core with updated settings
-        self.core = FFmpegCore(self.settings)
+        self.core = EncodeForgeCore(self.settings)
         
         logger.info(f"Starting conversion of {len(file_paths)} files with settings: {settings_dict}")
         
@@ -921,23 +930,100 @@ class FFmpegAPI:
             logger.debug(f"Sending progress update with {len(progress_update)} fields")
             self._send_response(progress_update)
         
-        # Start conversion
+        # Start conversion in a separate thread to allow stop commands
+        self.conversion_thread = threading.Thread(
+            target=self._run_conversion,
+            args=(file_paths, progress_callback),
+            daemon=True
+        )
+        self.conversion_result = None
+        self.conversion_thread.start()
+        
+        # Return immediately - the conversion runs in background
+        # Progress updates will be sent via the callback
+        return {
+            "status": "started",
+            "message": f"Started conversion of {len(file_paths)} files"
+        }
+    
+    def _run_conversion(self, file_paths, progress_callback):
+        """Run conversion in separate thread"""
         try:
+            if self.core is None:
+                logger.error("Core is not initialized")
+                error_result = {
+                    "type": "conversion_complete",
+                    "status": "error",
+                    "message": "Core not initialized"
+                }
+                self._send_response(error_result)
+                return
+                
             result = self.core.convert_files(file_paths, progress_callback)
             
             # Send final result
-            return {
+            success_count = result.get("converted", 0)
+            total_count = result.get("total", 0)
+            failed_count = total_count - success_count
+            
+            final_result = {
+                "type": "conversion_complete",
                 "status": result["status"],
-                "message": f"Converted {len(result['success'])}/{result['total']} files",
-                "success_count": len(result["success"]),
-                "failed_count": len(result["failed"]),
+                "message": f"Converted {success_count}/{total_count} files",
+                "success_count": success_count,
+                "failed_count": failed_count,
                 "details": result
             }
+            
+            logger.info(f"Conversion completed: {final_result}")
+            self._send_response(final_result)
+            self.conversion_result = final_result
+            
         except Exception as e:
             logger.error(f"Conversion error: {e}", exc_info=True)
-            return {
+            error_result = {
+                "type": "conversion_complete",
                 "status": "error",
                 "message": str(e)
+            }
+            self._send_response(error_result)
+            self.conversion_result = error_result
+    
+    def check_ongoing_conversion(self) -> Dict:
+        """Check if there's an ongoing conversion from a previous session"""
+        try:
+            # Initialize core if not already done
+            if not hasattr(self, 'core') or not self.core:
+                self.core = EncodeForgeCore(self.settings)
+            
+            # Check for saved process state
+            if hasattr(self.core, 'conversion_handler') and self.core.conversion_handler:
+                saved_state = self.core.conversion_handler.get_saved_process_state()
+            else:
+                saved_state = None
+            
+            if saved_state:
+                logger.info("Found ongoing conversion from previous session")
+                return {
+                    "status": "ongoing",
+                    "message": "Ongoing conversion detected",
+                    "current_file": saved_state.get('current_file', ''),
+                    "current_index": saved_state.get('current_index', 0),
+                    "total_files": saved_state.get('total_files', 0),
+                    "file_paths": saved_state.get('file_paths', []),
+                    "pid": saved_state.get('pid')
+                }
+            else:
+                return {
+                    "status": "none",
+                    "message": "No ongoing conversion found"
+                }
+                
+        except Exception as e:
+            logger.error(f"Error checking ongoing conversion: {e}")
+            return {
+                "status": "error",
+                "message": f"Failed to check ongoing conversion: {str(e)}"
             }
     
     def update_settings(self, settings_dict: Dict):
@@ -1084,7 +1170,7 @@ class FFmpegAPI:
             pass
         
         # Recreate core with new settings
-        self.core = FFmpegCore(self.settings)
+        self.core = EncodeForgeCore(self.settings)
     
     def settings_to_dict(self) -> Dict:
         """Convert settings to dictionary"""

@@ -163,11 +163,11 @@ REM Create batch launcher
 (
 echo @echo off
 echo cd /d "%%~dp0"
-echo java -jar encodeforge-1.0.0.jar %%*
+echo java -jar encodeforge-0.3.0.jar %%*
 ) > "%LAUNCHER_DIR%\Encode Forge.bat"
 
 REM Copy JAR to launcher directory
-copy "%OUTPUT_DIR%\encodeforge-1.0.0.jar" "%LAUNCHER_DIR%\" >nul
+copy "%OUTPUT_DIR%\encodeforge-0.3.0.jar" "%LAUNCHER_DIR%\" >nul
 
 echo SUCCESS: Portable launcher created
 exit /b 0
@@ -180,8 +180,8 @@ echo ========================================
 echo.
 echo Generated files:
 
-if exist "%OUTPUT_DIR%\encodeforge-1.0.0.jar" (
-    echo   - Universal JAR: %OUTPUT_DIR%\encodeforge-1.0.0.jar
+if exist "%OUTPUT_DIR%\encodeforge-0.3.0.jar" (
+    echo   - Universal JAR: %OUTPUT_DIR%\encodeforge-0.3.0.jar
 )
 
 if exist "%DIST_DIR%\windows\" (
@@ -211,7 +211,7 @@ echo Usage:
 echo   Windows: EncodeForge.exe (installer) or "Encode Forge.bat" (portable)
 echo   Linux: EncodeForge (AppImage)
 echo   macOS: Encode Forge.app (in DMG)
-echo   Universal: java -jar encodeforge-1.0.0.jar
+echo   Universal: java -jar encodeforge-0.3.0.jar
 echo.
 
 :end

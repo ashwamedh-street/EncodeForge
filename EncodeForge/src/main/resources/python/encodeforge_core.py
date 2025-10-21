@@ -187,9 +187,9 @@ class EncodeForgeCore:
         """Preview how files would be renamed"""
         return self.renaming_handler.preview_rename(file_paths, settings_dict)
     
-    def rename_files(self, file_paths: List[str], dry_run: bool = False) -> Dict:
+    def rename_files(self, file_paths: List[str], dry_run: bool = False, create_backup: bool = False) -> Dict:
         """Rename media files using metadata"""
-        return self.renaming_handler.rename_files(file_paths, dry_run)
+        return self.renaming_handler.rename_files(file_paths, dry_run, create_backup)
     
     # =======================
     # Conversion Operations

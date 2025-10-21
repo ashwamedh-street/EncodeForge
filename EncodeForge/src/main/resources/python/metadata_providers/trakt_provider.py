@@ -20,9 +20,9 @@ class TraktProvider(BaseMetadataProvider):
 
     API_URL = "https://api.trakt.tv"
 
-    def __init__(self, api_key: str = ""):
-        super().__init__(api_key)
-        logger.info("TraktProvider initialized")
+    def __init__(self, api_key: str = "", language_preference: str = "en"):
+        super().__init__(api_key, language_preference=language_preference)
+        logger.info(f"TraktProvider initialized (Language: {self.AVAILABLE_LANGUAGES.get(self.language_preference, self.language_preference)})")
 
     def validate_api_key(self) -> Tuple[bool, str]:
         """Validate Trakt API key"""

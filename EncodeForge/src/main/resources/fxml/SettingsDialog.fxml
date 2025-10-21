@@ -82,41 +82,44 @@
                 </VBox>
                 
                 <!-- FFmpeg Settings -->
-                <VBox fx:id="ffmpegSettings" spacing="20" styleClass="settings-category" visible="false" managed="false">
-                    <Label text="FFmpeg Configuration" styleClass="category-title"/>
+                <VBox fx:id="ffmpegSettings" spacing="20" styleClass="settings-category">
+                    <Label text="FFmpeg Settings" styleClass="category-title"/>
                     
                     <VBox spacing="12">
-                        <Label text="Status:" styleClass="subsection-title"/>
-                        <Label fx:id="ffmpegVersionLabel" text="Checking..." styleClass="version-label"/>
-                    </VBox>
-                    
-                    <Separator/>
-                    
-                    <VBox spacing="10">
-                        <Label text="FFmpeg Path:" styleClass="setting-label"/>
+                        <Label text="FFmpeg Installation" styleClass="subsection-title"/>
+                        
+                        <VBox spacing="8">
+                            <CheckBox fx:id="useEmbeddedFFmpegCheck" text="Use embedded FFmpeg (recommended)" selected="true"/>
+                            <Label text="Use the FFmpeg version packaged with EncodeForge. No installation required!" styleClass="hint-label" style="-fx-text-fill: #4ec9b0;"/>
+                        </VBox>
+                        
+                        <Separator/>
+                        
+                        <VBox spacing="8">
+                            <Label text="Custom FFmpeg Path (if not using embedded):" styleClass="setting-label"/>
+                            <HBox spacing="10">
+                                <TextField fx:id="ffmpegPathField" HBox.hgrow="ALWAYS" promptText="Path to ffmpeg executable"/>
+                                <Button text="Browse..." onAction="#handleBrowseFFmpeg" styleClass="small-button"/>
+                            </HBox>
+                        </VBox>
+                        
+                        <VBox spacing="8">
+                            <Label text="Custom FFprobe Path (if not using embedded):" styleClass="setting-label"/>
+                            <HBox spacing="10">
+                                <TextField fx:id="ffprobePathField" HBox.hgrow="ALWAYS" promptText="Path to ffprobe executable"/>
+                                <Button text="Browse..." onAction="#handleBrowseFFprobe" styleClass="small-button"/>
+                            </HBox>
+                        </VBox>
+                        
                         <HBox spacing="10">
-                            <TextField fx:id="ffmpegPathField" HBox.hgrow="ALWAYS" promptText="Auto-detect"/>
-                            <Button text="Browse..." onAction="#handleBrowseFFmpeg" styleClass="small-button"/>
+                            <Button fx:id="autoDetectButton" onAction="#handleAutoDetect" text="Auto-Detect" styleClass="small-button"/>
+                            <Button fx:id="downloadFFmpegButton" onAction="#handleDownloadFFmpeg" text="Download FFmpeg" styleClass="small-button"/>
                         </HBox>
-                        <Label text="Leave empty for automatic detection" styleClass="hint-label"/>
+                        
+                        <Label fx:id="ffmpegVersionLabel" text="FFmpeg: Not detected" styleClass="hint-label"/>
                     </VBox>
-                    
-                    <VBox spacing="10">
-                        <Label text="FFprobe Path:" styleClass="setting-label"/>
-                        <HBox spacing="10">
-                            <TextField fx:id="ffprobePathField" HBox.hgrow="ALWAYS" promptText="Auto-detect"/>
-                            <Button text="Browse..." onAction="#handleBrowseFFprobe" styleClass="small-button"/>
-                        </HBox>
-                        <Label text="Usually in the same folder as FFmpeg" styleClass="hint-label"/>
-                    </VBox>
-                    
-                    <Separator/>
-                    
-                    <HBox spacing="12">
-                        <Button fx:id="autoDetectButton" onAction="#handleAutoDetect" styleClass="primary-button"/>
-                        <Button fx:id="downloadFFmpegButton" onAction="#handleDownloadFFmpeg" styleClass="secondary-button"/>
-                    </HBox>
                 </VBox>
+                
                 
                 <!-- Video Settings -->
                 <VBox fx:id="videoSettings" spacing="15" styleClass="settings-category" visible="false" managed="false">
@@ -266,7 +269,7 @@
                     
                     <VBox spacing="4" style="-fx-padding: 8; -fx-background-color: rgba(76, 201, 176, 0.1); -fx-background-radius: 4;">
                         <Label text="✅ 10 Providers Available!" style="-fx-font-weight: bold; -fx-text-fill: #4ec9b0;"/>
-                        <Label text="Free (No Key): AniList, Kitsu, Jikan/MAL, TVmaze (4 providers)" styleClass="hint-label"/>
+                        <Label text="Free (No Key): AniDB, Kitsu, Jikan/MAL, TVmaze (4 providers)" styleClass="hint-label"/>
                         <Label text="Requires Free API Key: TMDB, TVDB, OMDB, Trakt, Fanart.tv (5 providers)" styleClass="hint-label"/>
                         <Label text="All are free to use - just need to register for API keys!" styleClass="hint-label" style="-fx-text-fill: #4ec9b0;"/>
                     </VBox>
@@ -330,7 +333,7 @@
                         </VBox>
                         
                         <Label text="✅ Free Providers (Always Available - No API Key Needed):" styleClass="hint-label" style="-fx-text-fill: #4ec9b0; -fx-font-weight: bold;"/>
-                        <Label text="  • AniList - Anime metadata (movies &amp; TV)" styleClass="hint-label"/>
+                        <Label text="  • AniDB - Anime metadata (movies &amp; TV)" styleClass="hint-label"/>
                         <Label text="  • Kitsu - Anime metadata (movies &amp; TV)" styleClass="hint-label"/>
                         <Label text="  • Jikan/MyAnimeList - Anime metadata (read-only)" styleClass="hint-label"/>
                         <Label text="  • TVmaze - TV show metadata" styleClass="hint-label"/>
@@ -339,28 +342,24 @@
                     <Separator/>
                     
                     <VBox spacing="12">
+                        <Label text="Language Preferences" styleClass="subsection-title"/>
+                        <Label text="Choose your preferred language for anime titles and episode names" styleClass="hint-label"/>
+                        
+                        <VBox spacing="8">
+                            <Label text="Preferred Language:" styleClass="setting-label"/>
+                            <ComboBox fx:id="languagePreferenceCombo" maxWidth="Infinity" promptText="Select language preference"/>
+                            <Label text="This affects how anime titles and episode names are displayed from metadata providers" styleClass="hint-label"/>
+                        </VBox>
+                    </VBox>
+                    
+                    <Separator/>
+                    
+                    <VBox spacing="12">
                         <Label text="Format Patterns" styleClass="subsection-title"/>
-                        <Label text="Customize how renamed files are formatted" styleClass="hint-label"/>
+                        <Label text="Use the Pattern Editor to customize how renamed files are formatted" styleClass="hint-label"/>
                         
-                        <VBox spacing="8">
-                            <Label text="TV Show Pattern:" styleClass="setting-label"/>
-                            <TextField fx:id="tvShowPatternField" promptText="{title} - S{season}E{episode} - {episodeTitle}"/>
-                            <Label text="Example: Breaking Bad - S01E01 - Pilot" styleClass="hint-label"/>
-                        </VBox>
-                        
-                        <VBox spacing="8">
-                            <Label text="Movie Pattern:" styleClass="setting-label"/>
-                            <TextField fx:id="moviePatternField" promptText="{title} ({year})"/>
-                            <Label text="Example: Inception (2010)" styleClass="hint-label"/>
-                        </VBox>
-                        
-                        <VBox spacing="8">
-                            <Label text="Anime Pattern:" styleClass="setting-label"/>
-                            <TextField fx:id="animePatternField" promptText="{title} - {episode} - {episodeTitle}"/>
-                            <Label text="Example: Naruto - 001 - Episode Title" styleClass="hint-label"/>
-                        </VBox>
-                        
-                        <Button fx:id="openPatternEditorButton" onAction="#handleOpenPatternEditor" text="Open Pattern Editor" styleClass="secondary-button"/>
+                        <Button fx:id="openPatternEditorButton" onAction="#handleOpenPatternEditor" text="Open Pattern Editor" styleClass="primary-button" maxWidth="Infinity"/>
+                        <Label text="Configure separate patterns for TV Shows, Movies, and Anime with live preview" styleClass="hint-label"/>
                         <Label text="Available tokens: {title}, {year}, {season}, {episode}, {episodeTitle}, {S}, {E}" styleClass="hint-label"/>
                     </VBox>
                 </VBox>

@@ -14,6 +14,7 @@ BUNDLE_DIR="python-bundle"
 REQUIREMENTS_FILE="requirements.txt"
 PYTHON_SCRIPTS_DIR="src/main/resources/python"
 OUTPUT_DIR="target/python-runtime"
+FFMPEG_OUTPUT_DIR="target/ffmpeg-runtime"
 
 # Check if Python 3.12 is available first
 if command -v python3.12 &> /dev/null; then
@@ -97,10 +98,93 @@ python "$(dirname "$0")/scripts/ffmpeg_manager.py" "$@"
 EOF
 chmod +x "$OUTPUT_DIR/python_backend"
 
+# Download and package FFmpeg
+echo ""
+echo "========================================"
+echo "Downloading and packaging FFmpeg..."
+echo "========================================"
+
+rm -rf "$FFMPEG_OUTPUT_DIR"
+mkdir -p "$FFMPEG_OUTPUT_DIR"
+
+# Detect OS and download appropriate FFmpeg
+OS=$(uname -s)
+ARCH=$(uname -m)
+
+if [[ "$OS" == "Linux" ]]; then
+    if [[ "$ARCH" == "x86_64" ]]; then
+        FFMPEG_URL="https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"
+        FFMPEG_FILE="ffmpeg.tar.xz"
+    else
+        echo "WARNING: Unsupported architecture $ARCH for Linux FFmpeg download"
+        echo "You may need to install FFmpeg manually"
+        FFMPEG_URL=""
+    fi
+elif [[ "$OS" == "Darwin" ]]; then
+    FFMPEG_URL="https://evermeet.cx/ffmpeg/getrelease/ffmpeg/zip"
+    FFMPEG_FILE="ffmpeg.zip"
+else
+    echo "WARNING: Unsupported OS $OS for FFmpeg download"
+    echo "You may need to install FFmpeg manually"
+    FFMPEG_URL=""
+fi
+
+if [[ -n "$FFMPEG_URL" ]]; then
+    echo "Downloading FFmpeg for $OS ($ARCH)..."
+    echo "URL: $FFMPEG_URL"
+    
+    if command -v curl &> /dev/null; then
+        curl -L -o "$FFMPEG_OUTPUT_DIR/$FFMPEG_FILE" "$FFMPEG_URL"
+    elif command -v wget &> /dev/null; then
+        wget -O "$FFMPEG_OUTPUT_DIR/$FFMPEG_FILE" "$FFMPEG_URL"
+    else
+        echo "ERROR: Neither curl nor wget found. Cannot download FFmpeg."
+        FFMPEG_URL=""
+    fi
+    
+    if [[ -f "$FFMPEG_OUTPUT_DIR/$FFMPEG_FILE" ]]; then
+        echo "Extracting FFmpeg..."
+        cd "$FFMPEG_OUTPUT_DIR"
+        
+        if [[ "$FFMPEG_FILE" == *.tar.xz ]]; then
+            tar -xf "$FFMPEG_FILE"
+            # Find the extracted directory and move contents
+            EXTRACTED_DIR=$(find . -maxdepth 1 -name "ffmpeg-*" -type d | head -1)
+            if [[ -n "$EXTRACTED_DIR" ]]; then
+                mv "$EXTRACTED_DIR"/* .
+                rmdir "$EXTRACTED_DIR"
+            fi
+        elif [[ "$FFMPEG_FILE" == *.zip ]]; then
+            unzip -q "$FFMPEG_FILE"
+            # Find the extracted directory and move contents
+            EXTRACTED_DIR=$(find . -maxdepth 1 -name "ffmpeg-*" -type d | head -1)
+            if [[ -n "$EXTRACTED_DIR" ]]; then
+                mv "$EXTRACTED_DIR"/* .
+                rmdir "$EXTRACTED_DIR"
+            fi
+        fi
+        
+        # Clean up downloaded file
+        rm -f "$FFMPEG_FILE"
+        
+        # Make FFmpeg executables
+        chmod +x ffmpeg ffprobe 2>/dev/null || true
+        
+        cd - > /dev/null
+        
+        echo "FFmpeg packaged successfully!"
+        echo "FFmpeg files:"
+        ls -la "$FFMPEG_OUTPUT_DIR"/ffmpeg* 2>/dev/null || echo "No FFmpeg files found"
+    else
+        echo "WARNING: Failed to download FFmpeg. You may need to install it manually."
+    fi
+fi
+
 echo ""
 echo "========================================"
 echo "Python bundle created successfully!"
 echo "Location: $OUTPUT_DIR"
+echo "FFmpeg location: $FFMPEG_OUTPUT_DIR"
 echo "========================================"
 echo ""
 echo "Bundle contents:"
@@ -109,5 +193,5 @@ ls -la "$OUTPUT_DIR"
 echo ""
 echo "Next steps:"
 echo "1. Run 'mvn clean package' to build the Java application"
-echo "2. The Python bundle will be included in the JAR"
+echo "2. The Python bundle and FFmpeg will be included in the JAR"
 echo ""

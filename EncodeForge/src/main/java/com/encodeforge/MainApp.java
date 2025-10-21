@@ -22,7 +22,7 @@ import java.io.IOException;
 public class MainApp extends Application {
     private static final Logger logger = LoggerFactory.getLogger(MainApp.class);
     private static final String APP_TITLE = "Encode Forge";
-    private static final String VERSION = "0.0.2";
+    private static final String VERSION = "0.3";
     
     private PythonBridge pythonBridge;
     private MainController controller;
@@ -88,10 +88,41 @@ public class MainApp extends Application {
             primaryStage.show();
             logger.info("Application started successfully");
             
+            // Check for updates on startup (background, non-blocking)
+            checkForUpdatesOnStartup();
+            
         } catch (IOException e) {
             logger.error("Failed to load application UI", e);
             showErrorAndExit("Failed to load application interface", e);
         }
+    }
+
+    /**
+     * Check for updates on startup (background, non-blocking)
+     */
+    private void checkForUpdatesOnStartup() {
+        // Run update check in background thread to avoid blocking startup
+        new Thread(() -> {
+            try {
+                // Wait a bit for the UI to fully load
+                Thread.sleep(2000);
+                
+                com.encodeforge.util.UpdateChecker.checkForUpdates().thenAccept(updateInfo -> {
+                    if (updateInfo.isUpdateAvailable()) {
+                        // Show update notification on JavaFX thread
+                        Platform.runLater(() -> {
+                            com.encodeforge.util.UpdateChecker.showUpdateDialog(updateInfo);
+                        });
+                    }
+                }).exceptionally(throwable -> {
+                    logger.debug("Background update check failed", throwable);
+                    return null;
+                });
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                logger.debug("Update check interrupted");
+            }
+        }).start();
     }
 
     @Override

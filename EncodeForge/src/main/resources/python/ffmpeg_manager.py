@@ -34,7 +34,45 @@ class FFmpegManager:
         self._cache_timestamp = 0
         self._encoder_test_cache = {}  # Cache encoder test results {encoder_name: (is_functional, timestamp)}
         self._encoder_cache_duration = 300  # 5 minutes
+        self._embedded_ffmpeg_checked = False
+        self._embedded_ffmpeg_path = None
+        self._embedded_ffprobe_path = None
+    
+    def _check_embedded_ffmpeg(self) -> bool:
+        """Check if embedded FFmpeg is available from Java runtime"""
+        if self._embedded_ffmpeg_checked:
+            return self._embedded_ffmpeg_path is not None
         
+        self._embedded_ffmpeg_checked = True
+        
+        try:
+            # Check for FFmpeg runtime directory from Java system property
+            import os
+            ffmpeg_runtime_dir = os.getenv('FFMPEG_RUNTIME_DIR')
+            if not ffmpeg_runtime_dir:
+                # Try to get from Java system property (set by JavaBridge)
+                # This is a fallback method - ideally Java should set the environment variable
+                return False
+            
+            # Check for FFmpeg binaries in the runtime directory
+            if platform.system() == "Windows":
+                ffmpeg_exe = os.path.join(ffmpeg_runtime_dir, "ffmpeg.exe")
+                ffprobe_exe = os.path.join(ffmpeg_runtime_dir, "ffprobe.exe")
+            else:
+                ffmpeg_exe = os.path.join(ffmpeg_runtime_dir, "ffmpeg")
+                ffprobe_exe = os.path.join(ffmpeg_runtime_dir, "ffprobe")
+            
+            if os.path.exists(ffmpeg_exe) and os.path.exists(ffprobe_exe):
+                self._embedded_ffmpeg_path = ffmpeg_exe
+                self._embedded_ffprobe_path = ffprobe_exe
+                logger.info(f"Found embedded FFmpeg: {ffmpeg_exe}")
+                return True
+            
+        except Exception as e:
+            logger.debug(f"Error checking for embedded FFmpeg: {e}")
+        
+        return False
+    
     def detect_ffmpeg(self, use_cache: bool = True) -> Tuple[bool, Dict[str, Union[str, List[str]]]]:
         """
         Detect FFmpeg installation and get version information
@@ -55,7 +93,11 @@ class FFmpegManager:
                 return self._detection_cache
         paths_to_check = []
         
-        # Check custom path first
+        # Check embedded FFmpeg first (highest priority)
+        if self._check_embedded_ffmpeg():
+            paths_to_check.append(self._embedded_ffmpeg_path)
+        
+        # Check custom path second
         if self.custom_path:
             paths_to_check.append(self.custom_path)
         

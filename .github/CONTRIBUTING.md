@@ -1,4 +1,4 @@
-## Contributing to FFmpeg Batch Transcoder
+## Contributing to Encode Forge
 
 Thank you for your interest in contributing! This document provides guidelines and instructions for contributing to the project.
 
@@ -8,8 +8,9 @@ Thank you for your interest in contributing! This document provides guidelines a
 2. **Set up your development environment**:
    - Install Java 17 or later
    - Install Python 3.9 or later
-   - Install FFmpeg
+   - Install FFmpeg (optional - bundled version available)
    - Install Maven (or use the included Maven Wrapper)
+   - Install Git
 
 3. **Create a new branch** for your feature or fix:
    ```bash
@@ -20,7 +21,7 @@ Thank you for your interest in contributing! This document provides guidelines a
 
 ### Java/JavaFX Development
 ```bash
-cd FFmpegGUI
+cd EncodeForge
 ./mvnw clean install
 ./mvnw javafx:run
 ```
@@ -30,7 +31,7 @@ cd FFmpegGUI
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
-python ffmpeg_batch_transcoder.py --help
+python EncodeForge/src/main/resources/python/encodeforge_cli.py --help
 ```
 
 ## Code Style
@@ -54,6 +55,10 @@ python ffmpeg_batch_transcoder.py --help
 3. **Update documentation** if you're changing functionality
 4. **Follow the existing code structure** and patterns
 5. **Keep commits focused** - one logical change per commit
+6. **For Java changes**: Update JavaDoc comments for public methods
+7. **For Python changes**: Add docstrings for functions and classes
+8. **For UI changes**: Test on different screen resolutions and themes
+9. **For backend changes**: Test with various file formats and codecs
 
 ## Commit Messages
 
@@ -103,6 +108,13 @@ Use the feature request template. Explain:
 - Test on your platform (Windows/macOS/Linux if possible)
 - Ensure existing functionality still works
 - Add unit tests for new features when applicable
+- Test JavaFX UI changes in the desktop application
+- Test Python backend changes with CLI interface
+- Test hardware acceleration (NVENC, AMF, Quick Sync, VideoToolbox)
+- Test subtitle generation with Whisper
+- Test subtitle downloads with OpenSubtitles
+- Test file renaming with metadata providers
+- Verify log files are generated correctly in `EncodeForge/logs/`
 
 ## Questions?
 

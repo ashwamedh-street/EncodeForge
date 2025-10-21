@@ -162,7 +162,7 @@ public class PythonRuntimeExtractor {
             "base_provider.py",
             "tmdb_provider.py",
             "tvdb_provider.py",
-            "anilist_provider.py",
+            "anidb_provider.py",
             "tvmaze_provider.py",
             "kitsu_provider.py",
             "jikan_provider.py",

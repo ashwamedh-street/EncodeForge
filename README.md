@@ -3,7 +3,7 @@
 <div align="center">
   <img src="EncodeForge/src/main/resources/icons/app-icon.png" alt="Encode Forge Logo" width="128" height="128">
   
-  **Version 0.2**
+  **Version 0.3**
   
   *The all-in-one media processing application*
 </div>
@@ -12,7 +12,7 @@
 
 ## What is Encode Forge?
 
-Encode Forge is a comprehensive media processing application that combines video encoding, subtitle generation, and smart file renaming into a single, easy-to-use desktop application. Built with JavaFX and Python, it provides a modern interface for all your media processing needs.
+Encode Forge is a comprehensive media processing application that combines video encoding, subtitle generation using AI directly on your computer, and smart file renaming into a single, easy-to-use desktop application. Built with JavaFX and Python, it provides a modern interface for all your media processing needs.
 
 ## Features
 
@@ -23,17 +23,18 @@ Encode Forge is a comprehensive media processing application that combines video
 - **Stream Copying** - Preserve quality while converting containers
 
 ### 💬 Subtitle Generation
-- **AI-Powered Subtitles** - Generate subtitles using OpenAI Whisper (90+ languages)
-- **9 Subtitle Providers** - Download from multiple sources including anime-specific providers
+- **AI-Powered Subtitles** - Can't find subtitles you want? Generate subtitles using OpenAI Whisper (90+ languages)
+- **9 Subtitle Providers** - Download from multiple sources including anime-specific providers (Note: Most Web Scrapping Providers do not work. Currently only OpenSubtitles works.)
 - **Multiple Language Support** - Handle multiple audio tracks and subtitle languages
 - **Preview Mode** - Review subtitles before applying (WIP/ComingSoon)
 
 ### 📝 Smart File Renaming
 - **10 Metadata Providers** - TMDB, TVDB, OMDB, Trakt, Fanart.tv + 5 free providers (no API key needed)
-- **4 Free Providers Always Available** - AniList, Kitsu, Jikan/MAL, TVmaze (no configuration needed)
-- **Anime Support** - Specialized anime detection with AniList, Kitsu, and Jikan/MAL
+- **4 Free Providers Always Available** - AniDB, Kitsu, Jikan/MAL, TVmaze (no configuration needed) (Note: AniDB is rate limited heavily)
+- **Movie Support** - Automatically detect and rename movies using multiple database
+- **Anime Support** - Specialized anime detection with AniDB, Kitsu, and Jikan/MAL
 - **TV Show Detection** - Automatically detect and rename TV episodes using multiple databases
-- **Custom Patterns** - Define your own naming conventions with powerful variables
+- **Custom Patterns** - Define your own naming conventions with powerful variables (Example: {title} - S##E## - {episode-title})
 - **Preview Changes** - See exactly what will be renamed before applying
 
 ### 🖥️ Modern Interface
@@ -41,6 +42,10 @@ Encode Forge is a comprehensive media processing application that combines video
 - **Real-time Progress** - See exactly what's happening with detailed progress bars
 - **Queue Management** - Add, remove, and reorder processing jobs
 - **Comprehensive Logging** - Export and filter logs for troubleshooting
+
+### Prebundled In:
+- **FFMPEG** - Prebuilt into the Java app (Supports external selection if needed)
+- **Python** - Prebuilt into the Java app
 
 ## Installation
 
@@ -52,7 +57,7 @@ Download the latest release for your platform:
 
 The desktop application includes everything you need - no additional setup required.
 
-### Alternative Interfaces
+### Alternative Interfaces (Not up to date - Will be updated once Java app is 1.0)
 For developers and advanced users, Encode Forge also provides:
 
 **Command Line Interface** - For automation and scripting
@@ -83,7 +88,7 @@ python ffmpeg_cli.py renamer /path/to/videos --tmdb-api-key YOUR_KEY --preview-o
 **Metadata Providers (File Renaming)**
 
 *Free Providers - No API Key Required:*
-- ✅ **AniList** - Anime metadata (always available)
+- ✅ **AniDB** - Anime metadata (always available)
 - ✅ **Kitsu** - Anime metadata (always available)
 - ✅ **Jikan (MyAnimeList)** - Anime metadata (always available, read-only)
 - ✅ **TVmaze** - TV show metadata (always available)
