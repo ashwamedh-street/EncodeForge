@@ -345,6 +345,7 @@
                             <destination>target/dist/mac</destination>
                             <type>DMG</type>
                             <icon>src/main/resources/icons/app-icon.png</icon>
+                            <appVersion>3.1</appVersion>
                             <macPackageIdentifier>com.encodeforge.app</macPackageIdentifier>
                             <macPackageName>EncodeForge</macPackageName>
                             <macSign>false</macSign>
@@ -363,6 +364,7 @@
                             <destination>target/dist/mac</destination>
                             <type>DMG</type>
                             <icon>src/main/resources/icons/app-icon.png</icon>
+                            <appVersion>3.1</appVersion>
                             <macPackageIdentifier>com.encodeforge.app</macPackageIdentifier>
                             <macPackageName>EncodeForge</macPackageName>
                             <macSign>false</macSign>
