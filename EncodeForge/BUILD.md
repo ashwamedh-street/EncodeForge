@@ -34,7 +34,7 @@ Dependencies installed on-demand:
 
 # Manual Maven command
 mvn clean package -DskipTests
-mvn jpackage:jpackage@jpackage-windows-exe
+mvn package -P windows-exe
 ```
 
 Output: `target/dist/windows/EncodeForge-0.3.1.exe`
@@ -49,19 +49,25 @@ Output: `target/dist/windows/EncodeForge-0.3.1.exe`
 
 # Manual Maven command
 mvn clean package -DskipTests
-mvn jpackage:jpackage@jpackage-linux-deb
+mvn package -P linux-deb
 ```
 
 Output: `target/dist/linux/encodeforge_0.3.1-1_amd64.deb`
 
 ### macOS
 ```bash
-# Create DMG installer
-./build.sh mac-dmg
+# Auto-detect architecture (Intel/ARM64)
+./build.sh
+
+# Create DMG installer for Intel Macs
+./build.sh mac-dmg-x64
+
+# Create DMG installer for Apple Silicon (ARM64)
+./build.sh mac-dmg-arm64
 
 # Manual Maven command
 mvn clean package -DskipTests
-mvn jpackage:jpackage@jpackage-mac-dmg
+mvn package -P mac-dmg-x64
 ```
 
 Output: `target/dist/mac/EncodeForge-0.3.1.dmg`

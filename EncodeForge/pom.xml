@@ -273,7 +273,6 @@
                             <winMenuGroup>EncodeForge</winMenuGroup>
                             <winPerUserInstall>false</winPerUserInstall>
                             <winUpgradeUuid>15365616-42f6-49a7-a80d-8f7b5cec1a0c</winUpgradeUuid>
-                            <winUpdateMode>update</winUpdateMode>
                         </configuration>
                     </execution>
                     
@@ -335,9 +334,9 @@
                         </configuration>
                     </execution>
                     
-                    <!-- macOS DMG -->
+                    <!-- macOS DMG (Intel) -->
                     <execution>
-                        <id>jpackage-mac-dmg</id>
+                        <id>jpackage-mac-dmg-x64</id>
                         <phase>none</phase> <!-- Activated by profile -->
                         <goals>
                             <goal>jpackage</goal>
@@ -349,6 +348,25 @@
                             <macPackageIdentifier>com.encodeforge.app</macPackageIdentifier>
                             <macPackageName>EncodeForge</macPackageName>
                             <macSign>false</macSign>
+                            <macTargetArch>x64</macTargetArch>
+                        </configuration>
+                    </execution>
+                    
+                    <!-- macOS DMG (ARM64) -->
+                    <execution>
+                        <id>jpackage-mac-dmg-arm64</id>
+                        <phase>none</phase> <!-- Activated by profile -->
+                        <goals>
+                            <goal>jpackage</goal>
+                        </goals>
+                        <configuration>
+                            <destination>target/dist/mac</destination>
+                            <type>DMG</type>
+                            <icon>src/main/resources/icons/app-icon.png</icon>
+                            <macPackageIdentifier>com.encodeforge.app</macPackageIdentifier>
+                            <macPackageName>EncodeForge</macPackageName>
+                            <macSign>false</macSign>
+                            <macTargetArch>aarch64</macTargetArch>
                         </configuration>
                     </execution>
                 </executions>
@@ -365,6 +383,10 @@
                 <os>
                     <family>windows</family>
                 </os>
+                <property>
+                    <name>!maven.profile</name>
+                    <value>linux-deb,linux-rpm,mac-dmg</value>
+                </property>
             </activation>
             <build>
                 <plugins>
@@ -439,13 +461,17 @@
             </build>
         </profile>
         
-        <!-- macOS DMG Profile -->
+        <!-- macOS DMG Profile (Intel) -->
         <profile>
-            <id>mac-dmg</id>
+            <id>mac-dmg-x64</id>
             <activation>
                 <os>
                     <family>mac</family>
                 </os>
+                <property>
+                    <name>!maven.profile</name>
+                    <value>linux-deb,linux-rpm,windows-exe,windows-msi,mac-dmg-arm64</value>
+                </property>
             </activation>
             <build>
                 <plugins>
@@ -454,7 +480,54 @@
                         <artifactId>jpackage-maven-plugin</artifactId>
                         <executions>
                             <execution>
-                                <id>jpackage-mac-dmg</id>
+                                <id>jpackage-mac-dmg-x64</id>
+                                <phase>package</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        
+        <!-- macOS DMG Profile (ARM64) -->
+        <profile>
+            <id>mac-dmg-arm64</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.panteleyev</groupId>
+                        <artifactId>jpackage-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>jpackage-mac-dmg-arm64</id>
+                                <phase>package</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        
+        <!-- macOS DMG Profile (Auto-detect) -->
+        <profile>
+            <id>mac-dmg</id>
+            <activation>
+                <os>
+                    <family>mac</family>
+                </os>
+                <property>
+                    <name>!maven.profile</name>
+                    <value>linux-deb,linux-rpm,windows-exe,windows-msi,mac-dmg-x64,mac-dmg-arm64</value>
+                </property>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.panteleyev</groupId>
+                        <artifactId>jpackage-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>jpackage-mac-dmg-x64</id>
                                 <phase>package</phase>
                             </execution>
                         </executions>
