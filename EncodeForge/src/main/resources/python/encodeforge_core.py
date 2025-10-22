@@ -77,15 +77,9 @@ class EncodeForgeCore:
         )
         self.profile_mgr = ProfileManager()
         
-        logger.info("Detecting FFmpeg during initialization...")
-        success, info = self.ffmpeg_mgr.detect_ffmpeg()
-        if success:
-            self.settings.ffmpeg_path = str(info["ffmpeg_path"])
-            self.settings.ffprobe_path = str(info["ffprobe_path"])
-            logger.info(f"FFmpeg detected: {info['ffmpeg_path']}")
-            logger.info(f"Available encoders: {info.get('encoders', [])}")
-        else:
-            logger.warning(f"FFmpeg not detected during init: {info.get('error', 'Unknown error')}")
+        # Skip expensive FFmpeg detection during initialization for faster startup
+        # FFmpeg will be detected on first use (lazy detection)
+        logger.info("EncodeForgeCore initialized (FFmpeg detection deferred)")
         
         # Initialize handlers
         self.file_handler = FileHandler(self.settings, self.ffmpeg_mgr)

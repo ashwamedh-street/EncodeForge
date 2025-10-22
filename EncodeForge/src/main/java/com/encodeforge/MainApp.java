@@ -4,6 +4,7 @@ import com.encodeforge.controller.InitializationDialog;
 import com.encodeforge.controller.MainController;
 import com.encodeforge.service.DependencyManager;
 import com.encodeforge.service.PythonBridge;
+import com.encodeforge.service.PythonProcessPool;
 import com.encodeforge.util.PathManager;
 import com.encodeforge.util.ResourceExtractor;
 import javafx.application.Application;
@@ -31,9 +32,11 @@ public class MainApp extends Application {
     private static final String VERSION = "0.3.1";
     
     private DependencyManager dependencyManager;
-    private PythonBridge pythonBridge;
+    private PythonBridge pythonBridge; // Legacy - will be replaced by processPool
+    private PythonProcessPool processPool;
     private MainController controller;
     private boolean pendingDependencyInstall = false;
+    private boolean useProcessPool = true; // Feature flag for gradual rollout
 
     @Override
     public void init() throws Exception {
@@ -103,14 +106,31 @@ public class MainApp extends Application {
     }
     
     /**
-     * Initialize runtime components (Python bridge, etc.)
+     * Initialize runtime components (Python bridge or process pool)
      */
     private void initializeRuntime() throws IOException {
         try {
-            // Initialize Python bridge (will use bundled or system Python)
-            pythonBridge = new PythonBridge(dependencyManager);
-            pythonBridge.start();
-            logger.info("Python bridge initialized");
+            if (useProcessPool) {
+                // NEW: Multi-process pool for concurrent operations
+                logger.info("Initializing Python process pool (multi-worker mode)");
+                processPool = new PythonProcessPool(dependencyManager, 4); // 4 workers for good balance
+                
+                // Start asynchronously - UI won't be blocked
+                processPool.startAsync()
+                    .thenRun(() -> logger.info("Python process pool started successfully"))
+                    .exceptionally(error -> {
+                        logger.error("Failed to start process pool", error);
+                        return null;
+                    });
+                
+                logger.info("Python process pool initialization started (async)");
+            } else {
+                // LEGACY: Single Python bridge (backwards compatibility)
+                logger.info("Initializing Python bridge (legacy single-worker mode)");
+                pythonBridge = new PythonBridge(dependencyManager);
+                pythonBridge.start();
+                logger.info("Python bridge initialized");
+            }
         } catch (IOException e) {
             // Check if this is a Python not found error
             if (e.getMessage() != null && e.getMessage().contains("Python not found")) {
@@ -178,7 +198,13 @@ public class MainApp extends Application {
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/MainView.fxml"));
             
             // Create controller and inject dependencies
-            controller = new MainController(pythonBridge);
+            if (useProcessPool) {
+                // NEW: Pass process pool to controller
+                controller = new MainController(processPool);
+            } else {
+                // LEGACY: Pass Python bridge to controller
+                controller = new MainController(pythonBridge);
+            }
             loader.setController(controller);
             
             // Load scene
@@ -267,7 +293,11 @@ public class MainApp extends Application {
             controller.shutdown();
         }
         
-        if (pythonBridge != null) {
+        if (useProcessPool && processPool != null) {
+            logger.info("Shutting down Python process pool");
+            processPool.shutdown();
+        } else if (pythonBridge != null) {
+            logger.info("Shutting down Python bridge");
             pythonBridge.shutdown();
         }
         

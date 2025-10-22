@@ -4,6 +4,7 @@ import com.encodeforge.model.ConversionJob;
 import com.encodeforge.model.ConversionSettings;
 import com.encodeforge.service.DependencyManager;
 import com.encodeforge.service.PythonBridge;
+import com.encodeforge.service.PythonProcessPool;
 import com.encodeforge.util.HardwareDetector;
 import com.encodeforge.util.PathManager;
 import com.encodeforge.util.StatusManager;
@@ -49,6 +50,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Main window controller for the modernized UI
@@ -56,7 +58,8 @@ import java.util.concurrent.TimeoutException;
 public class MainController {
     private static final Logger logger = LoggerFactory.getLogger(MainController.class);
     
-    private final PythonBridge pythonBridge;
+    private final PythonBridge pythonBridge; // Legacy mode
+    private final PythonProcessPool processPool; // Multi-worker mode
     private final DependencyManager dependencyManager;
     private final StatusManager statusManager;
     // Separate queues for different states
@@ -299,8 +302,12 @@ public class MainController {
     @FXML private Tab fileInfoTab;
     @FXML private Tab logsTab;
     
+    /**
+     * Constructor for legacy single-worker mode
+     */
     public MainController(PythonBridge pythonBridge) {
         this.pythonBridge = pythonBridge;
+        this.processPool = null; // Legacy mode
         
         // Get dependency manager from MainApp (will be passed in future refactor)
         // For now, create a new one
@@ -317,7 +324,32 @@ public class MainController {
         this.settings = ConversionSettings.load();
         logger.info("Settings loaded from: {}", ConversionSettings.getSettingsFilePath());
         
-        // FFmpeg is now managed by DependencyManager, no need for embedded setup here
+        logger.info("MainController initialized with PythonBridge (legacy mode)");
+    }
+    
+    /**
+     * Constructor for new multi-worker mode
+     */
+    public MainController(PythonProcessPool processPool) {
+        this.pythonBridge = null; // Multi-worker mode
+        this.processPool = processPool;
+        
+        // Get dependency manager from MainApp (will be passed in future refactor)
+        // For now, create a new one
+        try {
+            this.dependencyManager = new DependencyManager();
+        } catch (IOException e) {
+            logger.error("Failed to initialize DependencyManager", e);
+            throw new RuntimeException("Could not initialize dependency manager", e);
+        }
+        
+        this.statusManager = StatusManager.getInstance();
+        
+        // Load settings from disk
+        this.settings = ConversionSettings.load();
+        logger.info("Settings loaded from: {}", ConversionSettings.getSettingsFilePath());
+        
+        logger.info("MainController initialized with PythonProcessPool (multi-worker mode)");
     }
     
     @FXML
@@ -2532,8 +2564,137 @@ public class MainController {
      * FFmpeg detection now uses Java-side DependencyManager instead of Python.
      */
     private void updateAllStatus() {
+        // Use parallel execution if process pool is available
+        if (processPool != null) {
+            updateAllStatusParallel();
+        } else {
+            updateAllStatusSequential();
+        }
+    }
+    
+    /**
+     * Parallel version using PythonProcessPool for fast concurrent checks
+     */
+    private void updateAllStatusParallel() {
         try {
-            logger.info("Starting consolidated status check");
+            logger.info("Starting parallel status check (multi-process mode)");
+            long startTime = System.currentTimeMillis();
+            
+            // Sync settings with Python backend (quick operation)
+            try {
+                JsonObject settingsParams = new JsonObject();
+                settingsParams.add("settings", settings.toJson());
+                processPool.submitQuickTask("update_settings", settingsParams).get(2, TimeUnit.SECONDS);
+                logger.info("Settings synchronized with Python backend");
+            } catch (Exception e) {
+                logger.error("Failed to sync settings with Python backend", e);
+            }
+            
+            // Check FFmpeg using Java DependencyManager (parallel with Python checks)
+            CompletableFuture<Boolean> ffmpegCheckFuture = CompletableFuture.supplyAsync(() -> {
+                try {
+                    boolean available = dependencyManager.checkFFmpeg().get();
+                    logger.info("FFmpeg check completed: {}", available);
+                    return available;
+                } catch (Exception e) {
+                    logger.error("Error checking FFmpeg via DependencyManager", e);
+                    return false;
+                }
+            });
+            
+            // Parallel Python backend checks
+            CompletableFuture<JsonObject> getAllStatusFuture = CompletableFuture.supplyAsync(() -> {
+                try {
+                    JsonObject result = processPool.submitQuickTask("get_all_status").get(5, TimeUnit.SECONDS);
+                    logger.info("get_all_status completed");
+                    return result;
+                } catch (Exception e) {
+                    logger.error("Error getting all status", e);
+                    JsonObject error = new JsonObject();
+                    error.addProperty("status", "error");
+                    error.addProperty("message", e.getMessage());
+                    return error;
+                }
+            });
+            
+            // Wait for all checks to complete
+            CompletableFuture<Void> allChecks = CompletableFuture.allOf(
+                ffmpegCheckFuture,
+                getAllStatusFuture
+            );
+            
+            allChecks.get(10, TimeUnit.SECONDS); // Wait for all checks
+            
+            // Get results
+            boolean ffmpegAvailable = ffmpegCheckFuture.get();
+            String ffmpegVersion = "Not Found";
+            
+            if (ffmpegAvailable) {
+                java.nio.file.Path ffmpegPath = dependencyManager.getInstalledFFmpegPath();
+                if (ffmpegPath != null) {
+                    ffmpegVersion = "Found";
+                    logger.info("FFmpeg detected via DependencyManager at: {}", ffmpegPath);
+                } else {
+                    ffmpegVersion = "System PATH";
+                    logger.info("FFmpeg detected in system PATH");
+                }
+            }
+            
+            JsonObject response = getAllStatusFuture.get();
+            
+            if (response.has("status") && !response.get("status").isJsonNull() 
+                && response.get("status").getAsString().equals("error")) {
+                String errorMsg = response.has("message") && !response.get("message").isJsonNull() 
+                    ? response.get("message").getAsString() 
+                    : "Unknown error";
+                logger.error("Error getting Python status: " + errorMsg);
+            }
+            
+            // Update FFmpeg info in response (override Python's check with Java's)
+            if (response.has("ffmpeg")) {
+                JsonObject ffmpegInfo = response.getAsJsonObject("ffmpeg");
+                ffmpegInfo.addProperty("available", ffmpegAvailable);
+                if (ffmpegAvailable && ffmpegInfo.has("version")) {
+                    ffmpegVersion = ffmpegInfo.get("version").getAsString();
+                }
+            }
+            
+            // Update StatusManager with the consolidated response
+            com.encodeforge.util.StatusManager.getInstance().updateFromResponse(response);
+            
+            // Update UI on JavaFX thread
+            final boolean finalFfmpegAvailable = ffmpegAvailable;
+            final String finalFfmpegVersion = ffmpegVersion;
+            
+            Platform.runLater(() -> {
+                updateFFmpegStatus(finalFfmpegAvailable, finalFfmpegVersion);
+                updateUIFromStatus();
+            });
+            
+            long elapsedMs = System.currentTimeMillis() - startTime;
+            logger.info("Parallel status check completed in {}ms", elapsedMs);
+            
+        } catch (TimeoutException e) {
+            logger.error("Status check timed out", e);
+            Platform.runLater(() -> {
+                log("ERROR: Status check timed out - " + e.getMessage());
+                updateFFmpegStatus(false, "Timeout");
+            });
+        } catch (Exception e) {
+            logger.error("Unexpected error in parallel status check", e);
+            Platform.runLater(() -> {
+                log("ERROR: " + e.getMessage());
+                updateFFmpegStatus(false, "Error");
+            });
+        }
+    }
+    
+    /**
+     * Sequential version using legacy PythonBridge (backward compatibility)
+     */
+    private void updateAllStatusSequential() {
+        try {
+            logger.info("Starting consolidated status check (legacy mode)");
             
             // First, sync settings with Python backend
             try {
@@ -6394,7 +6555,13 @@ public class MainController {
         try {
             logger.info("Checking for ongoing conversions from previous session...");
             
-            JsonObject response = pythonBridge.checkOngoingConversion();
+            // Use appropriate bridge based on mode
+            JsonObject response;
+            if (processPool != null) {
+                response = processPool.submitQuickTask("check_ongoing_conversion").get(3, TimeUnit.SECONDS);
+            } else {
+                response = pythonBridge.checkOngoingConversion();
+            }
             
             if (response == null || !response.has("status")) {
                 logger.warn("Invalid response from check_ongoing_conversion");

@@ -63,15 +63,37 @@ logger.propagate = False
 logger.addHandler(handler)
 logger.setLevel(logging.DEBUG)
 
-try:
-    from encodeforge_core import ConversionSettings, EncodeForgeCore  # type: ignore
-    logger.info("Successfully imported encodeforge_core")
-    CORE_AVAILABLE = True
-except Exception as e:
-    logger.error(f"Failed to import encodeforge_core: {e}", exc_info=True)
-    logger.error("This means conversions will not work properly!")
-    logger.error("Check that all required Python modules are available")
-    CORE_AVAILABLE = False
+# Lazy imports - don't import heavy modules until actually needed
+CORE_AVAILABLE = None  # None = not checked yet, True = available, False = not available
+EncodeForgeCore = None
+ConversionSettings = None
+
+def _ensure_core_imports():
+    """Lazy import of encodeforge_core - only import when first needed"""
+    global CORE_AVAILABLE, EncodeForgeCore, ConversionSettings
+    
+    if CORE_AVAILABLE is not None:
+        return CORE_AVAILABLE
+    
+    try:
+        from encodeforge_core import ConversionSettings as CS, EncodeForgeCore as EFC  # type: ignore
+        ConversionSettings = CS
+        EncodeForgeCore = EFC
+        logger.info("Successfully imported encodeforge_core (lazy)")
+        CORE_AVAILABLE = True
+        return True
+    except Exception as e:
+        logger.error(f"Failed to import encodeforge_core: {e}", exc_info=True)
+        logger.error("This means conversions will not work properly!")
+        logger.error("Check that all required Python modules are available")
+        CORE_AVAILABLE = False
+        _setup_fallback_classes()
+        return False
+
+def _setup_fallback_classes():
+    """Setup minimal fallback classes if core import fails"""
+    global ConversionSettings, EncodeForgeCore
+    
     # Create minimal fallback classes with required attributes
     class ConversionSettings:
         def __init__(self):
@@ -224,13 +246,33 @@ class FFmpegAPI:
     """
     
     def __init__(self):
-        self.core = None
+        # Don't import/initialize heavy modules yet - lazy load when needed
+        _ensure_core_imports()  # Make sure classes are defined (fallback or real)
+        self._core = None  # Private attribute for lazy initialization
         self.settings = ConversionSettings()
         self._stdout_lock = threading.Lock()  # Protect stdout writes from multiple threads
         self.conversion_thread = None
         self.conversion_result = None
         self.worker_id = WORKER_ID  # Store worker ID for logging
-        logger.info(f"FFmpegAPI initialized for {self.worker_id}")
+        # Cache for expensive operations (5 minute TTL)
+        self._cache = {}
+        self._cache_ttl = 300  # 5 minutes in seconds
+        logger.info(f"FFmpegAPI initialized for {self.worker_id} (core lazy-loaded)")
+    
+    @property
+    def core(self):
+        """Lazy property for EncodeForgeCore - only initializes when first accessed"""
+        if self._core is None:
+            _ensure_core_imports()  # Ensure imports are done
+            logger.info(f"{self.worker_id}: Initializing EncodeForgeCore (first use)")
+            self._core = EncodeForgeCore(self.settings)
+            logger.info(f"{self.worker_id}: EncodeForgeCore initialized")
+        return self._core
+    
+    @core.setter
+    def core(self, value):
+        """Allow explicit setting of core (for reset operations)"""
+        self._core = value
     
     def _send_response(self, response: Dict):
         """Send JSON response to stdout (thread-safe)"""
@@ -247,6 +289,28 @@ class FFmpegAPI:
             "message": message
         })
     
+    def _get_cached(self, cache_key: str):
+        """Get cached value if still valid"""
+        if cache_key in self._cache:
+            cached_data = self._cache[cache_key]
+            import time
+            if time.time() - cached_data['timestamp'] < self._cache_ttl:
+                logger.debug(f"Cache hit for {cache_key}")
+                return cached_data['value']
+            else:
+                logger.debug(f"Cache expired for {cache_key}")
+                del self._cache[cache_key]
+        return None
+    
+    def _set_cached(self, cache_key: str, value):
+        """Set cached value with timestamp"""
+        import time
+        self._cache[cache_key] = {
+            'value': value,
+            'timestamp': time.time()
+        }
+        logger.debug(f"Cached {cache_key}")
+    
     def handle_request(self, request: Dict) -> Dict:
         """Handle incoming request and return response"""
         action = request.get("action")
@@ -255,24 +319,39 @@ class FFmpegAPI:
             return {"status": "error", "message": "No action specified"}
         
         try:
-            # Initialize core if needed
-            if self.core is None:
-                self.core = EncodeForgeCore(self.settings)
-            
             # Route to appropriate handler
             if action == "check_ffmpeg":
-                if self.core is None:
-                    self.core = EncodeForgeCore(self.settings)
-                return self.core.check_ffmpeg()
+                # Cache expensive FFmpeg detection
+                cached = self._get_cached("check_ffmpeg")
+                if cached:
+                    return cached
+                result = self.core.check_ffmpeg()
+                self._set_cached("check_ffmpeg", result)
+                return result
             
             elif action == "download_ffmpeg":
+                # Clear cache after download
+                if "check_ffmpeg" in self._cache:
+                    del self._cache["check_ffmpeg"]
                 return self.core.download_ffmpeg()
             
             elif action == "get_capabilities":
-                return self.handle_get_capabilities()
+                # Cache capabilities check
+                cached = self._get_cached("get_capabilities")
+                if cached:
+                    return cached
+                result = self.handle_get_capabilities()
+                self._set_cached("get_capabilities", result)
+                return result
             
             elif action == "check_whisper":
-                return self.core.check_whisper()
+                # Cache Whisper status (models might change, so shorter cache)
+                cached = self._get_cached("check_whisper")
+                if cached:
+                    return cached
+                result = self.core.check_whisper()
+                self._set_cached("check_whisper", result)
+                return result
             
             elif action == "check_opensubtitles":
                 return self.handle_check_opensubtitles()
@@ -284,10 +363,22 @@ class FFmpegAPI:
                 return self.handle_check_tvdb()
             
             elif action == "get_all_status":
-                return self.handle_get_all_status()
+                # Cache consolidated status
+                cached = self._get_cached("get_all_status")
+                if cached:
+                    return cached
+                result = self.handle_get_all_status()
+                self._set_cached("get_all_status", result)
+                return result
             
             elif action == "get_available_encoders":
-                return self.handle_get_available_encoders()
+                # Cache encoder detection (expensive operation)
+                cached = self._get_cached("get_available_encoders")
+                if cached:
+                    return cached
+                result = self.handle_get_available_encoders()
+                self._set_cached("get_available_encoders", result)
+                return result
             
             elif action == "reset_core":
                 # Reset core to force reinitialization (useful after installing packages)
@@ -296,12 +387,23 @@ class FFmpegAPI:
                 return {"status": "success", "message": "Core reset successfully"}
             
             elif action == "install_whisper":
+                # Clear cache after Whisper installation
+                if "check_whisper" in self._cache:
+                    del self._cache["check_whisper"]
+                if "get_all_status" in self._cache:
+                    del self._cache["get_all_status"]
                 return self.core.install_whisper()
             
             elif action == "download_whisper_model":
                 model = request.get("model", "base")
                 try:
-                    return self.core.download_whisper_model(model)
+                    result = self.core.download_whisper_model(model)
+                    # Clear cache after model download so UI refreshes
+                    if "check_whisper" in self._cache:
+                        del self._cache["check_whisper"]
+                    if "get_all_status" in self._cache:
+                        del self._cache["get_all_status"]
+                    return result
                 except Exception as e:
                     logger.error(f"Error downloading Whisper model: {e}", exc_info=True)
                     return {"status": "error", "message": f"Failed to download model: {str(e)}"}
@@ -765,33 +867,46 @@ class FFmpegAPI:
         """
         Consolidated endpoint that checks all provider/service statuses at once.
         This eliminates the need for multiple individual status check calls.
+        Uses cached results when available to avoid expensive operations.
         """
         try:
-            logger.info("Checking all provider statuses")
+            logger.info("Checking all provider statuses (lightweight)")
             
-            # Ensure core is initialized
-            if self.core is None:
-                self.core = EncodeForgeCore(self.settings)
+            # Check FFmpeg status - use cache if available
+            cached_ffmpeg = self._get_cached("check_ffmpeg")
+            if cached_ffmpeg:
+                ffmpeg_info = {
+                    "available": cached_ffmpeg.get("ffmpeg_available", False),
+                    "version": cached_ffmpeg.get("ffmpeg_version", "Unknown")
+                }
+            else:
+                # Do lightweight check without initializing core
+                ffmpeg_info = {
+                    "available": False,
+                    "version": "Not checked yet"
+                }
             
-            # Check FFmpeg status
-            ffmpeg_status = self.core.check_ffmpeg()
-            ffmpeg_info = {
-                "available": ffmpeg_status.get("ffmpeg_available", False),
-                "version": ffmpeg_status.get("ffmpeg_version", "Unknown")
-            }
-            
-            # Check Whisper status
-            whisper_status = self.core.check_whisper()
-            # Convert lists to JSON-serializable format
-            installed_models = whisper_status.get("installed_models", [])
-            available_models = whisper_status.get("available_models", [])
-            whisper_info = {
-                "available": whisper_status.get("whisper_available", False),
-                "version": whisper_status.get("whisper_version", "Unknown"),
-                "installed_models": installed_models if isinstance(installed_models, list) else [],
-                "available_models": available_models if isinstance(available_models, list) else [],
-                "model_sizes": whisper_status.get("model_sizes", {})
-            }
+            # Check Whisper status - use cache if available
+            cached_whisper = self._get_cached("check_whisper")
+            if cached_whisper:
+                installed_models = cached_whisper.get("installed_models", [])
+                available_models = cached_whisper.get("available_models", [])
+                whisper_info = {
+                    "available": cached_whisper.get("whisper_available", False),
+                    "version": cached_whisper.get("whisper_version", "Unknown"),
+                    "installed_models": installed_models if isinstance(installed_models, list) else [],
+                    "available_models": available_models if isinstance(available_models, list) else [],
+                    "model_sizes": cached_whisper.get("model_sizes", {})
+                }
+            else:
+                # Default lightweight response
+                whisper_info = {
+                    "available": False,
+                    "version": "Not checked yet",
+                    "installed_models": [],
+                    "available_models": [],
+                    "model_sizes": {}
+                }
             
             # Check OpenSubtitles configuration
             has_opensubtitles_creds = bool(
@@ -1043,15 +1158,11 @@ class FFmpegAPI:
     def check_ongoing_conversion(self) -> Dict:
         """Check if there's an ongoing conversion from a previous session"""
         try:
-            # Initialize core if not already done
-            if not hasattr(self, 'core') or not self.core:
-                self.core = EncodeForgeCore(self.settings)
-            
-            # Check for saved process state
-            if hasattr(self.core, 'conversion_handler') and self.core.conversion_handler:
-                saved_state = self.core.conversion_handler.get_saved_process_state()
-            else:
-                saved_state = None
+            # Check for saved process state WITHOUT initializing core
+            # Core initialization is expensive (2-3 seconds), so we access the state file directly
+            from encodeforge_modules.conversion_handler import ConversionHandler
+            handler = ConversionHandler(self.settings, None)  # Pass None for ffmpeg_mgr since we're just reading state
+            saved_state = handler.get_saved_process_state()
             
             if saved_state:
                 logger.info("Found ongoing conversion from previous session")
@@ -1266,8 +1377,13 @@ class FFmpegAPI:
             # Store for potential future use
             pass
         
-        # Recreate core with new settings
-        self.core = EncodeForgeCore(self.settings)
+        # Only recreate core if it was already initialized
+        # This avoids expensive init on every settings update
+        if self._core is not None:
+            logger.info("Settings changed - recreating core with new settings")
+            self._core = EncodeForgeCore(self.settings)
+        else:
+            logger.debug("Settings updated - core will use new settings when initialized")
     
     def settings_to_dict(self) -> Dict:
         """Convert settings to dictionary"""
