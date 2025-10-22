@@ -49,9 +49,9 @@ jobs:
       
       - name: Download JavaFX SDK
         run: |
-          echo "Downloading JavaFX SDK 17.0.2 for macOS (x64)..."
+          echo "Downloading JavaFX SDK 17.0.17 for macOS (x64)..."
           mkdir -p javafx-sdk
-          curl -L -o javafx-sdk.zip "https://download2.gluonhq.com/openjfx/17.0.2/openjfx-17.0.2_macos-x64_bin.zip"
+          curl -L -o javafx-sdk.zip "https://download2.gluonhq.com/openjfx/17.0.17/openjfx-17.0.17_osx-x64_bin-sdk.zip"
           
           # Verify download succeeded
           if [ ! -f javafx-sdk.zip ] || [ ! -s javafx-sdk.zip ]; then
@@ -157,7 +157,7 @@ jobs:
           echo "## Build Summary - x64 (Intel Macs)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- ✓ JDK 17 installed" >> $GITHUB_STEP_SUMMARY
-          echo "- ✓ JavaFX SDK 17.0.2 installed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✓ JavaFX SDK 17.0.17 installed" >> $GITHUB_STEP_SUMMARY
           echo "- ✓ JAR built successfully" >> $GITHUB_STEP_SUMMARY
           echo "- ✓ DMG installer created" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -201,9 +201,9 @@ jobs:
       
       - name: Download JavaFX SDK
         run: |
-          echo "Downloading JavaFX SDK 17.0.2 for macOS (aarch64)..."
+          echo "Downloading JavaFX SDK 17.0.17 for macOS (aarch64)..."
           mkdir -p javafx-sdk
-          curl -L -o javafx-sdk.zip "https://download2.gluonhq.com/openjfx/17.0.2/openjfx-17.0.2_macos-aarch64_bin.zip"
+          curl -L -o javafx-sdk.zip "https://download2.gluonhq.com/openjfx/17.0.17/openjfx-17.0.17_osx-aarch64_bin-sdk.zip"
           
           # Verify download succeeded
           if [ ! -f javafx-sdk.zip ] || [ ! -s javafx-sdk.zip ]; then
@@ -309,7 +309,7 @@ jobs:
           echo "## Build Summary - ARM64 (Apple Silicon)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- ✓ JDK 17 installed" >> $GITHUB_STEP_SUMMARY
-          echo "- ✓ JavaFX SDK 17.0.2 installed" >> $GITHUB_STEP_SUMMARY
+          echo "- ✓ JavaFX SDK 17.0.17 installed" >> $GITHUB_STEP_SUMMARY
           echo "- ✓ JAR built successfully" >> $GITHUB_STEP_SUMMARY
           echo "- ✓ DMG installer created" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
