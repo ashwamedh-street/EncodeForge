@@ -51,7 +51,23 @@ jobs:
         run: |
           echo "Downloading JavaFX SDK 17.0.2 for macOS (x64)..."
           mkdir -p javafx-sdk
-          curl -L -o javafx-sdk.zip "https://download2.gluonhq.com/openjfx/17.0.2/openjfx-17.0.2_macos-x64_bin-sdk.zip"
+          curl -L -o javafx-sdk.zip "https://download2.gluonhq.com/openjfx/17.0.2/openjfx-17.0.2_macos-x64_bin.zip"
+          
+          # Verify download succeeded
+          if [ ! -f javafx-sdk.zip ] || [ ! -s javafx-sdk.zip ]; then
+            echo "❌ Failed to download JavaFX SDK"
+            exit 1
+          fi
+          
+          # Check if it's a valid zip file
+          if ! unzip -t javafx-sdk.zip > /dev/null 2>&1; then
+            echo "❌ Downloaded file is not a valid zip file"
+            echo "File size: $(ls -lh javafx-sdk.zip | awk '{print $5}')"
+            head -20 javafx-sdk.zip
+            exit 1
+          fi
+          
+          echo "✓ Download successful, extracting..."
           unzip -q javafx-sdk.zip -d javafx-sdk
           rm javafx-sdk.zip
           JAVAFX_HOME=$(find javafx-sdk -type d -name "javafx-sdk-*" | head -n 1)
@@ -187,7 +203,23 @@ jobs:
         run: |
           echo "Downloading JavaFX SDK 17.0.2 for macOS (aarch64)..."
           mkdir -p javafx-sdk
-          curl -L -o javafx-sdk.zip "https://download2.gluonhq.com/openjfx/17.0.2/openjfx-17.0.2_macos-aarch64_bin-sdk.zip"
+          curl -L -o javafx-sdk.zip "https://download2.gluonhq.com/openjfx/17.0.2/openjfx-17.0.2_macos-aarch64_bin.zip"
+          
+          # Verify download succeeded
+          if [ ! -f javafx-sdk.zip ] || [ ! -s javafx-sdk.zip ]; then
+            echo "❌ Failed to download JavaFX SDK"
+            exit 1
+          fi
+          
+          # Check if it's a valid zip file
+          if ! unzip -t javafx-sdk.zip > /dev/null 2>&1; then
+            echo "❌ Downloaded file is not a valid zip file"
+            echo "File size: $(ls -lh javafx-sdk.zip | awk '{print $5}')"
+            head -20 javafx-sdk.zip
+            exit 1
+          fi
+          
+          echo "✓ Download successful, extracting..."
           unzip -q javafx-sdk.zip -d javafx-sdk
           rm javafx-sdk.zip
           JAVAFX_HOME=$(find javafx-sdk -type d -name "javafx-sdk-*" | head -n 1)
