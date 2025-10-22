@@ -522,9 +522,11 @@
 .combo-box-popup .list-view .list-cell {
     -fx-background-color: transparent;
     -fx-text-fill: #ffffff;
-    -fx-padding: 6 12;
+    -fx-padding: 2 8;
     -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
     -fx-font-size: 12px;
+    -fx-min-height: 24;
+    -fx-pref-height: 24;
 }
 
 .combo-box-popup .list-view .list-cell:hover {
@@ -2178,4 +2180,155 @@ FlowPane {
 .panel-toggle-button:focused {
     -fx-border-color: #0078d4;
     -fx-border-width: 2;
+}
+
+/* ========================================
+   WHISPER SETUP DIALOG STYLES
+   ======================================== */
+.dialog-container {
+    -fx-background-color: #1e1e1e;
+}
+
+.dialog-header {
+    -fx-background-color: #252525;
+    -fx-border-color: transparent transparent #2d2d2d transparent;
+    -fx-border-width: 0 0 1 0;
+}
+
+.dialog-title {
+    -fx-text-fill: #ffffff;
+    -fx-font-family: "Segoe UI", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-size: 22px;
+    -fx-font-weight: 600;
+}
+
+.dialog-subtitle {
+    -fx-text-fill: #a0a0a0;
+    -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-size: 13px;
+}
+
+.dialog-container .label {
+    -fx-text-fill: #ffffff;
+}
+
+.dialog-container .text {
+    -fx-fill: #ffffff;
+}
+
+/* Ensure all Text nodes in dialogs have white fill */
+.dialog-container > * .text {
+    -fx-fill: #ffffff;
+}
+
+/* Alternative selector for Text elements */
+BorderPane .text {
+    -fx-fill: #ffffff;
+}
+
+.page-title {
+    -fx-text-fill: #ffffff;
+    -fx-font-family: "Segoe UI", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-size: 16px;
+    -fx-font-weight: 600;
+}
+
+.section-title {
+    -fx-text-fill: #ffffff;
+    -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-size: 13px;
+    -fx-font-weight: 600;
+}
+
+.hint-label {
+    -fx-text-fill: #a0a0a0;
+    -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-size: 11px;
+}
+
+.success-title {
+    -fx-text-fill: #16c60c;
+    -fx-font-family: "Segoe UI", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-size: 20px;
+    -fx-font-weight: 600;
+}
+
+.info-box {
+    -fx-background-color: #252525;
+    -fx-border-color: #3a3a3a;
+    -fx-border-width: 1;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+}
+
+.info-box .label {
+    -fx-text-fill: #ffffff;
+}
+
+.warning-box {
+    -fx-background-color: #2d1f1f;
+    -fx-border-color: #5a3a3a;
+    -fx-border-width: 1;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+}
+
+.warning-box .label {
+    -fx-text-fill: #ffcccc;
+}
+
+.log-area {
+    -fx-background-color: #121212;
+    -fx-text-fill: #ffffff;
+    -fx-border-color: #2d2d2d;
+    -fx-border-width: 1;
+}
+
+.button-bar {
+    -fx-background-color: #252525;
+    -fx-border-color: #2d2d2d transparent transparent transparent;
+    -fx-border-width: 1 0 0 0;
+}
+
+.button-bar .button {
+    -fx-background-color: #2d2d2d;
+    -fx-text-fill: #ffffff;
+    -fx-border-color: #3a3a3a;
+    -fx-border-width: 1;
+    -fx-border-radius: 4;
+    -fx-background-radius: 4;
+    -fx-padding: 6 12;
+    -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-size: 12px;
+    -fx-min-height: 28;
+    -fx-pref-height: 28;
+}
+
+.button-bar .button:hover {
+    -fx-background-color: #3a3a3a;
+    -fx-border-color: #0078d4;
+}
+
+.button-bar .button:pressed {
+    -fx-background-color: #252525;
+}
+
+.button-bar .button:disabled {
+    -fx-opacity: 0.5;
+}
+
+.button-bar .button.default-button {
+    -fx-background-color: #0078d4;
+    -fx-text-fill: #ffffff;
+    -fx-border-color: #106ebe;
+    -fx-font-weight: 500;
+}
+
+.button-bar .button.default-button:hover {
+    -fx-background-color: #106ebe;
+    -fx-border-color: #005a9e;
+}
+
+.button-bar .button.default-button:pressed {
+    -fx-background-color: #005a9e;
 }

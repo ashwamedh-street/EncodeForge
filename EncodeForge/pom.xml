@@ -331,6 +331,10 @@
                             <linuxPackageName>encodeforge</linuxPackageName>
                             <linuxAppCategory>AudioVideo</linuxAppCategory>
                             <linuxPackageDeps>ffmpeg</linuxPackageDeps>
+                            <jlinkOptions>
+                                <option>--add-modules</option>
+                                <option>java.base,java.desktop,java.logging,java.xml,java.prefs,java.scripting,java.sql,java.rmi,java.naming,java.datatransfer</option>
+                            </jlinkOptions>
                         </configuration>
                     </execution>
                     

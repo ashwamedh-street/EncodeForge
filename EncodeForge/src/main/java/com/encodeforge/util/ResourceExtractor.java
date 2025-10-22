@@ -4,11 +4,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.*;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collections;
 import java.util.stream.Stream;
 
@@ -64,6 +62,9 @@ public class ResourceExtractor {
                 sourcePath = Paths.get(uri);
             }
             
+            // Track extraction stats
+            final int[] stats = new int[2]; // [copied, skipped]
+            
             // Walk through all files in the resource directory
             try (Stream<Path> walk = Files.walk(sourcePath)) {
                 walk.forEach(source -> {
@@ -75,10 +76,29 @@ public class ResourceExtractor {
                         if (Files.isDirectory(source)) {
                             Files.createDirectories(target);
                         } else {
-                            // Copy file
-                            Files.createDirectories(target.getParent());
-                            Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
-                            logger.debug("Extracted: {}", relative);
+                            // Check if file already exists with same size
+                            boolean shouldCopy = true;
+                            if (Files.exists(target)) {
+                                try {
+                                    long sourceSize = Files.size(source);
+                                    long targetSize = Files.size(target);
+                                    if (sourceSize == targetSize) {
+                                        shouldCopy = false;
+                                    }
+                                } catch (IOException e) {
+                                    // If we can't compare sizes, copy anyway
+                                }
+                            }
+                            
+                            if (shouldCopy) {
+                                Files.createDirectories(target.getParent());
+                                Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+                                logger.debug("Extracted: {}", relative);
+                                stats[0]++;
+                            } else {
+                                logger.debug("Skipped (already exists): {}", relative);
+                                stats[1]++;
+                            }
                         }
                     } catch (IOException e) {
                         logger.warn("Failed to extract: {}", source, e);
@@ -91,7 +111,8 @@ public class ResourceExtractor {
                 fs.close();
             }
             
-            logger.info("Successfully extracted {} to {}", resourcePath, targetDir);
+            logger.info("Successfully processed {} to {} (copied: {}, skipped: {})", 
+                resourcePath, targetDir, stats[0], stats[1]);
             
         } catch (URISyntaxException e) {
             throw new IOException("Invalid resource path: " + resourcePath, e);

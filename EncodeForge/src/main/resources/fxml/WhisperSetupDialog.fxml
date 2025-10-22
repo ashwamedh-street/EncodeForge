@@ -7,7 +7,6 @@
 <?import javafx.scene.text.Text?>
 
 <BorderPane xmlns="http://javafx.com/javafx" xmlns:fx="http://javafx.com/fxml"
-            fx:controller="com.encodeforge.controller.WhisperSetupDialog"
             prefWidth="700" prefHeight="500" styleClass="dialog-container">
     
     <!-- Top: Header -->
@@ -44,7 +43,7 @@
                     </font>
                 </Label>
                 
-                <Text wrappingWidth="640" text="Whisper AI is a state-of-the-art speech recognition system that can automatically generate subtitles for your videos in multiple languages."/>
+                <Text wrappingWidth="640" fill="#ffffff" text="Whisper AI is a state-of-the-art speech recognition system that can automatically generate subtitles for your videos in multiple languages."/>
                 
                 <VBox spacing="8" styleClass="info-box">
                     <padding>
@@ -70,8 +69,10 @@
                             <Font name="System Bold" size="13"/>
                         </font>
                     </Label>
-                    <Label text="• Disk space: 500 MB - 3 GB (depending on model)"/>
-                    <Label text="• RAM: 4-8 GB recommended"/>
+                    <Label text="• Disk space: 75 MB - 2.9 GB (depending on model)"/>
+                    <Label text="• RAM: 1 GB (Tiny/Base) to 10 GB (Large model)"/>
+                    <Label text="• CPU-only processing: Moderate speed"/>
+                    <Label text="• GPU-accelerated: Much faster (if CUDA available)"/>
                     <Label text="• First-time setup: 5-15 minutes"/>
                 </VBox>
             </VBox>
@@ -84,17 +85,17 @@
                     </font>
                 </Label>
                 
-                <Text wrappingWidth="640" text="Select the model size that best fits your needs. Larger models are more accurate but require more disk space and processing time."/>
+                <Text wrappingWidth="640" fill="#ffffff" text="Select the model size that best fits your needs. Larger models are more accurate but require more disk space, RAM, and processing time."/>
                 
                 <VBox spacing="10" fx:id="modelContainer">
-                    <RadioButton fx:id="tinyModel" text="Tiny (75 MB) - Fastest, lowest accuracy" toggleGroup="$modelGroup"/>
-                    <RadioButton fx:id="baseModel" text="Base (142 MB) - Fast, decent accuracy" toggleGroup="$modelGroup"/>
-                    <RadioButton fx:id="smallModel" text="Small (466 MB) - Good balance" toggleGroup="$modelGroup" selected="true"/>
-                    <RadioButton fx:id="mediumModel" text="Medium (1.5 GB) - High accuracy, slower" toggleGroup="$modelGroup"/>
-                    <RadioButton fx:id="largeModel" text="Large (2.9 GB) - Best accuracy, slowest" toggleGroup="$modelGroup"/>
+                    <RadioButton fx:id="tinyModel" text="Tiny (75 MB) - 1 GB RAM, Fastest (real-time), Lowest accuracy"/>
+                    <RadioButton fx:id="baseModel" text="Base (142 MB) - 1 GB RAM, Fast (~2x real-time), Decent accuracy"/>
+                    <RadioButton fx:id="smallModel" text="Small (466 MB) - 2 GB RAM, Moderate speed, Good balance" selected="true"/>
+                    <RadioButton fx:id="mediumModel" text="Medium (1.5 GB) - 5 GB RAM, Slower, High accuracy"/>
+                    <RadioButton fx:id="largeModel" text="Large (2.9 GB) - 10 GB RAM, Slowest, Best accuracy"/>
                 </VBox>
                 
-                <Label text="Recommended: Small or Medium for most users" styleClass="hint-label">
+                <Label text="Note: Processing speed varies by CPU/GPU. RAM is approximate for CPU-only processing." styleClass="hint-label">
                     <font>
                         <Font size="11" name="System Italic"/>
                     </font>
@@ -123,7 +124,7 @@
                     <ScrollPane fitToWidth="true" fitToHeight="true" prefHeight="200">
                         <TextArea fx:id="installLogArea" editable="false" wrapText="true" styleClass="log-area">
                             <font>
-                                <Font family="Monospaced" size="10"/>
+                                <Font name="Monospaced" size="10"/>
                             </font>
                         </TextArea>
                     </ScrollPane>
@@ -138,7 +139,7 @@
                     </font>
                 </Label>
                 
-                <Text wrappingWidth="640" textAlignment="CENTER" 
+                <Text wrappingWidth="640" fill="#ffffff" textAlignment="CENTER" 
                       text="Whisper AI has been successfully installed! You can now generate subtitles automatically for your videos."/>
                 
                 <VBox spacing="8" styleClass="info-box">

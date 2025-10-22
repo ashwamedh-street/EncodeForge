@@ -106,10 +106,19 @@ public class MainApp extends Application {
      * Initialize runtime components (Python bridge, etc.)
      */
     private void initializeRuntime() throws IOException {
-        // Initialize Python bridge (will use bundled or system Python)
-        pythonBridge = new PythonBridge(dependencyManager);
-        pythonBridge.start();
-        logger.info("Python bridge initialized");
+        try {
+            // Initialize Python bridge (will use bundled or system Python)
+            pythonBridge = new PythonBridge(dependencyManager);
+            pythonBridge.start();
+            logger.info("Python bridge initialized");
+        } catch (IOException e) {
+            // Check if this is a Python not found error
+            if (e.getMessage() != null && e.getMessage().contains("Python not found")) {
+                logger.error("Python not found", e);
+                throw new RuntimeException("Python not found. Please install Python 3.8 or higher.", e);
+            }
+            throw e;
+        }
     }
     
     /**
@@ -207,6 +216,15 @@ public class MainApp extends Application {
             // Check for updates on startup (background, non-blocking)
             checkForUpdatesOnStartup();
             
+        } catch (RuntimeException e) {
+            // Check if this is a Python not found error
+            if (e.getMessage() != null && e.getMessage().contains("Python not found")) {
+                logger.error("Python not found", e);
+                showPythonNotFoundDialog();
+            } else {
+                logger.error("Failed to start application", e);
+                showErrorAndExit("Failed to start application", e);
+            }
         } catch (IOException e) {
             logger.error("Failed to load application UI", e);
             showErrorAndExit("Failed to load application interface", e);
@@ -268,6 +286,70 @@ public class MainApp extends Application {
         alert.setHeaderText(message);
         alert.setContentText(e.getMessage());
         alert.showAndWait();
+        Platform.exit();
+    }
+    
+    /**
+     * Show dialog when Python is not found
+     */
+    private void showPythonNotFoundDialog() {
+        javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
+            javafx.scene.control.Alert.AlertType.ERROR
+        );
+        alert.setTitle("Python Not Found");
+        alert.setHeaderText("Python Interpreter Required");
+        
+        // Create styled content
+        javafx.scene.layout.VBox contentBox = new javafx.scene.layout.VBox(10);
+        
+        javafx.scene.text.Text warningText = new javafx.scene.text.Text(
+            "EncodeForge requires Python 3.8 or higher to run.\n\n" +
+            "Please install Python and try again."
+        );
+        warningText.setStyle("-fx-fill: #ffffff; -fx-font-size: 12px;");
+        warningText.setWrappingWidth(450);
+        
+        // Add platform-specific download links
+        String os = System.getProperty("os.name").toLowerCase();
+        String downloadText = "";
+        if (os.contains("win")) {
+            downloadText = "Download Python:\nhttps://www.python.org/downloads/\n\n" +
+                          "Recommended: Python 3.12 (latest stable)";
+        } else if (os.contains("mac")) {
+            downloadText = "Install Python:\nbrew install python@3.12\n\n" +
+                          "Or download from: https://www.python.org/downloads/";
+        } else {
+            downloadText = "Install Python:\nsudo apt-get install python3.12\n\n" +
+                          "Or: https://www.python.org/downloads/";
+        }
+        
+        javafx.scene.text.Text downloadInfo = new javafx.scene.text.Text(downloadText);
+        downloadInfo.setStyle("-fx-fill: #a0a0a0; -fx-font-size: 11px;");
+        downloadInfo.setWrappingWidth(450);
+        
+        contentBox.getChildren().addAll(warningText, downloadInfo);
+        alert.getDialogPane().setContent(contentBox);
+        
+        // Style the dialog
+        javafx.scene.control.DialogPane dialogPane = alert.getDialogPane();
+        dialogPane.getStylesheets().add(getClass().getResource("/styles/application.css").toExternalForm());
+        dialogPane.getStyleClass().add("dialog-pane");
+        
+        javafx.scene.control.ButtonType openWebsiteButton = new javafx.scene.control.ButtonType("Open Download Page");
+        javafx.scene.control.ButtonType closeButton = new javafx.scene.control.ButtonType("Close", 
+            javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
+        alert.getButtonTypes().setAll(openWebsiteButton, closeButton);
+        
+        alert.showAndWait().ifPresent(response -> {
+            if (response == openWebsiteButton) {
+                try {
+                    java.awt.Desktop.getDesktop().browse(new java.net.URI("https://www.python.org/downloads/"));
+                } catch (Exception ex) {
+                    logger.error("Failed to open browser", ex);
+                }
+            }
+        });
+        
         Platform.exit();
     }
 

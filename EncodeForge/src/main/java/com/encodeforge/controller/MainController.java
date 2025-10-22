@@ -340,13 +340,23 @@ public class MainController {
         // Set default mode to encoder
         handleEncoderMode();
         
-        // Run consolidated status check for faster startup
-        CompletableFuture.runAsync(this::updateAllStatus);
+        // Defer status check to let Python backend fully initialize
+        // This improves startup performance by showing UI first
+        CompletableFuture.runAsync(() -> {
+            try {
+                // Wait a moment for Python backend to be ready
+                Thread.sleep(500);
+                updateAllStatus();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                logger.debug("Status check interrupted");
+            }
+        });
         
         // Check for ongoing conversions from previous session
         CompletableFuture.runAsync(this::checkForOngoingConversions);
         
-        logger.info("Main Controller initialized (async status check running)");
+        logger.info("Main Controller initialized (async status check deferred)");
     }
     
     private void setupSubtitleFileSelector() {
@@ -1696,6 +1706,7 @@ public class MainController {
             controller.setSettings(settings);
             controller.setPythonBridge(pythonBridge);
             controller.setDependencyManager(dependencyManager);  // Pass DependencyManager for FFmpeg detection
+            controller.setStatusManager(statusManager);  // Pass StatusManager for status display
             
             // Navigate to specific category if provided
             if (category != null) {
@@ -2521,86 +2532,84 @@ public class MainController {
      * FFmpeg detection now uses Java-side DependencyManager instead of Python.
      */
     private void updateAllStatus() {
-        new Thread(() -> {
+        try {
+            logger.info("Starting consolidated status check");
+            
+            // First, sync settings with Python backend
             try {
-                logger.info("Starting consolidated status check");
-                
-                // First, sync settings with Python backend
-                try {
-                    JsonObject updateSettings = new JsonObject();
-                    updateSettings.addProperty("action", "update_settings");
-                    updateSettings.add("settings", settings.toJson());
-                    pythonBridge.sendCommand(updateSettings);
-                    logger.info("Settings synchronized with Python backend");
-                } catch (Exception e) {
-                    logger.error("Failed to sync settings with Python backend", e);
-                }
-                
-                // Check FFmpeg using Java DependencyManager (not Python)
-                boolean ffmpegAvailable = false;
-                String ffmpegVersion = "Not Found";
-                try {
-                    ffmpegAvailable = dependencyManager.checkFFmpeg().get();
-                    if (ffmpegAvailable) {
-                        java.nio.file.Path ffmpegPath = dependencyManager.getInstalledFFmpegPath();
-                        if (ffmpegPath != null) {
-                            ffmpegVersion = "Found";
-                            logger.info("FFmpeg detected via DependencyManager at: {}", ffmpegPath);
-                        } else {
-                            // FFmpeg found in system PATH
-                            ffmpegVersion = "System PATH";
-                            logger.info("FFmpeg detected in system PATH");
-                        }
-                    }
-                } catch (Exception e) {
-                    logger.error("Error checking FFmpeg via DependencyManager", e);
-                }
-                
-                // Get Python backend status (Whisper, providers, etc)
-                JsonObject response = pythonBridge.getAllStatus();
-                
-                if (response.has("status") && response.get("status").getAsString().equals("error")) {
-                    logger.error("Error getting Python status: " + response.get("message").getAsString());
-                }
-                
-                // Update FFmpeg info in response (override Python's check with Java's)
-                if (response.has("ffmpeg")) {
-                    JsonObject ffmpegInfo = response.getAsJsonObject("ffmpeg");
-                    ffmpegInfo.addProperty("available", ffmpegAvailable);
-                    if (ffmpegAvailable && ffmpegInfo.has("version")) {
-                        ffmpegVersion = ffmpegInfo.get("version").getAsString();
-                    }
-                }
-                
-                // Update StatusManager with the consolidated response
-                com.encodeforge.util.StatusManager.getInstance().updateFromResponse(response);
-                
-                // Update FFmpeg status separately (using Java check)
-                final boolean finalFfmpegAvailable = ffmpegAvailable;
-                final String finalFfmpegVersion = ffmpegVersion;
-                
-                // Update UI on JavaFX thread
-                Platform.runLater(() -> {
-                    updateFFmpegStatus(finalFfmpegAvailable, finalFfmpegVersion);
-                    updateUIFromStatus();
-                });
-                
-                logger.info("Consolidated status check completed successfully");
-                
-            } catch (IOException | TimeoutException e) {
-                logger.error("Error checking status", e);
-                Platform.runLater(() -> {
-                    log("ERROR checking status: " + e.getMessage());
-                    updateFFmpegStatus(false, "Error");
-                });
+                JsonObject updateSettings = new JsonObject();
+                updateSettings.addProperty("action", "update_settings");
+                updateSettings.add("settings", settings.toJson());
+                pythonBridge.sendCommand(updateSettings);
+                logger.info("Settings synchronized with Python backend");
             } catch (Exception e) {
-                logger.error("Unexpected error checking status", e);
-                Platform.runLater(() -> {
-                    log("ERROR: " + e.getMessage());
-                    updateFFmpegStatus(false, "Error");
-                });
+                logger.error("Failed to sync settings with Python backend", e);
             }
-        }).start();
+            
+            // Check FFmpeg using Java DependencyManager (not Python)
+            boolean ffmpegAvailable = false;
+            String ffmpegVersion = "Not Found";
+            try {
+                ffmpegAvailable = dependencyManager.checkFFmpeg().get();
+                if (ffmpegAvailable) {
+                    java.nio.file.Path ffmpegPath = dependencyManager.getInstalledFFmpegPath();
+                    if (ffmpegPath != null) {
+                        ffmpegVersion = "Found";
+                        logger.info("FFmpeg detected via DependencyManager at: {}", ffmpegPath);
+                    } else {
+                        // FFmpeg found in system PATH
+                        ffmpegVersion = "System PATH";
+                        logger.info("FFmpeg detected in system PATH");
+                    }
+                }
+            } catch (Exception e) {
+                logger.error("Error checking FFmpeg via DependencyManager", e);
+            }
+            
+            // Get Python backend status (Whisper, providers, etc)
+            JsonObject response = pythonBridge.getAllStatus();
+            
+            if (response.has("status") && response.get("status").getAsString().equals("error")) {
+                logger.error("Error getting Python status: " + response.get("message").getAsString());
+            }
+            
+            // Update FFmpeg info in response (override Python's check with Java's)
+            if (response.has("ffmpeg")) {
+                JsonObject ffmpegInfo = response.getAsJsonObject("ffmpeg");
+                ffmpegInfo.addProperty("available", ffmpegAvailable);
+                if (ffmpegAvailable && ffmpegInfo.has("version")) {
+                    ffmpegVersion = ffmpegInfo.get("version").getAsString();
+                }
+            }
+            
+            // Update StatusManager with the consolidated response
+            com.encodeforge.util.StatusManager.getInstance().updateFromResponse(response);
+            
+            // Update FFmpeg status separately (using Java check)
+            final boolean finalFfmpegAvailable = ffmpegAvailable;
+            final String finalFfmpegVersion = ffmpegVersion;
+            
+            // Update UI on JavaFX thread
+            Platform.runLater(() -> {
+                updateFFmpegStatus(finalFfmpegAvailable, finalFfmpegVersion);
+                updateUIFromStatus();
+            });
+            
+            logger.info("Consolidated status check completed successfully");
+            
+        } catch (IOException | TimeoutException e) {
+            logger.error("Error checking status", e);
+            Platform.runLater(() -> {
+                log("ERROR checking status: " + e.getMessage());
+                updateFFmpegStatus(false, "Error");
+            });
+        } catch (Exception e) {
+            logger.error("Unexpected error checking status", e);
+            Platform.runLater(() -> {
+                log("ERROR: " + e.getMessage());
+                updateFFmpegStatus(false, "Error");
+            });
+        }
     }
     
     /**
@@ -3785,6 +3794,15 @@ public class MainController {
                 
                 // Refresh status after installation
                 if (setupDialog.isInstallationComplete()) {
+                    // Reset Python core to detect newly installed Whisper
+                    try {
+                        pythonBridge.resetCore();
+                        logger.info("Python core reset after Whisper installation");
+                    } catch (Exception e) {
+                        logger.warn("Failed to reset Python core", e);
+                    }
+                    
+                    // Refresh status to update UI
                     CompletableFuture.runAsync(this::updateAllStatus);
                     showInfo("Whisper Installed", "AI subtitle generation is now available!");
                 }

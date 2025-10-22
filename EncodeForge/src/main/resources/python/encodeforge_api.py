@@ -30,8 +30,12 @@ os.environ['PYTHONUNBUFFERED'] = '1'
 # Use unified application data directory for logs
 from path_manager import get_logs_dir
 
+# Get worker ID from environment (set by Java PythonWorker)
+WORKER_ID = os.environ.get('WORKER_ID', 'worker-0')
+
 log_dir = get_logs_dir()
-log_file = log_dir / 'encodeforge-api.log'
+# Each worker gets its own log file for easier debugging
+log_file = log_dir / f'encodeforge-api-{WORKER_ID}.log'
 
 # Create rotating file handler
 handler = logging.handlers.RotatingFileHandler(
@@ -42,8 +46,8 @@ handler = logging.handlers.RotatingFileHandler(
 )
 handler.setLevel(logging.DEBUG)
 
-# Create formatter and add it to handler
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+# Create formatter with worker ID for easier tracking
+formatter = logging.Formatter(f'%(asctime)s - [{WORKER_ID}] - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 
 # Configure root logger - IMPORTANT: force=True removes default handlers that output to stdout
@@ -225,6 +229,8 @@ class FFmpegAPI:
         self._stdout_lock = threading.Lock()  # Protect stdout writes from multiple threads
         self.conversion_thread = None
         self.conversion_result = None
+        self.worker_id = WORKER_ID  # Store worker ID for logging
+        logger.info(f"FFmpegAPI initialized for {self.worker_id}")
     
     def _send_response(self, response: Dict):
         """Send JSON response to stdout (thread-safe)"""
@@ -283,12 +289,22 @@ class FFmpegAPI:
             elif action == "get_available_encoders":
                 return self.handle_get_available_encoders()
             
+            elif action == "reset_core":
+                # Reset core to force reinitialization (useful after installing packages)
+                logger.info("Resetting EncodeForgeCore to detect newly installed packages")
+                self.core = None
+                return {"status": "success", "message": "Core reset successfully"}
+            
             elif action == "install_whisper":
                 return self.core.install_whisper()
             
             elif action == "download_whisper_model":
                 model = request.get("model", "base")
-                return self.core.download_whisper_model(model)
+                try:
+                    return self.core.download_whisper_model(model)
+                except Exception as e:
+                    logger.error(f"Error downloading Whisper model: {e}", exc_info=True)
+                    return {"status": "error", "message": f"Failed to download model: {str(e)}"}
             
             elif action == "get_media_info":
                 file_path = request.get("file_path")
@@ -496,6 +512,14 @@ class FFmpegAPI:
                     return {"status": "success", "message": f"Deleted profile: {profile_name}"}
                 else:
                     return {"status": "error", "message": "Cannot delete built-in profile or profile not found"}
+            
+            elif action == "heartbeat":
+                # Heartbeat check for health monitoring
+                return {
+                    "status": "success",
+                    "worker_id": self.worker_id,
+                    "timestamp": __import__('time').time()
+                }
             
             elif action == "shutdown":
                 return self.handle_shutdown()
@@ -758,9 +782,15 @@ class FFmpegAPI:
             
             # Check Whisper status
             whisper_status = self.core.check_whisper()
+            # Convert lists to JSON-serializable format
+            installed_models = whisper_status.get("installed_models", [])
+            available_models = whisper_status.get("available_models", [])
             whisper_info = {
                 "available": whisper_status.get("whisper_available", False),
-                "version": whisper_status.get("whisper_version", "Unknown")
+                "version": whisper_status.get("whisper_version", "Unknown"),
+                "installed_models": installed_models if isinstance(installed_models, list) else [],
+                "available_models": available_models if isinstance(available_models, list) else [],
+                "model_sizes": whisper_status.get("model_sizes", {})
             }
             
             # Check OpenSubtitles configuration

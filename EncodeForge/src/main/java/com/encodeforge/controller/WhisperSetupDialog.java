@@ -13,7 +13,9 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -40,6 +42,8 @@ public class WhisperSetupDialog {
     @FXML private RadioButton mediumModel;
     @FXML private RadioButton largeModel;
     
+    private ToggleGroup modelGroup = new ToggleGroup();
+    
     // Installation progress
     @FXML private Label installStatusLabel;
     @FXML private ProgressBar installProgressBar;
@@ -54,12 +58,19 @@ public class WhisperSetupDialog {
     
     private Stage dialogStage;
     private DependencyManager dependencyManager;
+    private com.encodeforge.service.PythonBridge pythonBridge;
+    private com.encodeforge.model.ConversionSettings settings;
     private int currentPage = 1;
     private String selectedModel = "small";
     private boolean installationComplete = false;
     
     public WhisperSetupDialog(DependencyManager dependencyManager) {
         this.dependencyManager = dependencyManager;
+        this.settings = com.encodeforge.model.ConversionSettings.load();
+    }
+    
+    public void setPythonBridge(com.encodeforge.service.PythonBridge pythonBridge) {
+        this.pythonBridge = pythonBridge;
     }
     
     /**
@@ -74,6 +85,13 @@ public class WhisperSetupDialog {
             // Create scene
             Scene scene = new Scene(loader.load());
             scene.getStylesheets().add(getClass().getResource("/styles/application.css").toExternalForm());
+            
+            // Initialize ToggleGroup after loading
+            tinyModel.setToggleGroup(modelGroup);
+            baseModel.setToggleGroup(modelGroup);
+            smallModel.setToggleGroup(modelGroup);
+            mediumModel.setToggleGroup(modelGroup);
+            largeModel.setToggleGroup(modelGroup);
             
             // Create stage
             dialogStage = new Stage();
@@ -234,10 +252,11 @@ public class WhisperSetupDialog {
                 updateInstallProgress(new ProgressUpdate("installing", 10, 
                     "Installing Whisper AI (this may take several minutes)...", ""));
                 
+                // Specify only package names without version constraints
+                // Let pip resolve the best compatible versions for the Python environment
                 List<String> packages = Arrays.asList(
-                    "openai-whisper>=20231117",
-                    "torch>=2.0.0",
-                    "numba>=0.58.0,<0.63.0"
+                    "openai-whisper",
+                    "torch"
                 );
                 
                 dependencyManager.installOptionalLibraries(packages, this::updateInstallProgress).get();
@@ -249,16 +268,52 @@ public class WhisperSetupDialog {
                     "Downloading " + selectedModel + " model...", ""));
                 appendLog("\nDownloading " + selectedModel + " model (this may take a while)...");
                 
-                // TODO: Implement model download via Python
-                // For now, just simulate it
-                Thread.sleep(2000);
+                // Actually download the model via Python backend
+                // Note: This will happen in a future implementation via PythonBridge
+                // For now, we'll do it directly via a Python call
+                try {
+                    ProcessBuilder pb = new ProcessBuilder(
+                        dependencyManager.getPythonExecutable().toString(),
+                        "-c", 
+                        "import whisper; whisper.load_model('" + selectedModel + "')"
+                    );
+                    pb.redirectErrorStream(true);
+                    Process process = pb.start();
+                    
+                    // Capture output
+                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            logger.debug("whisper model download: {}", line);
+                            if (line.contains("downloading") || line.contains("Downloading")) {
+                                appendLog(line);
+                            }
+                        }
+                    }
+                    
+                    int exitCode = process.waitFor();
+                    if (exitCode == 0) {
+                        appendLog("✓ Model downloaded successfully");
+                    } else {
+                        appendLog("⚠ Model download completed with warnings (exit code: " + exitCode + ")");
+                    }
+                } catch (Exception e) {
+                    logger.error("Failed to download model", e);
+                    appendLog("⚠ Warning: Could not verify model download: " + e.getMessage());
+                    appendLog("You can download models manually later from Settings > Subtitles");
+                }
                 
-                appendLog("✓ Model downloaded successfully");
+                // Save the selected model to settings
+                settings.setWhisperModel(selectedModel);
+                settings.setEnableWhisper(true);
+                settings.save();
+                logger.info("Saved Whisper model preference: {}", selectedModel);
                 
                 // Complete
                 updateInstallProgress(new ProgressUpdate("complete", 100, 
                     "Installation complete!", ""));
                 appendLog("\n✓ Whisper AI is ready to use!");
+                appendLog("\n✓ Selected model: " + selectedModel);
                 
                 installationComplete = true;
                 

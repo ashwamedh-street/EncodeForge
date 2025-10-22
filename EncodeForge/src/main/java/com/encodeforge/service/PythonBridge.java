@@ -281,6 +281,22 @@ public class PythonBridge {
     }
     
     /**
+     * Reset the Python backend's core instance to force reinitialization.
+     * This is useful after installing new Python packages (like Whisper) that need to be detected.
+     */
+    public void resetCore() throws IOException, TimeoutException {
+        JsonObject command = new JsonObject();
+        command.addProperty("action", "reset_core");
+        JsonObject response = sendCommand(command);
+        
+        if (!response.has("status") || !response.get("status").getAsString().equals("success")) {
+            logger.warn("Failed to reset core: {}", response);
+        } else {
+            logger.info("Python core reset successfully");
+        }
+    }
+    
+    /**
      * @deprecated Use getAllStatus() instead for better performance
      * Check OpenSubtitles status
      */

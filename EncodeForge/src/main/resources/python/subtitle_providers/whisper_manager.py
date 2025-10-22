@@ -137,15 +137,43 @@ class WhisperManager:
                     "message": f"Downloading Whisper {model_name} model ({self.MODEL_SIZES[model_name]})..."
                 })
             
+            import os
+
             import whisper
             
             logger.info(f"Downloading Whisper model: {model_name}")
             
-            # This will download the model if not already present
-            whisper.load_model(model_name)
+            # Set the download directory to our models folder
+            from path_manager import get_models_dir
+            model_dir = get_models_dir() / "whisper"
+            model_dir.mkdir(parents=True, exist_ok=True)
             
+            # Whisper saves models to ~/.cache/whisper by default
+            # We need to point it to our app directory
+            whisper_cache_dir = model_dir
+            os.environ["XDG_CACHE_HOME"] = str(whisper_cache_dir.parent)
+            logger.info(f"Set XDG_CACHE_HOME to: {whisper_cache_dir.parent}")
+            logger.info(f"Whisper models will be saved to: {whisper_cache_dir}")
+            
+            # This will download the model if not already present
+            # Note: whisper.load_model() downloads the model automatically if it doesn't exist
+            # The download can take several minutes for large models
+            logger.info(f"Calling whisper.load_model('{model_name}')...")
+            model = whisper.load_model(model_name, download_root=str(model_dir))
+            logger.info(f"Model {model_name} loaded successfully")
+            
+            # Update installed models list
             if model_name not in self.installed_models:
                 self.installed_models.append(model_name)
+                logger.info(f"Added {model_name} to installed models list")
+            
+            # Check where the model was saved
+            from path_manager import get_models_dir
+            model_dir = get_models_dir() / "whisper"
+            logger.info(f"Whisper models directory: {model_dir}")
+            if model_dir.exists():
+                model_files = list(model_dir.glob("*.pt"))
+                logger.info(f"Found {len(model_files)} model files in directory")
             
             if progress_callback:
                 progress_callback({

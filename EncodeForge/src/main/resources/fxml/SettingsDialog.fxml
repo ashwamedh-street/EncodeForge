@@ -198,12 +198,24 @@
                         <Label text="AI Subtitle Generation (Whisper)" styleClass="subsection-title"/>
                         <Label text="Generate subtitles using OpenAI Whisper AI when none are available" styleClass="hint-label"/>
                         
+                        <VBox spacing="8" style="-fx-padding: 8; -fx-background-color: rgba(76, 201, 176, 0.1); -fx-background-radius: 4;">
+                            <Label fx:id="whisperStatusLabel" text="Checking Whisper status..." style="-fx-font-weight: bold; -fx-text-fill: #4ec9b0;"/>
+                            <Label fx:id="whisperInstalledModelsLabel" text="" styleClass="hint-label"/>
+                        </VBox>
+                        
+                        <HBox spacing="10">
+                            <Button fx:id="setupWhisperButton" onAction="#handleSetupWhisper" text="Setup Whisper AI" styleClass="small-button"/>
+                            <Button fx:id="uninstallWhisperButton" onAction="#handleUninstallWhisper" text="Uninstall Whisper" styleClass="small-button" disable="true"/>
+                        </HBox>
+                        
                         <VBox spacing="10">
                             <VBox spacing="8">
                                 <Label text="Whisper Model:" styleClass="setting-label"/>
                                 <ComboBox fx:id="whisperModelCombo" maxWidth="Infinity"/>
                                 <Label text="Larger models are more accurate but slower. 'base' is recommended for most users." styleClass="hint-label"/>
                             </VBox>
+                            
+                            <Button fx:id="downloadModelButton" onAction="#handleDownloadWhisperModel" text="Download Another Model" styleClass="small-button" disable="true"/>
                         </VBox>
                     </VBox>
                     

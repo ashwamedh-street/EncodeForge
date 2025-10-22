@@ -5,7 +5,9 @@ import com.encodeforge.service.DependencyManager;
 import com.encodeforge.service.PythonBridge;
 import com.encodeforge.util.PathManager;
 import com.encodeforge.util.StatusManager;
+import java.util.ArrayList;
 import java.util.List;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
@@ -101,6 +103,13 @@ public class SettingsController {
     @FXML private ComboBox<String> subtitleFormatCombo;
     @FXML private ComboBox<String> whisperModelCombo;
     
+    // Whisper Management
+    @FXML private Label whisperStatusLabel;
+    @FXML private Label whisperInstalledModelsLabel;
+    @FXML private Button setupWhisperButton;
+    @FXML private Button uninstallWhisperButton;
+    @FXML private Button downloadModelButton;
+    
     // Subtitle Settings (continued) - OpenSubtitles Consumer API is hardcoded, users provide login
     @FXML private TextField opensubtitlesUsernameField;
     @FXML private PasswordField opensubtitlesPasswordField;
@@ -187,6 +196,9 @@ public class SettingsController {
         
         // Initialize ComboBoxes
         initializeComboBoxes();
+        
+        // Initialize Whisper status (will be updated when dialog is shown)
+        updateWhisperStatus();
     }
     
     private void initializeComboBoxes() {
@@ -1058,6 +1070,7 @@ public class SettingsController {
             
             // Refresh status after installation
             if (setupDialog.isInstallationComplete()) {
+                updateWhisperStatus();
                 Alert info = new Alert(Alert.AlertType.INFORMATION);
                 info.setTitle("Whisper Installed");
                 info.setHeaderText("AI subtitle generation is now available!");
@@ -1071,6 +1084,245 @@ public class SettingsController {
             alert.setHeaderText("Failed to open Whisper setup");
             alert.setContentText(e.getMessage());
             alert.showAndWait();
+        }
+    }
+    
+    /**
+     * Handle Uninstall Whisper button
+     */
+    @FXML
+    private void handleUninstallWhisper() {
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("Uninstall Whisper");
+        confirm.setHeaderText("Uninstall Whisper AI?");
+        confirm.setContentText("This will remove Whisper AI and all downloaded models. You can reinstall later if needed.");
+        
+        Optional<ButtonType> result = confirm.showAndWait();
+        if (result.isPresent() && result.get() == ButtonType.OK) {
+            try {
+                logger.info("Starting Whisper uninstall");
+                
+                if (dependencyManager == null) {
+                    throw new RuntimeException("DependencyManager not initialized");
+                }
+                
+                // Update UI to show progress
+                if (whisperStatusLabel != null) {
+                    whisperStatusLabel.setText("⏳ Uninstalling Whisper AI...");
+                }
+                
+                // Run uninstall in background
+                new Thread(() -> {
+                    try {
+                        dependencyManager.uninstallWhisper(progress -> {
+                            Platform.runLater(() -> {
+                                if (whisperStatusLabel != null) {
+                                    whisperStatusLabel.setText(progress.getMessage());
+                                }
+                            });
+                        }).get();
+                        
+                        Platform.runLater(() -> {
+                            Alert info = new Alert(Alert.AlertType.INFORMATION);
+                            info.setTitle("Whisper Uninstalled");
+                            info.setHeaderText("Whisper AI has been removed");
+                            info.setContentText("You can reinstall it from Settings > Subtitles > Setup Whisper AI");
+                            info.showAndWait();
+                            
+                            updateWhisperStatus();
+                        });
+                    } catch (Exception e) {
+                        logger.error("Failed to uninstall Whisper", e);
+                        Platform.runLater(() -> {
+                            Alert alert = new Alert(Alert.AlertType.ERROR);
+                            alert.setTitle("Error");
+                            alert.setHeaderText("Failed to uninstall Whisper");
+                            alert.setContentText(e.getMessage());
+                            alert.showAndWait();
+                            
+                            updateWhisperStatus();
+                        });
+                    }
+                }).start();
+                
+            } catch (Exception e) {
+                logger.error("Failed to start Whisper uninstall", e);
+                Alert alert = new Alert(Alert.AlertType.ERROR);
+                alert.setTitle("Error");
+                alert.setHeaderText("Failed to uninstall Whisper");
+                alert.setContentText(e.getMessage());
+                alert.showAndWait();
+            }
+        }
+    }
+    
+    /**
+     * Handle Download Whisper Model button
+     */
+    @FXML
+    private void handleDownloadWhisperModel() {
+        if (whisperModelCombo.getValue() == null) {
+            Alert alert = new Alert(Alert.AlertType.WARNING);
+            alert.setTitle("No Model Selected");
+            alert.setHeaderText("Please select a model to download");
+            alert.setContentText("Choose a model from the dropdown and try again.");
+            alert.showAndWait();
+            return;
+        }
+        
+        String selectedModel = whisperModelCombo.getValue();
+        
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("Download Whisper Model");
+        confirm.setHeaderText("Download " + selectedModel + " model?");
+        confirm.setContentText("This may take several minutes depending on your internet connection and the model size.");
+        
+        Optional<ButtonType> result = confirm.showAndWait();
+        if (result.isPresent() && result.get() == ButtonType.OK) {
+            try {
+                logger.info("Downloading Whisper model: {}", selectedModel);
+                
+                // Update UI to show progress
+                if (whisperStatusLabel != null) {
+                    whisperStatusLabel.setText("⏳ Downloading " + selectedModel + " model...");
+                }
+                
+                // Run download in background
+                new Thread(() -> {
+                    try {
+                        if (pythonBridge == null) {
+                            throw new RuntimeException("PythonBridge not initialized");
+                        }
+                        
+                        // Call Python backend to download model
+                        JsonObject command = new JsonObject();
+                        command.addProperty("action", "download_whisper_model");
+                        command.addProperty("model", selectedModel);
+                        
+                        JsonObject response = pythonBridge.sendCommand(command);
+                        
+                        Platform.runLater(() -> {
+                            if (response == null) {
+                                Alert alert = new Alert(Alert.AlertType.ERROR);
+                                alert.setTitle("Download Failed");
+                                alert.setHeaderText("No response from Python backend");
+                                alert.setContentText("The Python backend did not respond. Check logs for more details.");
+                                alert.showAndWait();
+                                updateWhisperStatus();
+                                return;
+                            }
+                            
+                            String status = response.has("status") ? response.get("status").getAsString() : "error";
+                            String message = response.has("message") ? response.get("message").getAsString() : "Unknown error";
+                            
+                            if ("success".equals(status)) {
+                                Alert info = new Alert(Alert.AlertType.INFORMATION);
+                                info.setTitle("Model Downloaded");
+                                info.setHeaderText(selectedModel + " model downloaded successfully");
+                                info.setContentText(message);
+                                info.showAndWait();
+                                
+                                updateWhisperStatus();
+                            } else {
+                                Alert alert = new Alert(Alert.AlertType.ERROR);
+                                alert.setTitle("Download Failed");
+                                alert.setHeaderText("Failed to download " + selectedModel + " model");
+                                alert.setContentText(message);
+                                alert.showAndWait();
+                                
+                                updateWhisperStatus();
+                            }
+                        });
+                    } catch (Exception e) {
+                        logger.error("Failed to download Whisper model", e);
+                        Platform.runLater(() -> {
+                            Alert alert = new Alert(Alert.AlertType.ERROR);
+                            alert.setTitle("Error");
+                            alert.setHeaderText("Failed to download model");
+                            alert.setContentText(e.getMessage());
+                            alert.showAndWait();
+                            
+                            updateWhisperStatus();
+                        });
+                    }
+                }).start();
+                
+            } catch (Exception e) {
+                logger.error("Failed to start Whisper model download", e);
+                Alert alert = new Alert(Alert.AlertType.ERROR);
+                alert.setTitle("Error");
+                alert.setHeaderText("Failed to download model");
+                alert.setContentText(e.getMessage());
+                alert.showAndWait();
+            }
+        }
+    }
+    
+    /**
+     * Update Whisper status display
+     */
+    private void updateWhisperStatus() {
+        if (statusManager == null) {
+            whisperStatusLabel.setText("Whisper status unavailable");
+            return;
+        }
+        
+        boolean whisperAvailable = statusManager.isWhisperAvailable();
+        
+        if (whisperAvailable) {
+            whisperStatusLabel.setText("✅ Whisper AI is installed and ready");
+            whisperStatusLabel.setStyle("-fx-text-fill: #4ec9b0;");
+            
+            if (uninstallWhisperButton != null) {
+                uninstallWhisperButton.setDisable(false);
+            }
+            if (downloadModelButton != null) {
+                downloadModelButton.setDisable(false);
+            }
+            
+            // Get installed models from Python backend
+            try {
+                if (pythonBridge != null) {
+                    JsonObject response = pythonBridge.getAllStatus();
+                    if (response.has("whisper")) {
+                        JsonObject whisperInfo = response.getAsJsonObject("whisper");
+                        if (whisperInfo.has("installed_models")) {
+                            JsonArray models = whisperInfo.getAsJsonArray("installed_models");
+                            List<String> modelList = new ArrayList<>();
+                            for (int i = 0; i < models.size(); i++) {
+                                modelList.add(models.get(i).getAsString());
+                            }
+                            
+                            if (modelList.isEmpty()) {
+                                whisperInstalledModelsLabel.setText("No models installed. Click 'Download Another Model' to install one.");
+                            } else {
+                                whisperInstalledModelsLabel.setText("Installed models: " + String.join(", ", modelList));
+                            }
+                        } else {
+                            whisperInstalledModelsLabel.setText("Model status: Unknown");
+                        }
+                    } else {
+                        whisperInstalledModelsLabel.setText("Model status: Check failed");
+                    }
+                } else {
+                    whisperInstalledModelsLabel.setText("Models: Python bridge unavailable");
+                }
+            } catch (Exception e) {
+                logger.warn("Could not fetch Whisper models", e);
+                whisperInstalledModelsLabel.setText("Models: Unable to check");
+            }
+        } else {
+            whisperStatusLabel.setText("❌ Whisper AI is not installed");
+            whisperStatusLabel.setStyle("-fx-text-fill: #d13438;");
+            
+            if (uninstallWhisperButton != null) {
+                uninstallWhisperButton.setDisable(true);
+            }
+            if (downloadModelButton != null) {
+                downloadModelButton.setDisable(true);
+            }
+            
+            whisperInstalledModelsLabel.setText("Click 'Setup Whisper AI' to install");
         }
     }
     
@@ -1256,6 +1508,12 @@ public class SettingsController {
         } catch (Exception e) {
             logger.error("Failed to initialize settings dialog icons", e);
         }
+    }
+    
+    public void setStatusManager(StatusManager statusManager) {
+        this.statusManager = statusManager;
+        // Update Whisper status after setting StatusManager
+        updateWhisperStatus();
     }
 }
 

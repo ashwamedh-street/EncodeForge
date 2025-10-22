@@ -3,7 +3,6 @@ package com.encodeforge.service;
 import com.encodeforge.model.ProgressUpdate;
 import com.encodeforge.util.DownloadManager;
 import com.encodeforge.util.PathManager;
-import com.encodeforge.util.PythonRuntimeExtractor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -286,6 +285,127 @@ public class DependencyManager {
     }
     
     /**
+     * Uninstall Whisper AI and related packages
+     */
+    public CompletableFuture<Void> uninstallWhisper(Consumer<ProgressUpdate> callback) {
+        return CompletableFuture.runAsync(() -> {
+            try {
+                Path pythonExe = getPythonExecutable();
+                
+                callback.accept(new ProgressUpdate("uninstalling", 0, 
+                    "Uninstalling Whisper AI...", ""));
+                
+                // List of Whisper-related packages to uninstall
+                List<String> whisperPackages = Arrays.asList(
+                    "openai-whisper",
+                    "whisper"
+                );
+                
+                int total = whisperPackages.size();
+                int current = 0;
+                
+                for (String packageName : whisperPackages) {
+                    current++;
+                    int progress = (current * 100) / total;
+                    
+                    callback.accept(new ProgressUpdate("uninstalling", progress,
+                        String.format("Uninstalling %s (%d/%d)...", packageName, current, total),
+                        ""));
+                    
+                    uninstallPythonPackage(pythonExe, packageName);
+                    logger.info("Uninstalled: {}", packageName);
+                }
+                
+                // Delete Whisper models directory
+                try {
+                    Path modelsDir = PathManager.getModelsDir().resolve("whisper");
+                    if (Files.exists(modelsDir)) {
+                        logger.info("Deleting Whisper models directory: {}", modelsDir);
+                        deleteDirectory(modelsDir);
+                        callback.accept(new ProgressUpdate("uninstalling", 90, 
+                            "Deleted Whisper models", ""));
+                    }
+                } catch (Exception e) {
+                    logger.warn("Could not delete Whisper models directory", e);
+                }
+                
+                callback.accept(new ProgressUpdate("complete", 100, 
+                    "Whisper AI uninstalled successfully", ""));
+                
+            } catch (Exception e) {
+                logger.error("Failed to uninstall Whisper", e);
+                callback.accept(new ProgressUpdate("error", 0, 
+                    "Failed to uninstall Whisper: " + e.getMessage(), ""));
+                throw new RuntimeException("Whisper uninstallation failed", e);
+            }
+        });
+    }
+    
+    /**
+     * Uninstall a single Python package
+     */
+    private void uninstallPythonPackage(Path pythonExe, String packageName) throws IOException, InterruptedException {
+        logger.info("Uninstalling Python package: {}", packageName);
+        
+        // Check if we're running in a venv
+        boolean isVenv = isVenvEnvironment(pythonExe);
+        
+        List<String> command;
+        if (isVenv) {
+            // Development mode: uninstall from venv
+            command = Arrays.asList(
+                pythonExe.toString(),
+                "-m", "pip", "uninstall",
+                "-y",  // Yes to all prompts
+                packageName
+            );
+        } else {
+            // Production mode: uninstall from custom directory
+            // Note: --target installs don't support uninstall, so we delete manually
+            logger.info("Skipping pip uninstall (using --target install), will delete manually");
+            return;
+        }
+        
+        ProcessBuilder pb = new ProcessBuilder(command);
+        pb.redirectErrorStream(true);
+        
+        Process process = pb.start();
+        
+        // Discard output
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                logger.debug("pip uninstall: {}", line);
+            }
+        }
+        
+        int exitCode = process.waitFor();
+        if (exitCode != 0) {
+            logger.warn("pip uninstall returned non-zero exit code: {}", exitCode);
+        }
+    }
+    
+    /**
+     * Delete a directory and all its contents
+     */
+    private void deleteDirectory(Path directory) throws IOException {
+        if (!Files.exists(directory)) {
+            return;
+        }
+        
+        try (java.util.stream.Stream<Path> walk = Files.walk(directory)) {
+            walk.sorted(java.util.Comparator.reverseOrder())
+                .forEach(path -> {
+                    try {
+                        Files.delete(path);
+                    } catch (IOException e) {
+                        logger.warn("Could not delete: {}", path, e);
+                    }
+                });
+        }
+    }
+    
+    /**
      * Read requirements file and return list of package specifications
      */
     private List<String> readRequirementsFile(String filename) throws IOException {
@@ -303,14 +423,42 @@ public class DependencyManager {
                     line = line.trim();
                     // Skip empty lines and comments
                     if (!line.isEmpty() && !line.startsWith("#")) {
-                        packages.add(line);
+                        // Strip version constraints to let pip resolve compatible versions
+                        String packageName = stripVersionConstraints(line);
+                        packages.add(packageName);
                     }
                 }
             }
         }
         
-        logger.info("Read {} packages from {}", packages.size(), filename);
+        logger.info("Read {} packages from {} (version constraints stripped)", packages.size(), filename);
         return packages;
+    }
+    
+    /**
+     * Strip version constraints from package specification
+     * Converts "package>=1.0.0,<2.0.0" to "package"
+     * This lets pip resolve the best compatible version for the current Python environment
+     */
+    private String stripVersionConstraints(String packageSpec) {
+        // Remove everything after first comparison operator
+        String[] operators = {">=", "<=", ">", "<", "==", "!=", "~="};
+        String stripped = packageSpec;
+        
+        for (String op : operators) {
+            int index = stripped.indexOf(op);
+            if (index != -1) {
+                stripped = stripped.substring(0, index).trim();
+            }
+        }
+        
+        // Handle commas (for multiple constraints like ">=1.0,<2.0")
+        int commaIndex = stripped.indexOf(',');
+        if (commaIndex != -1) {
+            stripped = stripped.substring(0, commaIndex).trim();
+        }
+        
+        return stripped;
     }
     
     /**
@@ -358,31 +506,89 @@ public class DependencyManager {
     private void installPythonPackage(Path pythonExe, String packageSpec) throws IOException, InterruptedException {
         logger.info("Installing Python package: {}", packageSpec);
         
-        // Install to our custom directory
-        List<String> command = Arrays.asList(
-            pythonExe.toString(),
-            "-m", "pip", "install",
-            "--target", pythonLibsDir.toString(),
-            "--upgrade",
-            packageSpec
-        );
+        // Check if we're running in a venv (development mode)
+        boolean isVenv = isVenvEnvironment(pythonExe);
+        
+        List<String> command;
+        if (isVenv) {
+            // Development mode: install directly to venv (no --target)
+            logger.info("Detected venv environment, installing to venv site-packages");
+            command = Arrays.asList(
+                pythonExe.toString(),
+                "-m", "pip", "install",
+                "--upgrade",
+                packageSpec
+            );
+        } else {
+            // Production mode: install to our custom directory
+            logger.info("Production mode, installing to custom directory: {}", pythonLibsDir);
+            command = Arrays.asList(
+                pythonExe.toString(),
+                "-m", "pip", "install",
+                "--target", pythonLibsDir.toString(),
+                "--upgrade",
+                packageSpec
+            );
+        }
         
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.redirectErrorStream(true);
         
+        // Log the full command for debugging
+        logger.debug("Running pip command: {}", String.join(" ", command));
+        
         Process process = pb.start();
         
-        // Log output
+        // Capture output for error analysis
+        StringBuilder output = new StringBuilder();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 logger.debug("pip: {}", line);
+                output.append(line).append("\n");
             }
         }
         
         int exitCode = process.waitFor();
         if (exitCode != 0) {
-            throw new IOException("pip install failed with exit code: " + exitCode);
+            String errorOutput = output.toString();
+            
+            // Check for Python version incompatibility
+            if (errorOutput.contains("only versions") && errorOutput.contains("are supported")) {
+                String pythonVersion = getPythonVersion(pythonExe);
+                throw new IOException(String.format(
+                    "Python version incompatibility detected!\n\n" +
+                    "Python version: %s\n" +
+                    "Package %s requires Python versions that don't include %s.\n\n" +
+                    "Please install Python 3.8-3.13 or wait for updated packages.\n\n" +
+                    "Error details:\n%s",
+                    pythonVersion, packageSpec, pythonVersion, errorOutput
+                ));
+            }
+            
+            throw new IOException("pip install failed with exit code: " + exitCode + "\n" + errorOutput);
+        }
+    }
+    
+    /**
+     * Get Python version string
+     */
+    private String getPythonVersion(Path pythonExe) {
+        try {
+            ProcessBuilder pb = new ProcessBuilder(
+                pythonExe.toString(),
+                "--version"
+            );
+            Process process = pb.start();
+            
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String version = reader.readLine();
+                process.waitFor();
+                return version != null ? version : "Unknown";
+            }
+        } catch (Exception e) {
+            logger.debug("Could not get Python version", e);
+            return "Unknown";
         }
     }
     
@@ -423,32 +629,89 @@ public class DependencyManager {
      * Get Python executable path (bundled or system)
      */
     public Path getPythonExecutable() throws IOException {
-        // First try bundled Python from resources
-        try {
-            Path bundledPython = PythonRuntimeExtractor.getPythonExecutablePath(
-                PathManager.getBaseDir().resolve("python")
-            );
-            if (bundledPython != null && Files.exists(bundledPython)) {
-                logger.info("Using bundled Python: {}", bundledPython);
-                return bundledPython;
-            }
-        } catch (Exception e) {
-            logger.debug("Bundled Python not available", e);
-        }
-        
-        // Fall back to system Python
         String os = System.getProperty("os.name").toLowerCase();
         
-        // On Windows, try python first (python3 doesn't exist)
-        // On Unix, try python3 first (python might be Python 2)
+        // Try bundled Python first (extracted by jpackage to app directory)
+        // Check multiple possible locations where bundled Python might be
+        List<Path> bundledPaths = new ArrayList<>();
+        
+        // Path where jpackage extracts bundled resources
+        Path appDir = PathManager.getBaseDir();
+        bundledPaths.add(appDir.resolve("python").resolve("python_backend.exe"));
+        bundledPaths.add(appDir.resolve("python").resolve("python_backend"));
+        bundledPaths.add(appDir.resolve("python-runtime").resolve("python_backend.exe"));
+        bundledPaths.add(appDir.resolve("python-runtime").resolve("python_backend"));
+        
+        // Check if running from jpackage bundle
+        if (os.contains("win")) {
+            // On Windows, jpackage may bundle resources differently
+            bundledPaths.add(appDir.resolve("app").resolve("python").resolve("python_backend.exe"));
+        }
+        
+        for (Path bundledPath : bundledPaths) {
+            if (Files.exists(bundledPath)) {
+                String version = getPythonVersion(bundledPath);
+                logger.info("Using bundled Python: {} (version: {})", bundledPath, version);
+                return bundledPath;
+            }
+        }
+        
+        logger.debug("Bundled Python not found, trying system Python");
+        
+        // Try to find Python in multiple ways
         List<String> pythonCommands = os.contains("win") 
-            ? Arrays.asList("python", "python3")
+            ? Arrays.asList("python", "python3", "py")
             : Arrays.asList("python3", "python");
         
+        // First try: standard commands
         for (String cmd : pythonCommands) {
             if (isCommandAvailable(cmd)) {
-                logger.info("Using system Python: {}", cmd);
-                return Paths.get(cmd);
+                Path pythonPath = Paths.get(cmd);
+                String version = getPythonVersion(pythonPath);
+                
+                // Check if version is compatible (3.8 to 3.13)
+                if (isPythonVersionCompatible(version)) {
+                    logger.info("Using system Python: {} (version: {})", cmd, version);
+                    return pythonPath;
+                } else {
+                    // Allow non-compatible versions with a warning (useful for development)
+                    logger.warn("Python version {} detected. Whisper may not work properly. Recommended: Python 3.8-3.13", version);
+                    logger.warn("Using Python {} anyway (development mode). For production, install Python 3.8-3.13", version);
+                    return pythonPath;
+                }
+            }
+        }
+        
+        // Second try: Check PATH for python3.x executables
+        String pathEnv = System.getenv("PATH");
+        if (pathEnv != null) {
+            String[] pathDirs = pathEnv.split(os.contains("win") ? ";" : ":");
+            for (String dir : pathDirs) {
+                try {
+                    Path dirPath = Paths.get(dir);
+                    if (Files.isDirectory(dirPath)) {
+                        // Look for python3.x executables
+                        try (var stream = Files.list(dirPath)) {
+                            for (Path file : stream.toList()) {
+                                String fileName = file.getFileName().toString().toLowerCase();
+                                if (fileName.startsWith("python3.") && !fileName.endsWith(".exe-config")) {
+                                    String version = getPythonVersion(file);
+                                    if (version != null && !version.isEmpty() && !version.equals("Unknown")) {
+                                        logger.info("Found Python in PATH: {} (version: {})", file, version);
+                                        if (isPythonVersionCompatible(version)) {
+                                            return file;
+                                        } else {
+                                            logger.warn("Python version {} detected. Using anyway for development", version);
+                                            return file;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.debug("Error checking PATH directory: {}", dir, e);
+                }
             }
         }
         
@@ -456,10 +719,79 @@ public class DependencyManager {
     }
     
     /**
+     * Check if Python version is compatible with numba/Whisper
+     * Requires Python 3.8-3.13 (Python 3.14 has compatibility issues)
+     */
+    private boolean isPythonVersionCompatible(String version) {
+        if (version == null || version.isEmpty()) {
+            return false;
+        }
+        
+        // Parse major.minor version (e.g., "Python 3.14.0" -> 3.14)
+        try {
+            String[] parts = version.trim().split("\\s+");
+            for (String part : parts) {
+                if (part.startsWith("3.")) {
+                    String[] versionParts = part.split("\\.");
+                    if (versionParts.length >= 2) {
+                        int major = Integer.parseInt(versionParts[0]);
+                        int minor = Integer.parseInt(versionParts[1]);
+                        
+                        // Check if version is 3.8 to 3.13
+                        if (major == 3 && minor >= 8 && minor <= 13) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Could not parse Python version: {}", version);
+        }
+        
+        return false;
+    }
+    
+    /**
      * Get PYTHONPATH environment variable value
      */
     public String getPythonPath() {
         return pythonLibsDir.toString();
+    }
+    
+    /**
+     * Check if the Python executable is from a virtual environment
+     */
+    private boolean isVenvEnvironment(Path pythonExe) {
+        try {
+            // Run python -c "import sys; print(sys.prefix)"
+            ProcessBuilder pb = new ProcessBuilder(
+                pythonExe.toString(),
+                "-c", "import sys; print(sys.prefix)"
+            );
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            
+            StringBuilder output = new StringBuilder();
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line);
+                }
+            }
+            
+            int exitCode = process.waitFor();
+            if (exitCode == 0) {
+                String prefix = output.toString().trim();
+                // Check if prefix contains 'venv' or is different from system Python
+                boolean isVenv = prefix.toLowerCase().contains("venv") || 
+                                !prefix.equals(System.getProperty("user.home"));
+                logger.debug("Python prefix: {}, isVenv: {}", prefix, isVenv);
+                return isVenv;
+            }
+        } catch (Exception e) {
+            logger.debug("Could not check venv status", e);
+        }
+        return false;
     }
     
     // ===========================
