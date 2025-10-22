@@ -1,0 +1,59 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Python virtual environment
+venv/
+__pycache__/
+*.pyc
+
+# Build artifacts
+target/
+dist/
+*.jar
+*.exe
+*.msi
+*.deb
+*.rpm
+*.dmg
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Maven wrapper cache
+.mvn/
+
+# Documentation
+*.md
+!EncodeForge/BUILD.md
+
+# Requirements files (not needed in Docker)
+requirements*.txt
+
+# Scripts not needed in Docker
+start_*.bat
+start_*.sh
+
+# Virtual environment
+venv/
+
+# Docker files (don't need to copy these into the image)
+docker/
+
+# Distribution output directories
+dist-deb/
+dist-rpm/
+

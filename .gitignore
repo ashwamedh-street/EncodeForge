@@ -7,6 +7,8 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+dist-deb/
+dist-rpm/
 downloads/
 eggs/
 .eggs/
@@ -213,3 +215,6 @@ dmypy.json
 *.pid
 *.seed
 *.pid.lock
+
+#docker
+/docker/
