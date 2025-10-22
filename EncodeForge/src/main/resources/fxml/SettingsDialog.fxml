@@ -6,7 +6,7 @@
 
 <StackPane xmlns="http://javafx.com/javafx/17" xmlns:fx="http://javafx.com/fxml/1">
     <!-- Main Content -->
-    <BorderPane styleClass="dialog-pane" prefWidth="700" prefHeight="600">
+    <BorderPane styleClass="dialog-pane" prefWidth="750" prefHeight="600">
         
         <!-- Custom Title Bar -->
         <top>
@@ -31,7 +31,7 @@
     
     <!-- Left: Settings Categories -->
     <left>
-        <ListView fx:id="categoryList" styleClass="category-list" prefWidth="180"/>
+        <ListView fx:id="categoryList" styleClass="category-list" prefWidth="220"/>
     </left>
     
     <!-- Center: Settings Content -->
@@ -49,7 +49,7 @@
                     <VBox spacing="10">
                         <Label text="Settings Location:" styleClass="setting-label"/>
                         <HBox spacing="10" alignment="CENTER_LEFT">
-                            <Label fx:id="settingsLocationLabel" text="AppData/Local/EncodeForge/settings/settings.json" styleClass="hint-label" HBox.hgrow="ALWAYS"/>
+                            <Label fx:id="settingsLocationLabel" text="Loading..." styleClass="hint-label" HBox.hgrow="ALWAYS"/>
                             <Button fx:id="openSettingsFolderButton" onAction="#handleOpenSettingsFolder" styleClass="small-button"/>
                         </HBox>
                     </VBox>
@@ -89,34 +89,34 @@
                         <Label text="FFmpeg Installation" styleClass="subsection-title"/>
                         
                         <VBox spacing="8">
-                            <CheckBox fx:id="useEmbeddedFFmpegCheck" text="Use embedded FFmpeg (recommended)" selected="true"/>
-                            <Label text="Use the FFmpeg version packaged with EncodeForge. No installation required!" styleClass="hint-label" style="-fx-text-fill: #4ec9b0;"/>
+                            <Label fx:id="ffmpegVersionLabel" text="FFmpeg: Checking..." styleClass="hint-label"/>
+                            <Label text="FFmpeg is required for video encoding and processing." styleClass="hint-label" style="-fx-text-fill: #9cdcfe;"/>
                         </VBox>
                         
                         <Separator/>
                         
                         <VBox spacing="8">
-                            <Label text="Custom FFmpeg Path (if not using embedded):" styleClass="setting-label"/>
+                            <Label text="FFmpeg Path:" styleClass="setting-label"/>
                             <HBox spacing="10">
-                                <TextField fx:id="ffmpegPathField" HBox.hgrow="ALWAYS" promptText="Path to ffmpeg executable"/>
+                                <TextField fx:id="ffmpegPathField" HBox.hgrow="ALWAYS" promptText="Automatically detected or manually specify"/>
                                 <Button text="Browse..." onAction="#handleBrowseFFmpeg" styleClass="small-button"/>
                             </HBox>
                         </VBox>
                         
                         <VBox spacing="8">
-                            <Label text="Custom FFprobe Path (if not using embedded):" styleClass="setting-label"/>
+                            <Label text="FFprobe Path:" styleClass="setting-label"/>
                             <HBox spacing="10">
-                                <TextField fx:id="ffprobePathField" HBox.hgrow="ALWAYS" promptText="Path to ffprobe executable"/>
+                                <TextField fx:id="ffprobePathField" HBox.hgrow="ALWAYS" promptText="Automatically detected or manually specify"/>
                                 <Button text="Browse..." onAction="#handleBrowseFFprobe" styleClass="small-button"/>
                             </HBox>
                         </VBox>
                         
-                        <HBox spacing="10">
-                            <Button fx:id="autoDetectButton" onAction="#handleAutoDetect" text="Auto-Detect" styleClass="small-button"/>
+                        <HBox spacing="10" alignment="CENTER_LEFT">
+                            <Button fx:id="autoDetectButton" onAction="#handleAutoDetect" text="Auto-Detect FFmpeg" styleClass="small-button"/>
                             <Button fx:id="downloadFFmpegButton" onAction="#handleDownloadFFmpeg" text="Download FFmpeg" styleClass="small-button"/>
                         </HBox>
                         
-                        <Label fx:id="ffmpegVersionLabel" text="FFmpeg: Not detected" styleClass="hint-label"/>
+                        <Label text="💡 Tip: FFmpeg is automatically downloaded on first launch. You can also manually install it and use auto-detect." styleClass="hint-label" style="-fx-text-fill: #ce9178;"/>
                     </VBox>
                 </VBox>
                 

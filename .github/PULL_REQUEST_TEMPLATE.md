@@ -26,7 +26,11 @@ Describe the tests you ran and how to reproduce them:
 - [ ] Tested with various video formats
 - [ ] Tested with GPU acceleration (NVENC/AMF/Quick Sync/VideoToolbox)
 - [ ] Tested with CPU encoding
-- [ ] Tested subtitle generation (Whisper)
+- [ ] Tested first-time dependency installation
+- [ ] Tested FFmpeg auto-download and detection
+- [ ] Tested Python library installation
+- [ ] Tested Whisper AI setup wizard (if applicable)
+- [ ] Tested subtitle generation with Whisper (if installed)
 - [ ] Tested subtitle downloads (OpenSubtitles)
 - [ ] Tested file renaming with metadata providers
 - [ ] Tested JavaFX UI changes
@@ -47,5 +51,6 @@ If applicable, add screenshots showing the changes.
 - [ ] Added JavaDoc comments for public methods (Java)
 - [ ] Added docstrings for functions and classes (Python)
 - [ ] Updated pom.xml version if needed
-- [ ] Updated requirements.txt if Python dependencies changed
+- [ ] Updated requirements-core.txt if core Python dependencies changed
+- [ ] Updated requirements-ai.txt if AI/Whisper dependencies changed
 

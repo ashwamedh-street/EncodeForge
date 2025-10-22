@@ -29,6 +29,15 @@ class SubtitleHandler:
         logger.info(f"Language: {language or 'auto-detect'}")
         logger.info(f"Model: {self.settings.whisper_model}")
         
+        # Check if Whisper manager is available
+        if self.whisper_mgr is None:
+            logger.error("Whisper AI not available (optional dependencies not installed)")
+            return {
+                "status": "error",
+                "message": "AI subtitle generation not available. Install Whisper via Tools > Setup AI Subtitles",
+                "subtitle_path": None
+            }
+        
         # Check if Whisper is available
         whisper_status = self.whisper_mgr.get_status()
         if not whisper_status.get("installed"):

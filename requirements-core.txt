@@ -1,0 +1,3 @@
+# No external Python dependencies required for core functionality
+# All Python scripts use only standard library modules
+

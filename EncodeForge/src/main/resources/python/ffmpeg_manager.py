@@ -165,16 +165,77 @@ class FFmpegManager:
                         paths_to_check.insert(0, found_path)
                     else:
                         logger.debug("Recursive search in Documents did not find ffmpeg.exe")
-        else:
+        elif platform.system() == "Darwin":  # macOS
+            # Check PATH using shutil.which first (most reliable)
+            try:
+                import shutil
+                which_result = shutil.which("ffmpeg")
+                if which_result:
+                    paths_to_check.insert(0, which_result)
+            except Exception:
+                pass
+            
+            # Common macOS installation paths
+            paths_to_check.extend([
+                "ffmpeg",
+                "/usr/local/bin/ffmpeg",
+                "/opt/homebrew/bin/ffmpeg",  # Apple Silicon Homebrew
+                "/usr/bin/ffmpeg",
+                "/opt/ffmpeg/bin/ffmpeg",
+                os.path.expanduser("~/bin/ffmpeg"),
+                os.path.expanduser("~/ffmpeg/ffmpeg"),
+            ])
+            
+            # Check Homebrew installations
+            homebrew_prefixes = ["/opt/homebrew", "/usr/local"]
+            for prefix in homebrew_prefixes:
+                if os.path.exists(prefix):
+                    paths_to_check.extend([
+                        os.path.join(prefix, "bin", "ffmpeg"),
+                        os.path.join(prefix, "Cellar", "ffmpeg", "bin", "ffmpeg")
+                    ])
+            
+            # Check MacPorts
+            if os.path.exists("/opt/local"):
+                paths_to_check.extend([
+                    "/opt/local/bin/ffmpeg",
+                    "/opt/local/lib/ffmpeg/bin/ffmpeg"
+                ])
+
+        else:  # Linux/Unix
+            # Check PATH using shutil.which first (most reliable)
+            try:
+                import shutil
+                which_result = shutil.which("ffmpeg")
+                if which_result:
+                    paths_to_check.insert(0, which_result)
+            except Exception:
+                pass
+            
+            # Common Linux installation paths
             paths_to_check.extend([
                 "ffmpeg",
                 "/usr/bin/ffmpeg",
                 "/usr/local/bin/ffmpeg",
-                "/opt/ffmpeg/ffmpeg",
-                "/opt/homebrew/bin/ffmpeg",
+                "/opt/ffmpeg/bin/ffmpeg",
+                "/snap/bin/ffmpeg",  # Snap package
                 os.path.expanduser("~/bin/ffmpeg"),
                 os.path.expanduser("~/ffmpeg/ffmpeg"),
             ])
+            
+            # Check snap installations
+            snap_path = "/snap/bin/ffmpeg"
+            if os.path.exists(snap_path):
+                paths_to_check.append(snap_path)
+            
+            # Check Flatpak installations
+            flatpak_paths = [
+                os.path.expanduser("~/.local/share/flatpak/exports/bin/ffmpeg"),
+                "/var/lib/flatpak/exports/bin/ffmpeg"
+            ]
+            for flatpak_path in flatpak_paths:
+                if os.path.exists(flatpak_path):
+                    paths_to_check.append(flatpak_path)
         
         # Try each path
         logger.info(f"Searching for FFmpeg in {len([p for p in paths_to_check if p])} locations...")

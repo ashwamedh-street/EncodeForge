@@ -5,86 +5,96 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.file.*;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.Collections;
+import java.util.stream.Stream;
 
 /**
- * Utility to extract bundled Python runtime and scripts
+ * Utility to extract bundled Python scripts from JAR
  */
 public class ResourceExtractor {
     private static final Logger logger = LoggerFactory.getLogger(ResourceExtractor.class);
-    private static Path extractedPythonDir;
+    private static Path extractedScriptsDir;
     
     /**
-     * Extract Python runtime from JAR resources to temporary directory
+     * Extract Python scripts from JAR resources to app directory
+     * This extracts only .py files, not the full Python runtime or libraries
      */
-    public static void extractPythonRuntime() throws IOException {
-        // Create extraction directory in AppData/Local/EncodeForge/temp
-        Path baseDir = PathManager.getTempDir();
-        extractedPythonDir = baseDir.resolve("python");
+    public static void extractPythonScripts() throws IOException {
+        // Extract to ~/.encodeforge/scripts/
+        extractedScriptsDir = PathManager.getBaseDir().resolve("scripts");
         
         // Create directories
-        Files.createDirectories(extractedPythonDir);
+        Files.createDirectories(extractedScriptsDir);
         
-        logger.info("Extracting Python runtime to: {}", extractedPythonDir);
+        logger.info("Extracting Python scripts to: {}", extractedScriptsDir);
         
-        // Extract bundled Python runtime (venv + scripts + dependencies)
-        extractPythonRuntimeBundle();
+        // Extract all .py files from /python/ resource directory
+        extractResourceDirectory("/python/", extractedScriptsDir);
         
         // Set system property for easy access
-        System.setProperty("python.runtime.dir", extractedPythonDir.toString());
+        System.setProperty("python.scripts.dir", extractedScriptsDir.toString());
         
-        logger.info("Python runtime extracted successfully");
-    }
-    
-    /**
-     * Extract the complete Python runtime bundle including venv and dependencies
-     */
-    private static void extractPythonRuntimeBundle() throws IOException {
-        // Use the advanced Python runtime extractor
-        PythonRuntimeExtractor.extractPythonRuntimeBundle(extractedPythonDir);
+        logger.info("Python scripts extracted successfully");
     }
     
     /**
      * Extract a directory from JAR resources
      */
-    private static void extractDirectory(String resourcePath, Path targetDir) throws IOException {
-        // This is a simplified version - in practice, you'd need to enumerate resources
-        // For now, we'll extract individual files that we know exist
-        logger.info("Extracting directory: {} -> {}", resourcePath, targetDir);
+    private static void extractResourceDirectory(String resourcePath, Path targetDir) throws IOException {
+        logger.info("Extracting resource directory: {} -> {}", resourcePath, targetDir);
         
-        // Create target directory
-        Files.createDirectories(targetDir);
-        
-        // For now, we'll extract known files individually
-        // In a more sophisticated implementation, you'd enumerate all resources under the path
-        logger.debug("Directory extraction completed: {}", targetDir);
-    }
-    
-    /**
-     * Extract a single resource from JAR to file system
-     */
-    private static void extractResource(String resourcePath, Path targetPath) throws IOException {
-        // Check if resource exists
-        InputStream is = ResourceExtractor.class.getResourceAsStream(resourcePath);
-        if (is == null) {
-            throw new IOException("Resource not found: " + resourcePath);
-        }
-        
-        try (is) {
-            // If file already exists and is same size, skip extraction
-            if (Files.exists(targetPath)) {
-                long existingSize = Files.size(targetPath);
-                long resourceSize = is.available();
-                
-                if (existingSize == resourceSize) {
-                    logger.debug("Skipping extraction, file already exists: {}", targetPath.getFileName());
-                    return;
-                }
+        try {
+            // Get resource URI
+            URI uri = ResourceExtractor.class.getResource(resourcePath).toURI();
+            
+            // Handle both JAR and file system paths
+            Path sourcePath;
+            FileSystem fs = null;
+            
+            if (uri.getScheme().equals("jar")) {
+                // Running from JAR
+                fs = FileSystems.newFileSystem(uri, Collections.emptyMap());
+                sourcePath = fs.getPath(resourcePath);
+            } else {
+                // Running from IDE
+                sourcePath = Paths.get(uri);
             }
             
-            // Copy resource to file
-            Files.copy(is, targetPath, StandardCopyOption.REPLACE_EXISTING);
-            logger.debug("Extracted: {} -> {}", resourcePath, targetPath.getFileName());
+            // Walk through all files in the resource directory
+            try (Stream<Path> walk = Files.walk(sourcePath)) {
+                walk.forEach(source -> {
+                    try {
+                        // Get relative path
+                        Path relative = sourcePath.relativize(source);
+                        Path target = targetDir.resolve(relative.toString());
+                        
+                        if (Files.isDirectory(source)) {
+                            Files.createDirectories(target);
+                        } else {
+                            // Copy file
+                            Files.createDirectories(target.getParent());
+                            Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+                            logger.debug("Extracted: {}", relative);
+                        }
+                    } catch (IOException e) {
+                        logger.warn("Failed to extract: {}", source, e);
+                    }
+                });
+            }
+            
+            // Close file system if we opened one
+            if (fs != null) {
+                fs.close();
+            }
+            
+            logger.info("Successfully extracted {} to {}", resourcePath, targetDir);
+            
+        } catch (URISyntaxException e) {
+            throw new IOException("Invalid resource path: " + resourcePath, e);
         }
     }
     
@@ -92,13 +102,13 @@ public class ResourceExtractor {
      * Clean up extracted resources (optional, called on app exit)
      */
     public static void cleanup() {
-        // Optionally delete extracted files
-        // For now, we keep them for faster startup on subsequent runs
+        // Keep extracted scripts for next run
         logger.info("Resource cleanup skipped (files kept for next startup)");
     }
     
-    public static Path getExtractedPythonDir() {
-        return extractedPythonDir;
+    public static Path getExtractedScriptsDir() {
+        return extractedScriptsDir;
     }
 }
+
 

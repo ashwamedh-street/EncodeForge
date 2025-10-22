@@ -3,7 +3,6 @@ package com.encodeforge.service;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import com.encodeforge.util.FFmpegRuntimeExtractor;
 import com.encodeforge.util.PathManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +24,7 @@ public class PythonBridge {
     private static final long TIMEOUT_SECONDS = 300; // 5 minutes for long operations
     private static final int THREAD_POOL_SIZE = Runtime.getRuntime().availableProcessors() + 2; // CPU cores + 2 for I/O
     
+    private final DependencyManager dependencyManager;
     private Process pythonProcess;
     private BufferedReader reader;
     private BufferedWriter writer;
@@ -34,7 +34,9 @@ public class PythonBridge {
     private final Object ioLock = new Object();
     private final Object streamingLock = new Object(); // Serialize streaming commands
     
-    public PythonBridge() {
+    public PythonBridge(DependencyManager dependencyManager) {
+        this.dependencyManager = dependencyManager;
+        
         // Main executor for CPU-bound tasks
         this.executorService = Executors.newFixedThreadPool(THREAD_POOL_SIZE, r -> {
             Thread t = new Thread(r, "PythonBridge-Worker");
@@ -77,13 +79,19 @@ public class PythonBridge {
         // Set working directory
         pb.directory(scriptPath.getParent().toFile());
         
-        // Set environment variable for Python unbuffered mode
+        // Set environment variables
         pb.environment().put("PYTHONUNBUFFERED", "1");
         
-        // Pass FFmpeg runtime directory to Python if available
-        String ffmpegRuntimeDir = System.getProperty("ffmpeg.runtime.dir");
-        if (ffmpegRuntimeDir != null) {
-            pb.environment().put("FFMPEG_RUNTIME_DIR", ffmpegRuntimeDir);
+        // Set PYTHONPATH to include our custom libraries directory
+        String pythonPath = dependencyManager.getPythonPath();
+        pb.environment().put("PYTHONPATH", pythonPath);
+        logger.info("PYTHONPATH set to: {}", pythonPath);
+        
+        // Pass FFmpeg directory to Python if available
+        Path ffmpegPath = dependencyManager.getInstalledFFmpegPath();
+        if (ffmpegPath != null) {
+            pb.environment().put("FFMPEG_PATH", ffmpegPath.toString());
+            logger.info("FFmpeg path set to: {}", ffmpegPath);
         }
         
         // Merge error stream for easier handling
@@ -412,170 +420,48 @@ public class PythonBridge {
     }
     
     /**
-     * Get path to Python executable (bundled, venv, or system)
+     * Get path to Python executable (delegates to DependencyManager)
      */
     private Path getPythonExecutable() throws IOException {
-        // First, check if we have an extracted Python runtime
-        String runtimeDir = System.getProperty("python.runtime.dir");
-        if (runtimeDir != null) {
-            Path runtimePath = Paths.get(runtimeDir);
-            Path bundledExecutable = com.encodeforge.util.PythonRuntimeExtractor.getPythonExecutablePath(runtimePath);
-            
-            if (Files.exists(bundledExecutable)) {
-                logger.info("Using bundled Python executable: {}", bundledExecutable);
-                return bundledExecutable;
-            }
-        }
-        
-        // Second, check for venv in project directory (for development/Whisper support)
-        Path workspaceRoot = Paths.get(System.getProperty("user.dir"));
-        Path venvPython = null;
-        
-        if (System.getProperty("os.name").toLowerCase().contains("win")) {
-            venvPython = workspaceRoot.resolve("venv").resolve("Scripts").resolve("python.exe");
-        } else {
-            venvPython = workspaceRoot.resolve("venv").resolve("bin").resolve("python3");
-        }
-        
-        if (venvPython != null && Files.exists(venvPython)) {
-            logger.info("Using project venv Python: {}", venvPython);
-            return venvPython;
-        }
-        
-        // Fallback to system Python
-        String pythonCommand = System.getProperty("os.name").toLowerCase().contains("win") ? "python.exe" : "python3";
-        logger.info("Using system Python: {}", pythonCommand);
-        return Paths.get(pythonCommand);
+        return dependencyManager.getPythonExecutable();
     }
     
     /**
      * Get path to Python API script
      */
     private Path getPythonScript() throws IOException {
-        // First try extracted runtime directory
-        String runtimeDir = System.getProperty("python.runtime.dir");
-        if (runtimeDir != null) {
-            Path runtimePath = Paths.get(runtimeDir);
-            
-            // Try encodeforge_api.py first (new name)
-            Path scriptPath = runtimePath.resolve("scripts").resolve("encodeforge_api.py");
+        // First try extracted scripts directory
+        String scriptsDir = System.getProperty("python.scripts.dir");
+        if (scriptsDir != null) {
+            Path scriptPath = Paths.get(scriptsDir, "encodeforge_api.py");
             if (Files.exists(scriptPath)) {
-                logger.info("Using bundled Python script: {}", scriptPath);
-                return scriptPath;
-            }
-            
-            scriptPath = runtimePath.resolve("encodeforge_api.py");
-            if (Files.exists(scriptPath)) {
-                logger.info("Using bundled Python API script: {}", scriptPath);
-                return scriptPath;
-            }
-            
-            // Fallback to old name for backward compatibility
-            scriptPath = runtimePath.resolve("scripts").resolve("ffmpeg_api.py");
-            if (Files.exists(scriptPath)) {
-                logger.info("Using bundled Python script (legacy): {}", scriptPath);
-                return scriptPath;
-            }
-            
-            scriptPath = runtimePath.resolve("ffmpeg_api.py");
-            if (Files.exists(scriptPath)) {
-                logger.info("Using bundled Python API script (legacy): {}", scriptPath);
+                logger.info("Using extracted Python script: {}", scriptPath);
                 return scriptPath;
             }
         }
         
-        // Fallback to project directory (for development)
-        // Try new name first
+        // Fallback to development directory (running from IDE)
         Path devScriptPath = Paths.get("src", "main", "resources", "python", "encodeforge_api.py");
         if (Files.exists(devScriptPath)) {
             logger.info("Using development Python script: {}", devScriptPath);
             return devScriptPath;
         }
         
-        // Try old name for backward compatibility
-        devScriptPath = Paths.get("src", "main", "resources", "python", "ffmpeg_api.py");
+        // Try EncodeForge subdirectory (Maven project structure)
+        devScriptPath = Paths.get("EncodeForge", "src", "main", "resources", "python", "encodeforge_api.py");
         if (Files.exists(devScriptPath)) {
-            logger.info("Using development Python script (legacy): {}", devScriptPath);
+            logger.info("Using development Python script (in EncodeForge/): {}", devScriptPath);
             return devScriptPath;
         }
         
-        // Try parent directory (old location)
-        Path parentScriptPath = Paths.get("encodeforge_api.py");
-        if (Files.exists(parentScriptPath)) {
-            logger.info("Using parent directory Python script: {}", parentScriptPath);
-            return parentScriptPath;
-        }
-        
-        parentScriptPath = Paths.get("ffmpeg_api.py");
-        if (Files.exists(parentScriptPath)) {
-            logger.info("Using parent directory Python script (legacy): {}", parentScriptPath);
-            return parentScriptPath;
-        }
-        
-        throw new IOException("Python API script not found. Checked:\n" +
-            "  - " + (runtimeDir != null ? Paths.get(runtimeDir, "scripts", "encodeforge_api.py") : "(runtime dir not set)") + "\n" +
-            "  - " + (runtimeDir != null ? Paths.get(runtimeDir, "encodeforge_api.py") : "(runtime dir not set)") + "\n" +
+        throw new IOException("Python API script (encodeforge_api.py) not found. Checked:\n" +
+            "  - " + (scriptsDir != null ? Paths.get(scriptsDir, "encodeforge_api.py") : "(scripts dir not set)") + "\n" +
             "  - " + Paths.get("src", "main", "resources", "python", "encodeforge_api.py") + "\n" +
-            "  - " + Paths.get("src", "main", "resources", "python", "ffmpeg_api.py") + " (legacy)\n" +
-            "  - " + Paths.get("encodeforge_api.py") + "\n" +
-            "  - " + Paths.get("ffmpeg_api.py") + " (legacy)");
+            "  - " + Paths.get("EncodeForge", "src", "main", "resources", "python", "encodeforge_api.py"));
     }
     
     public boolean isRunning() {
         return isRunning && pythonProcess != null && pythonProcess.isAlive();
     }
-    
-    
-    /**
-     * Extract FFmpeg runtime and update settings to use embedded FFmpeg if available
-     */
-    public void setupEmbeddedFFmpeg(com.encodeforge.model.ConversionSettings settings) {
-        try {
-            // Check if embedded FFmpeg is available
-            if (!FFmpegRuntimeExtractor.isEmbeddedFFmpegAvailable()) {
-                logger.info("Embedded FFmpeg not available, using system FFmpeg");
-                settings.setUseEmbeddedFFmpeg(false);
-                return;
-            }
-            
-            // Extract FFmpeg runtime
-            String ffmpegRuntimeDir = System.getProperty("ffmpeg.runtime.dir");
-            if (ffmpegRuntimeDir == null) {
-                // Create temporary directory for FFmpeg extraction in unified temp location
-                Path tempDir = PathManager.createTempDirectory("encodeforge-ffmpeg");
-                tempDir.toFile().deleteOnExit();
-                ffmpegRuntimeDir = tempDir.toString();
-                System.setProperty("ffmpeg.runtime.dir", ffmpegRuntimeDir);
-            }
-            
-            Path ffmpegRuntimePath = Paths.get(ffmpegRuntimeDir);
-            FFmpegRuntimeExtractor.extractFFmpegRuntime(ffmpegRuntimePath);
-            
-            // Update settings to use embedded FFmpeg
-            Path ffmpegPath = FFmpegRuntimeExtractor.getFFmpegExecutablePath(ffmpegRuntimePath);
-            Path ffprobePath = FFmpegRuntimeExtractor.getFFprobeExecutablePath(ffmpegRuntimePath);
-            
-            if (Files.exists(ffmpegPath) && Files.exists(ffprobePath)) {
-                settings.setFfmpegPath(ffmpegPath.toString());
-                settings.setFfprobePath(ffprobePath.toString());
-                settings.setUseEmbeddedFFmpeg(true);
-                
-                // Set environment variable for Python to find embedded FFmpeg
-                System.setProperty("ffmpeg.runtime.dir", ffmpegRuntimeDir);
-                
-                String version = FFmpegRuntimeExtractor.getEmbeddedFFmpegVersion(ffmpegRuntimePath);
-                logger.info("Using embedded FFmpeg: {} (version: {})", ffmpegPath, version);
-            } else {
-                logger.warn("Embedded FFmpeg extraction failed, falling back to system FFmpeg");
-                settings.setUseEmbeddedFFmpeg(false);
-            }
-            
-        } catch (Exception e) {
-            logger.error("Error setting up embedded FFmpeg", e);
-            settings.setUseEmbeddedFFmpeg(false);
-        }
-    }
-    
-    
 }
 

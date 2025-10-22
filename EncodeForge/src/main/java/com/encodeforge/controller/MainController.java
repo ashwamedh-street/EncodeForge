@@ -2,9 +2,11 @@ package com.encodeforge.controller;
 
 import com.encodeforge.model.ConversionJob;
 import com.encodeforge.model.ConversionSettings;
+import com.encodeforge.service.DependencyManager;
 import com.encodeforge.service.PythonBridge;
 import com.encodeforge.util.HardwareDetector;
 import com.encodeforge.util.PathManager;
+import com.encodeforge.util.StatusManager;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import javafx.application.Platform;
@@ -55,6 +57,8 @@ public class MainController {
     private static final Logger logger = LoggerFactory.getLogger(MainController.class);
     
     private final PythonBridge pythonBridge;
+    private final DependencyManager dependencyManager;
+    private final StatusManager statusManager;
     // Separate queues for different states
     private final ObservableList<ConversionJob> queuedFiles = FXCollections.observableArrayList();
     private final ObservableList<ConversionJob> processingFiles = FXCollections.observableArrayList();
@@ -298,12 +302,22 @@ public class MainController {
     public MainController(PythonBridge pythonBridge) {
         this.pythonBridge = pythonBridge;
         
+        // Get dependency manager from MainApp (will be passed in future refactor)
+        // For now, create a new one
+        try {
+            this.dependencyManager = new DependencyManager();
+        } catch (IOException e) {
+            logger.error("Failed to initialize DependencyManager", e);
+            throw new RuntimeException("Could not initialize dependency manager", e);
+        }
+        
+        this.statusManager = StatusManager.getInstance();
+        
         // Load settings from disk
         this.settings = ConversionSettings.load();
         logger.info("Settings loaded from: {}", ConversionSettings.getSettingsFilePath());
         
-        // Setup embedded FFmpeg if available
-        pythonBridge.setupEmbeddedFFmpeg(settings);
+        // FFmpeg is now managed by DependencyManager, no need for embedded setup here
     }
     
     @FXML
@@ -379,12 +393,25 @@ public class MainController {
         }
     }
     
+    /**
+     * Get all files from all queues (queued, processing, completed)
+     */
+    private List<ConversionJob> getAllFiles() {
+        List<ConversionJob> allFiles = new java.util.ArrayList<>();
+        allFiles.addAll(queuedFiles);
+        allFiles.addAll(processingFiles);
+        allFiles.addAll(completedFiles);
+        return allFiles;
+    }
+    
     private void updateSubtitleFileList() {
-        if (subtitleFileCombo != null && !queuedFiles.isEmpty()) {
+        if (subtitleFileCombo != null) {
+            List<ConversionJob> allFiles = getAllFiles();
+            if (!allFiles.isEmpty()) {
             subtitleFileCombo.getItems().clear();
             
-            // Add files with status tags
-            for (ConversionJob job : queuedFiles) {
+                // Add files with status tags from ALL queues
+                for (ConversionJob job : allFiles) {
                 String fileName = new java.io.File(job.getInputPath()).getName();
                 String displayName = formatFileNameWithStatus(fileName);
                 subtitleFileCombo.getItems().add(displayName);
@@ -398,6 +425,7 @@ public class MainController {
                 // Update the display of currently selected file
                 String updatedDisplayName = formatFileNameWithStatus(extractBaseFileName(currentlySelectedFile));
                 subtitleFileCombo.setValue(updatedDisplayName);
+                }
             }
         }
     }
@@ -1667,6 +1695,7 @@ public class MainController {
             controller.setDialogStage(dialogStage);
             controller.setSettings(settings);
             controller.setPythonBridge(pythonBridge);
+            controller.setDependencyManager(dependencyManager);  // Pass DependencyManager for FFmpeg detection
             
             // Navigate to specific category if provided
             if (category != null) {
@@ -1873,22 +1902,42 @@ public class MainController {
     @FXML
     private void handleAbout() {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle("About");
-        alert.setHeaderText("EncodeForge");
+        alert.setTitle("About EncodeForge");
+        alert.setHeaderText(null);
         
         // Create styled content
-        javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(8);
+        javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(12);
+        content.setPadding(new javafx.geometry.Insets(10));
         
-        javafx.scene.text.Text versionText = new javafx.scene.text.Text("Version 0.3");
-        versionText.setStyle("-fx-fill: #16c60c; -fx-font-size: 14px; -fx-font-weight: bold;");
+        // App name
+        javafx.scene.text.Text appName = new javafx.scene.text.Text("EncodeForge");
+        appName.setStyle("-fx-fill: #16c60c; -fx-font-size: 24px; -fx-font-weight: bold;");
         
+        // Version
+        javafx.scene.text.Text versionText = new javafx.scene.text.Text("Version 0.3.1");
+        versionText.setStyle("-fx-fill: #4ec9b0; -fx-font-size: 14px;");
+        
+        // Description
         javafx.scene.text.Text descriptionText = new javafx.scene.text.Text(
-            "A modern, cross-platform media encoding, subtitle management, and file renaming tool."
+            "A modern, cross-platform media encoding, subtitle management, and file renaming tool.\n\n" +
+            "Features:\n" +
+            "• Hardware-accelerated video encoding (NVENC, QuickSync, VideoToolbox)\n" +
+            "• AI-powered subtitle generation with OpenAI Whisper\n" +
+            "• Multi-provider subtitle download and synchronization\n" +
+            "• Automated metadata retrieval and file renaming\n" +
+            "• Batch processing with customizable profiles\n" +
+            "• Support for HDR, HDR10+, Dolby Vision"
         );
-        descriptionText.setStyle("-fx-fill: #ffffff; -fx-font-size: 12px;");
-        descriptionText.setWrappingWidth(400);
+        descriptionText.setStyle("-fx-fill: #cccccc; -fx-font-size: 12px;");
+        descriptionText.setWrappingWidth(450);
         
-        javafx.scene.control.Hyperlink githubLink = new javafx.scene.control.Hyperlink("GitHub: https://github.com/SirStig/EncodeForge");
+        // Separator
+        javafx.scene.control.Separator separator = new javafx.scene.control.Separator();
+        
+        // Links
+        javafx.scene.layout.VBox linksBox = new javafx.scene.layout.VBox(6);
+        
+        javafx.scene.control.Hyperlink githubLink = new javafx.scene.control.Hyperlink("🔗 GitHub Repository");
         githubLink.setStyle("-fx-text-fill: #0078d4; -fx-font-size: 12px;");
         githubLink.setOnAction(e -> {
             try {
@@ -1898,8 +1947,25 @@ public class MainController {
             }
         });
         
-        content.getChildren().addAll(versionText, descriptionText, githubLink);
+        javafx.scene.control.Hyperlink issuesLink = new javafx.scene.control.Hyperlink("🐛 Report an Issue");
+        issuesLink.setStyle("-fx-text-fill: #0078d4; -fx-font-size: 12px;");
+        issuesLink.setOnAction(e -> {
+            try {
+                java.awt.Desktop.getDesktop().browse(new java.net.URI("https://github.com/SirStig/EncodeForge/issues"));
+            } catch (Exception ex) {
+                logger.error("Error opening Issues URL", ex);
+            }
+        });
+        
+        linksBox.getChildren().addAll(githubLink, issuesLink);
+        
+        // Copyright
+        javafx.scene.text.Text copyrightText = new javafx.scene.text.Text("© 2025 EncodeForge. Licensed under MIT License.");
+        copyrightText.setStyle("-fx-fill: #858585; -fx-font-size: 10px;");
+        
+        content.getChildren().addAll(appName, versionText, descriptionText, separator, linksBox, copyrightText);
         alert.getDialogPane().setContent(content);
+        alert.getDialogPane().setMinWidth(500);
         
         // Style the dialog
         javafx.scene.control.DialogPane dialogPane = alert.getDialogPane();
@@ -1942,6 +2008,175 @@ public class MainController {
         
         Platform.exit();
     }
+    
+    // ========================================
+    // ADDITIONAL MENU HANDLERS
+    // ========================================
+    
+    @FXML
+    private void handleClearQueue() {
+        if (!queuedFiles.isEmpty() || !processingFiles.isEmpty() || !completedFiles.isEmpty()) {
+            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+            confirm.setTitle("Clear Queue");
+            confirm.setHeaderText("Clear all items from queue?");
+            confirm.setContentText("This will remove all items from all queues (queued, processing, and completed).");
+            
+            Optional<ButtonType> result = confirm.showAndWait();
+            if (result.isPresent() && result.get() == ButtonType.OK) {
+                queuedFiles.clear();
+                processingFiles.clear();
+                completedFiles.clear();
+                updateQueueCounts();
+                logger.info("All queues cleared");
+            }
+        }
+    }
+    
+    @FXML
+    private void handleRemoveSelected() {
+        // Remove from whichever table has selection
+        ObservableList<ConversionJob> selectedQueued = queuedTable.getSelectionModel().getSelectedItems();
+        ObservableList<ConversionJob> selectedProcessing = processingTable.getSelectionModel().getSelectedItems();
+        ObservableList<ConversionJob> selectedCompleted = completedTable.getSelectionModel().getSelectedItems();
+        
+        int removed = 0;
+        if (!selectedQueued.isEmpty()) {
+            queuedFiles.removeAll(new java.util.ArrayList<>(selectedQueued));
+            removed += selectedQueued.size();
+        }
+        if (!selectedProcessing.isEmpty()) {
+            processingFiles.removeAll(new java.util.ArrayList<>(selectedProcessing));
+            removed += selectedProcessing.size();
+        }
+        if (!selectedCompleted.isEmpty()) {
+            completedFiles.removeAll(new java.util.ArrayList<>(selectedCompleted));
+            removed += selectedCompleted.size();
+        }
+        
+        if (removed > 0) {
+            updateQueueCounts();
+            logger.info("Removed " + removed + " selected items");
+        }
+    }
+    
+    @FXML
+    private void handleOpenOutputFolder() {
+        String outputPath = settings.getOutputDirectory();
+        if (outputPath == null || outputPath.isEmpty()) {
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle("No Output Folder");
+            alert.setHeaderText("Output folder not configured");
+            alert.setContentText("Please configure an output folder in Settings.");
+            alert.showAndWait();
+            return;
+        }
+        
+        try {
+            java.awt.Desktop.getDesktop().open(new java.io.File(outputPath));
+        } catch (Exception e) {
+            logger.error("Error opening output folder", e);
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Error");
+            alert.setHeaderText("Could not open output folder");
+            alert.setContentText(e.getMessage());
+            alert.showAndWait();
+        }
+    }
+    
+    @FXML
+    private void handleSelectAll() {
+        queuedTable.getSelectionModel().selectAll();
+        processingTable.getSelectionModel().selectAll();
+        completedTable.getSelectionModel().selectAll();
+    }
+    
+    @FXML
+    private void handleDeselectAll() {
+        queuedTable.getSelectionModel().clearSelection();
+        processingTable.getSelectionModel().clearSelection();
+        completedTable.getSelectionModel().clearSelection();
+    }
+    
+    @FXML
+    private void handleExtractSubtitles() {
+        // Switch to subtitle mode
+        handleSubtitleMode();
+    }
+    
+    @FXML
+    private void handleOpenLogsFolder() {
+        try {
+            java.io.File logsDir = new java.io.File("EncodeForge/logs");
+            if (!logsDir.exists()) {
+                logsDir = new java.io.File("logs");
+            }
+            if (logsDir.exists()) {
+                java.awt.Desktop.getDesktop().open(logsDir);
+            } else {
+                Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                alert.setTitle("Logs Folder");
+                alert.setHeaderText("Logs folder not found");
+                alert.setContentText("The logs folder could not be located.");
+                alert.showAndWait();
+            }
+        } catch (Exception e) {
+            logger.error("Error opening logs folder", e);
+        }
+    }
+    
+    @FXML
+    private void handleOpenSettingsFolder() {
+        try {
+            java.io.File settingsDir = com.encodeforge.util.PathManager.getBaseDir().toFile();
+            if (settingsDir.exists()) {
+                java.awt.Desktop.getDesktop().open(settingsDir);
+            } else {
+                Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                alert.setTitle("Settings Folder");
+                alert.setHeaderText("Settings folder not found");
+                alert.setContentText("The settings folder could not be located.");
+                alert.showAndWait();
+            }
+        } catch (Exception e) {
+            logger.error("Error opening settings folder", e);
+        }
+    }
+    
+    @FXML
+    private void handleViewLogs() {
+        try {
+            java.io.File logFile = new java.io.File("EncodeForge/logs/encodeforge.log");
+            if (!logFile.exists()) {
+                logFile = new java.io.File("logs/encodeforge.log");
+            }
+            if (logFile.exists()) {
+                java.awt.Desktop.getDesktop().open(logFile);
+            } else {
+                Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                alert.setTitle("View Logs");
+                alert.setHeaderText("Log file not found");
+                alert.setContentText("The log file could not be located.");
+                alert.showAndWait();
+            }
+        } catch (Exception e) {
+            logger.error("Error opening log file", e);
+        }
+    }
+    
+    @FXML
+    private void handleReportIssue() {
+        try {
+            java.awt.Desktop.getDesktop().browse(
+                new java.net.URI("https://github.com/SirStig/EncodeForge/issues/new")
+            );
+        } catch (Exception e) {
+            logger.error("Error opening issue reporter", e);
+        }
+    }
+    
+    // ========================================
+    // END ADDITIONAL MENU HANDLERS
+    // ========================================
     
     private void handleProgressUpdate(JsonObject update) {
         Platform.runLater(() -> {
@@ -2283,7 +2518,7 @@ public class MainController {
     /**
      * Consolidated status check for all providers and services.
      * Uses StatusManager to cache results and avoid redundant API calls.
-     * This replaces the old separate checkFFmpegAvailability() and checkProviderStatus() methods.
+     * FFmpeg detection now uses Java-side DependencyManager instead of Python.
      */
     private void updateAllStatus() {
         new Thread(() -> {
@@ -2301,23 +2536,52 @@ public class MainController {
                     logger.error("Failed to sync settings with Python backend", e);
                 }
                 
-                // Get all status information in one call
+                // Check FFmpeg using Java DependencyManager (not Python)
+                boolean ffmpegAvailable = false;
+                String ffmpegVersion = "Not Found";
+                try {
+                    ffmpegAvailable = dependencyManager.checkFFmpeg().get();
+                    if (ffmpegAvailable) {
+                        java.nio.file.Path ffmpegPath = dependencyManager.getInstalledFFmpegPath();
+                        if (ffmpegPath != null) {
+                            ffmpegVersion = "Found";
+                            logger.info("FFmpeg detected via DependencyManager at: {}", ffmpegPath);
+                        } else {
+                            // FFmpeg found in system PATH
+                            ffmpegVersion = "System PATH";
+                            logger.info("FFmpeg detected in system PATH");
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.error("Error checking FFmpeg via DependencyManager", e);
+                }
+                
+                // Get Python backend status (Whisper, providers, etc)
                 JsonObject response = pythonBridge.getAllStatus();
                 
                 if (response.has("status") && response.get("status").getAsString().equals("error")) {
-                    logger.error("Error getting status: " + response.get("message").getAsString());
-                    Platform.runLater(() -> {
-                        log("ERROR: " + response.get("message").getAsString());
-                        updateFFmpegStatus(false, "Error");
-                    });
-                    return;
+                    logger.error("Error getting Python status: " + response.get("message").getAsString());
+                }
+                
+                // Update FFmpeg info in response (override Python's check with Java's)
+                if (response.has("ffmpeg")) {
+                    JsonObject ffmpegInfo = response.getAsJsonObject("ffmpeg");
+                    ffmpegInfo.addProperty("available", ffmpegAvailable);
+                    if (ffmpegAvailable && ffmpegInfo.has("version")) {
+                        ffmpegVersion = ffmpegInfo.get("version").getAsString();
+                    }
                 }
                 
                 // Update StatusManager with the consolidated response
                 com.encodeforge.util.StatusManager.getInstance().updateFromResponse(response);
                 
+                // Update FFmpeg status separately (using Java check)
+                final boolean finalFfmpegAvailable = ffmpegAvailable;
+                final String finalFfmpegVersion = ffmpegVersion;
+                
                 // Update UI on JavaFX thread
                 Platform.runLater(() -> {
+                    updateFFmpegStatus(finalFfmpegAvailable, finalFfmpegVersion);
                     updateUIFromStatus();
                 });
                 
@@ -2342,21 +2606,13 @@ public class MainController {
     /**
      * Update all UI elements based on the current StatusManager state.
      * This method should be called on the JavaFX Application thread.
+     * Note: FFmpeg status is updated separately via Java DependencyManager, not here.
      */
     private void updateUIFromStatus() {
         com.encodeforge.util.StatusManager statusMgr = com.encodeforge.util.StatusManager.getInstance();
         
-        // Update FFmpeg status in sidebar
-        if (statusMgr.isFFmpegAvailable()) {
-            String version = statusMgr.getFFmpegVersion();
-            log("FFmpeg detected: " + version);
-            updateFFmpegStatus(true, version);
-        } else {
-            log("WARNING: FFmpeg not detected");
-            updateFFmpegStatus(false, "Not Found");
-            showWarning("FFmpeg Not Found", 
-                "FFmpeg could not be detected. Please install FFmpeg or set the path in Settings.");
-        }
+        // FFmpeg status is now updated separately via Java DependencyManager in updateAllStatus()
+        // Don't update it here to avoid overwriting with stale Python data
         
         // Update Whisper status
         if (statusMgr.isWhisperAvailable()) {
@@ -2743,8 +2999,9 @@ public class MainController {
         originalNamesListView.getItems().clear();
         suggestedNamesListView.getItems().clear();
         
-        // Show original filenames and leave suggested names blank
-        for (ConversionJob job : queuedFiles) {
+        // Show original filenames from ALL queues and leave suggested names blank
+        List<ConversionJob> allFiles = getAllFiles();
+        for (ConversionJob job : allFiles) {
             originalNamesListView.getItems().add(job.getFileName());
             suggestedNamesListView.getItems().add("");  // Blank until search
         }
@@ -2754,7 +3011,7 @@ public class MainController {
             applyRenameButton.setDisable(true);
         }
         
-        log("Showing " + queuedFiles.size() + " file(s) - click Search to fetch metadata");
+        log("Showing " + allFiles.size() + " file(s) - click Search to fetch metadata");
     }
     
     private void updateRenamePreview() {
@@ -3519,7 +3776,26 @@ public class MainController {
     
     @FXML
     private void handleConfigureWhisper() {
+        // Check if Whisper is installed
+        if (!statusManager.isWhisperAvailable()) {
+            // Open Whisper setup wizard
+            try {
+                WhisperSetupDialog setupDialog = new WhisperSetupDialog(dependencyManager);
+                setupDialog.showAndWait();
+                
+                // Refresh status after installation
+                if (setupDialog.isInstallationComplete()) {
+                    CompletableFuture.runAsync(this::updateAllStatus);
+                    showInfo("Whisper Installed", "AI subtitle generation is now available!");
+                }
+            } catch (Exception e) {
+                logger.error("Failed to open Whisper setup dialog", e);
+                showError("Error", "Failed to open Whisper setup: " + e.getMessage());
+            }
+        } else {
+            // Whisper already installed, open settings to configure
         openSettings("Subtitles");
+        }
     }
     
     @FXML
@@ -5138,23 +5414,30 @@ public class MainController {
             return;
         }
         
-        // Check if Whisper is available
-        try {
-            JsonObject whisperStatus = pythonBridge.checkWhisper();
-            if (!whisperStatus.has("whisper_available") || !whisperStatus.get("whisper_available").getAsBoolean()) {
-                showWarning("Whisper Not Available", 
-                    "Whisper AI is not installed. Please install it from Settings > Subtitles.");
+        // Check if Whisper is available using StatusManager
+        if (!statusManager.isWhisperAvailable()) {
+            // Offer to install Whisper
+            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+            confirm.setTitle("Whisper Not Installed");
+            confirm.setHeaderText("AI subtitle generation requires Whisper");
+            confirm.setContentText("Whisper AI is not installed. Would you like to install it now?");
+            
+            Optional<ButtonType> result = confirm.showAndWait();
+            if (result.isPresent() && result.get() == ButtonType.OK) {
+                handleConfigureWhisper(); // Open setup dialog
+            }
                 return;
             }
             
             // Check if model is installed
+        try {
+            JsonObject whisperStatus = pythonBridge.checkWhisper();
             if (!whisperStatus.has("installed_models") || whisperStatus.get("installed_models").getAsJsonArray().size() == 0) {
                 showWarning("Whisper Model Not Downloaded", 
                     "No Whisper models are installed. Please download a model from Settings > Subtitles.\n\n" +
                     "Recommended: 'base' model for good balance of speed and quality.");
                 return;
             }
-            
         } catch (Exception e) {
             logger.error("Error checking Whisper status", e);
             showError("Error", "Failed to check Whisper status: " + e.getMessage());

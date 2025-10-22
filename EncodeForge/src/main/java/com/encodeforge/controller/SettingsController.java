@@ -1,7 +1,10 @@
 package com.encodeforge.controller;
 
 import com.encodeforge.model.ConversionSettings;
+import com.encodeforge.service.DependencyManager;
 import com.encodeforge.service.PythonBridge;
+import com.encodeforge.util.PathManager;
+import com.encodeforge.util.StatusManager;
 import java.util.List;
 import com.google.gson.JsonObject;
 import javafx.application.Platform;
@@ -15,6 +18,7 @@ import javafx.scene.input.MouseEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.Optional;
 
 import java.io.File;
@@ -28,6 +32,8 @@ public class SettingsController {
     private Stage dialogStage;
     private ConversionSettings settings;
     private PythonBridge pythonBridge;
+    private DependencyManager dependencyManager;
+    private StatusManager statusManager;
     private boolean applied = false;
     
     // Window dragging variables
@@ -74,7 +80,6 @@ public class SettingsController {
     @FXML private Button autoDetectButton;
     @FXML private Button downloadFFmpegButton;
     @FXML private Label ffmpegVersionLabel;
-    @FXML private CheckBox useEmbeddedFFmpegCheck;
     
     // Video Settings
     @FXML private ComboBox<String> outputFormatCombo;
@@ -150,7 +155,7 @@ public class SettingsController {
         
         // Show settings location
         if (settingsLocationLabel != null) {
-            settingsLocationLabel.setText(ConversionSettings.getSettingsFilePath());
+            settingsLocationLabel.setText(PathManager.getSettingsFilePath());
         }
         
         // Select first category by default
@@ -261,8 +266,22 @@ public class SettingsController {
     public void setPythonBridge(PythonBridge pythonBridge) {
         this.pythonBridge = pythonBridge;
         
-        // Use centralized StatusManager instead of making individual checks
-        updateFFmpegStatusFromManager();
+        // Initialize status manager if not already set
+        if (this.statusManager == null) {
+            this.statusManager = StatusManager.getInstance();
+        }
+        
+        // Initialize dependency manager if not already set
+        if (this.dependencyManager == null) {
+            try {
+                this.dependencyManager = new DependencyManager();
+            } catch (IOException e) {
+                logger.error("Failed to initialize DependencyManager in SettingsController", e);
+            }
+        }
+        
+        // Check FFmpeg using Java DependencyManager (not Python)
+        checkFFmpegStatus();
         
         // Encoder detection is now handled instantly by Java HardwareDetector
         // No need for delayed backend checks
@@ -270,37 +289,12 @@ public class SettingsController {
     }
     
     /**
-     * Update FFmpeg status display from centralized StatusManager
+     * Set the DependencyManager from MainController
      */
-    private void updateFFmpegStatusFromManager() {
-        com.encodeforge.util.StatusManager statusMgr = com.encodeforge.util.StatusManager.getInstance();
-        
-        if (ffmpegVersionLabel != null) {
-            if (statusMgr.isFFmpegAvailable()) {
-                String version = statusMgr.getFFmpegVersion();
-                String source = settings != null && settings.isUseEmbeddedFFmpeg() ? "Embedded" : "External";
-                ffmpegVersionLabel.setText("✅ FFmpeg (" + source + "): " + version);
-                ffmpegVersionLabel.setStyle("-fx-text-fill: #4ec9b0;");
-                logger.info("FFmpeg detected: {} at {}", version, settings != null ? settings.getFfmpegPath() : "unknown");
-            } else {
-                ffmpegVersionLabel.setText("❌ FFmpeg not found");
-                ffmpegVersionLabel.setStyle("-fx-text-fill: #f48771;");
-            }
-        }
-    }
-    
-    /**
-     * Update the state of FFmpeg path fields based on embedded checkbox
-     */
-    private void updateFFmpegFieldsState() {
-        boolean useEmbedded = useEmbeddedFFmpegCheck != null && useEmbeddedFFmpegCheck.isSelected();
-        
-        if (ffmpegPathField != null) {
-            ffmpegPathField.setDisable(useEmbedded);
-        }
-        if (ffprobePathField != null) {
-            ffprobePathField.setDisable(useEmbedded);
-        }
+    public void setDependencyManager(DependencyManager dependencyManager) {
+        this.dependencyManager = dependencyManager;
+        // Re-check FFmpeg status with the provided DependencyManager
+        checkFFmpegStatus();
     }
     
     public void navigateToCategory(String category) {
@@ -375,13 +369,6 @@ public class SettingsController {
         // Load settings into UI controls
         ffmpegPathField.setText(settings.getFfmpegPath());
         ffprobePathField.setText(settings.getFfprobePath());
-        useEmbeddedFFmpegCheck.setSelected(settings.isUseEmbeddedFFmpeg());
-        
-        // Set up embedded FFmpeg checkbox listener
-        if (useEmbeddedFFmpegCheck != null) {
-            useEmbeddedFFmpegCheck.setOnAction(e -> updateFFmpegFieldsState());
-            updateFFmpegFieldsState(); // Initial state
-        }
         
         deleteOriginalCheck.setSelected(settings.isDeleteOriginal());
         overwriteCheck.setSelected(settings.isOverwriteExisting());
@@ -443,7 +430,6 @@ public class SettingsController {
         // Save UI controls to settings
         settings.setFfmpegPath(ffmpegPathField.getText());
         settings.setFfprobePath(ffprobePathField.getText());
-        settings.setUseEmbeddedFFmpeg(useEmbeddedFFmpegCheck.isSelected());
         
         settings.setDeleteOriginal(deleteOriginalCheck.isSelected());
         settings.setOverwriteExisting(overwriteCheck.isSelected());
@@ -544,57 +530,97 @@ public class SettingsController {
     }
     
     private void checkFFmpegStatus() {
-        if (pythonBridge == null) {
+        if (dependencyManager == null) {
+            logger.warn("DependencyManager not available for FFmpeg check");
+            Platform.runLater(() -> {
+                ffmpegVersionLabel.setText("❌ FFmpeg: DependencyManager not available");
+                ffmpegVersionLabel.setStyle("-fx-text-fill: #f48771;");
+            });
             return;
         }
         
+        // Show checking status immediately
+        Platform.runLater(() -> {
+            ffmpegVersionLabel.setText("⏳ FFmpeg: Checking...");
+            ffmpegVersionLabel.setStyle("-fx-text-fill: #ffb900;");
+        });
+        
         new Thread(() -> {
             try {
-                JsonObject response = pythonBridge.checkFFmpeg();
+                // Use Java DependencyManager to check FFmpeg (not Python)
+                boolean available = dependencyManager.checkFFmpeg().get();
                 
-                Platform.runLater(() -> {
-                    if (response.has("status") && response.get("status").getAsString().equals("error")) {
+                if (!available) {
+                    Platform.runLater(() -> {
                         ffmpegVersionLabel.setText("❌ FFmpeg: Not Found");
                         ffmpegVersionLabel.setStyle("-fx-text-fill: #f48771;");
-                        return;
-                    }
-                    
-                    if (response.has("ffmpeg_available") && response.get("ffmpeg_available").getAsBoolean()) {
-                        String version = response.get("ffmpeg_version").getAsString();
-                        String path = response.get("ffmpeg_path").getAsString();
-                        
-                        ffmpegVersionLabel.setText("✅ FFmpeg: " + version);
-                        ffmpegVersionLabel.setStyle("-fx-text-fill: #4ec9b0;");
-                        
-                        // Update path fields if empty
-                        if (ffmpegPathField.getText().isEmpty()) {
-                            ffmpegPathField.setText(path);
+                        ffmpegPathField.setText("");
+                        ffprobePathField.setText("");
+                    });
+                    return;
+                }
+                
+                // FFmpeg found - get path and version
+                java.nio.file.Path ffmpegPath = dependencyManager.getInstalledFFmpegPath();
+                String ffmpegPathStr = null;
+                String version = "Found";
+                
+                if (ffmpegPath != null) {
+                    ffmpegPathStr = ffmpegPath.toString();
+                } else {
+                    // FFmpeg is in system PATH
+                    version = "System PATH";
+                    ffmpegPathStr = "ffmpeg";  // Will be in PATH
+                }
+                
+                // Try to get version from Python backend for display
+                try {
+                    if (pythonBridge != null) {
+                        JsonObject response = pythonBridge.getAllStatus();
+                        if (response.has("ffmpeg")) {
+                            JsonObject ffmpegInfo = response.getAsJsonObject("ffmpeg");
+                            if (ffmpegInfo.has("version")) {
+                                version = ffmpegInfo.get("version").getAsString();
+                            }
+                            if (ffmpegInfo.has("path") && ffmpegPathStr == null) {
+                                ffmpegPathStr = ffmpegInfo.get("path").getAsString();
+                            }
                         }
-                        if (ffprobePathField.getText().isEmpty()) {
-                            ffprobePathField.setText(path.replace("ffmpeg", "ffprobe"));
-                        }
-                        
-                        logger.info("FFmpeg detected: " + version + " at " + path);
-                    } else {
-                        ffmpegVersionLabel.setText("⚠️ FFmpeg: Not Detected");
-                        ffmpegVersionLabel.setStyle("-fx-text-fill: #ce9178;");
                     }
+                } catch (Exception e) {
+                    logger.debug("Could not get FFmpeg version from Python, using default", e);
+                }
+                
+                final String finalVersion = version;
+                final String finalPath = ffmpegPathStr;
+                
+                Platform.runLater(() -> {
+                    ffmpegVersionLabel.setText("✅ FFmpeg: " + finalVersion);
+                    ffmpegVersionLabel.setStyle("-fx-text-fill: #4ec9b0;");
+                    if (finalPath != null && !finalPath.isEmpty() && !finalPath.equals("ffmpeg")) {
+                        ffmpegPathField.setText(finalPath);
+                        // Also set ffprobe path
+                        String ffprobePath = finalPath.replace("ffmpeg", "ffprobe");
+                        if (System.getProperty("os.name").toLowerCase().contains("win")) {
+                            ffprobePath = ffprobePath.replace(".exe", "") + ".exe";
+                        }
+                        ffprobePathField.setText(ffprobePath);
+                    } else if (finalPath != null && finalPath.equals("ffmpeg")) {
+                        // FFmpeg is in system PATH
+                        ffmpegPathField.setText("ffmpeg");
+                        ffprobePathField.setText("ffprobe");
+                    }
+                    logger.info("FFmpeg status updated in Settings: {} at {}", finalVersion, finalPath);
                 });
                 
             } catch (Exception e) {
-                logger.error("Error checking FFmpeg status", e);
+                logger.error("Error checking FFmpeg status via DependencyManager", e);
                 Platform.runLater(() -> {
-                    ffmpegVersionLabel.setText("❌ Error checking FFmpeg");
+                    ffmpegVersionLabel.setText("❌ FFmpeg: Error - " + e.getMessage());
                     ffmpegVersionLabel.setStyle("-fx-text-fill: #f48771;");
                 });
             }
         }).start();
-    }
-    
-    @FXML
-    private void handleDownloadFFmpeg() {
-        // This will be handled by MainController via callback
-        logger.info("Download FFmpeg requested");
     }
     
     @FXML
@@ -951,12 +977,6 @@ public class SettingsController {
         }
     }
     
-    private void updateAvailableEncoders() {
-        // Encoder detection is now handled by Java's HardwareDetector
-        // No backend Python check needed - encoders are already correctly populated
-        logger.debug("Encoder detection already completed by HardwareDetector - skipping backend check");
-    }
-    
     // ========================================
     // WINDOW CONTROL METHODS
     // ========================================
@@ -1016,6 +1036,104 @@ public class SettingsController {
     }
     
     // Settings dialog is not resizable, so no resize methods needed
+    
+    /**
+     * Handle Setup Whisper AI button - opens wizard
+     */
+    @FXML
+    private void handleSetupWhisper() {
+        if (dependencyManager == null) {
+            logger.error("DependencyManager not initialized");
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Error");
+            alert.setHeaderText("Cannot setup Whisper");
+            alert.setContentText("Dependency manager not initialized");
+            alert.showAndWait();
+            return;
+        }
+        
+        try {
+            WhisperSetupDialog setupDialog = new WhisperSetupDialog(dependencyManager);
+            setupDialog.showAndWait();
+            
+            // Refresh status after installation
+            if (setupDialog.isInstallationComplete()) {
+                Alert info = new Alert(Alert.AlertType.INFORMATION);
+                info.setTitle("Whisper Installed");
+                info.setHeaderText("AI subtitle generation is now available!");
+                info.setContentText("You can now use Whisper to generate subtitles automatically.");
+                info.showAndWait();
+            }
+        } catch (Exception e) {
+            logger.error("Failed to open Whisper setup dialog", e);
+            Alert alert = new Alert(Alert.AlertType.ERROR);
+            alert.setTitle("Error");
+            alert.setHeaderText("Failed to open Whisper setup");
+            alert.setContentText(e.getMessage());
+            alert.showAndWait();
+        }
+    }
+    
+    /**
+     * Handle Download FFmpeg button - uses DependencyManager
+     */
+    @FXML
+    private void handleDownloadFFmpeg() {
+        if (dependencyManager == null) {
+            logger.error("DependencyManager not initialized");
+            return;
+        }
+        
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("Download FFmpeg");
+        confirm.setHeaderText("Download and install FFmpeg?");
+        confirm.setContentText("This will download FFmpeg for your platform and install it to " + 
+            dependencyManager.getFfmpegDir());
+        
+        if (confirm.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
+            // Show progress dialog (could create a simple one or reuse InitializationDialog)
+            if (ffmpegVersionLabel != null) {
+                ffmpegVersionLabel.setText("⏳ Downloading FFmpeg...");
+            }
+            
+            new Thread(() -> {
+                try {
+                    dependencyManager.installFFmpeg(progress -> {
+                        Platform.runLater(() -> {
+                            if (ffmpegVersionLabel != null) {
+                                ffmpegVersionLabel.setText(progress.getMessage());
+                            }
+                        });
+                    }).get();
+                    
+                    Platform.runLater(() -> {
+                        if (ffmpegVersionLabel != null) {
+                            ffmpegVersionLabel.setText("✅ FFmpeg installed successfully");
+                            ffmpegVersionLabel.setStyle("-fx-text-fill: #4ec9b0;");
+                        }
+                        // Refresh status after a short delay to ensure installation is complete
+                        javafx.animation.Timeline timeline = new javafx.animation.Timeline(
+                            new javafx.animation.KeyFrame(javafx.util.Duration.seconds(1), e -> checkFFmpegStatus())
+                        );
+                        timeline.play();
+                    });
+                } catch (Exception e) {
+                    logger.error("Failed to install FFmpeg", e);
+                    Platform.runLater(() -> {
+                        if (ffmpegVersionLabel != null) {
+                            ffmpegVersionLabel.setText("❌ Installation failed");
+                            ffmpegVersionLabel.setStyle("-fx-text-fill: #f48771;");
+                        }
+                        Alert alert = new Alert(Alert.AlertType.ERROR);
+                        alert.setTitle("Installation Failed");
+                        alert.setHeaderText("Failed to install FFmpeg");
+                        alert.setContentText(e.getMessage());
+                        alert.showAndWait();
+                    });
+                }
+            }).start();
+        }
+    }
     
     /**
      * Initialize all icons using Ikonli FontAwesome

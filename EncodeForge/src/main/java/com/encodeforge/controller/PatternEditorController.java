@@ -309,8 +309,8 @@ public class PatternEditorController {
         // Clean up multiple spaces
         result = result.replaceAll("\\s+", " ").trim();
         
-        // Remove invalid filename characters
-        result = result.replaceAll("[<>:\"/\\\\|?*]", "");
+        // Remove invalid filename characters (cross-platform)
+        result = sanitizeFilename(result);
         
         return result;
     }
@@ -562,6 +562,33 @@ public class PatternEditorController {
         } catch (Exception e) {
             logger.error("Failed to initialize pattern editor icons", e);
         }
+    }
+    
+    /**
+     * Sanitize filename for cross-platform compatibility
+     */
+    private String sanitizeFilename(String filename) {
+        String osName = System.getProperty("os.name").toLowerCase();
+        
+        if (osName.contains("win")) {
+            // Windows invalid characters
+            filename = filename.replaceAll("[<>:\"/\\\\|?*]", "");
+            // Remove trailing dots and spaces (Windows doesn't like them)
+            filename = filename.replaceAll("\\.+$", "").replaceAll("\\s+$", "");
+            // Windows reserved names
+            String[] reservedNames = {"CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"};
+            for (String reserved : reservedNames) {
+                if (filename.toUpperCase().equals(reserved)) {
+                    filename = filename + "_";
+                    break;
+                }
+            }
+        } else {
+            // Unix/Linux/macOS - only forward slash and null character
+            filename = filename.replaceAll("[/\u0000]", "");
+        }
+        
+        return filename;
     }
 }
 

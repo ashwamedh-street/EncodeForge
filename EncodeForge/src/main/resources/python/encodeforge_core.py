@@ -5,7 +5,7 @@ Lightweight orchestrator that delegates to specialized handlers
 """
 
 import logging
-from typing import Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional
 
 from encodeforge_modules import (
     ConversionHandler,
@@ -18,7 +18,21 @@ from ffmpeg_manager import FFmpegManager
 from metadata_grabber import MetadataGrabber
 from profile_manager import ProfileManager
 from subtitle_manager import SubtitleProviders
-from subtitle_providers.whisper_manager import WhisperManager
+
+# Try importing optional AI libraries
+try:
+    from subtitle_providers.whisper_manager import WhisperManager
+    WHISPER_AVAILABLE = True
+    WhisperManagerClass = WhisperManager
+except ImportError:
+    WHISPER_AVAILABLE = False
+    if TYPE_CHECKING:
+        from subtitle_providers.whisper_manager import (
+            WhisperManager as WhisperManagerClass,
+        )
+    else:
+        WhisperManagerClass = None  # type: ignore
+    # Don't log here, will log in __init__ when creating the instance
 
 # Setup logging
 logging.basicConfig(
@@ -43,7 +57,15 @@ class EncodeForgeCore:
         
         # Initialize managers
         self.ffmpeg_mgr = FFmpegManager(self.settings.ffmpeg_path)
-        self.whisper_mgr = WhisperManager()
+        
+        # Initialize Whisper manager if available (optional AI feature)
+        if WHISPER_AVAILABLE and WhisperManagerClass is not None:
+            self.whisper_mgr = WhisperManagerClass()
+            logger.info("Whisper AI available for subtitle generation")
+        else:
+            self.whisper_mgr = None
+            logger.info("Whisper not available (optional AI subtitle feature)")
+        
         self.renamer = MetadataGrabber(
             tmdb_key=self.settings.tmdb_api_key,
             tvdb_key=self.settings.tvdb_api_key
@@ -104,6 +126,15 @@ class EncodeForgeCore:
     
     def check_whisper(self) -> Dict:
         """Check Whisper availability"""
+        if self.whisper_mgr is None:
+            return {
+                "status": "success",
+                "whisper_available": False,
+                "installed_models": [],
+                "available_models": [],
+                "model_sizes": {}
+            }
+        
         status = self.whisper_mgr.get_status()
         return {
             "status": "success",
@@ -123,6 +154,12 @@ class EncodeForgeCore:
     
     def install_whisper(self, progress_callback: Optional[Callable] = None) -> Dict:
         """Install Whisper"""
+        if self.whisper_mgr is None:
+            return {
+                "status": "error",
+                "message": "Whisper not available. Please install required dependencies."
+            }
+        
         success, message = self.whisper_mgr.install_whisper(progress_callback=progress_callback)
         return {
             "status": "success" if success else "error",
@@ -131,6 +168,12 @@ class EncodeForgeCore:
     
     def download_whisper_model(self, model: str, progress_callback: Optional[Callable] = None) -> Dict:
         """Download a Whisper model"""
+        if self.whisper_mgr is None:
+            return {
+                "status": "error",
+                "message": "Whisper not available. Please install required dependencies."
+            }
+        
         success, message = self.whisper_mgr.download_model(model, progress_callback=progress_callback)
         return {
             "status": "success" if success else "error",

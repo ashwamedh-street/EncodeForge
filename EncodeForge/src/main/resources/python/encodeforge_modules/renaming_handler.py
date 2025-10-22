@@ -4,6 +4,8 @@ Renaming Handler - Media file renaming operations
 """
 
 import logging
+import platform
+import re
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -928,15 +930,37 @@ class RenamingHandler:
             # Remove multiple spaces
             result = re.sub(r'\s+', ' ', result)
             
-            # Remove invalid filename characters
-            result = re.sub(r'[<>:"/\\|?*]', '', result)
-            
-            # Remove trailing dots and spaces (Windows doesn't like them)
-            result = result.rstrip('. ')
+            # Remove invalid filename characters (cross-platform)
+            result = self._sanitize_filename(result)
             
             return result if result else None
             
         except Exception as e:
             logger.error(f"Error formatting filename: {e}")
             return None
+    
+    def _sanitize_filename(self, filename: str) -> str:
+        """Sanitize filename for cross-platform compatibility"""
+        # Remove or replace invalid characters based on platform
+        system = platform.system().lower()
+        
+        if system == "windows":
+            # Windows invalid characters
+            invalid_chars = r'[<>:"/\\|?*]'
+        else:
+            # Unix/Linux/macOS - only forward slash and null character
+            invalid_chars = r'[/\x00]'
+        
+        result = re.sub(invalid_chars, '', filename)
+        
+        # Additional platform-specific handling
+        if system == "windows":
+            # Remove trailing dots and spaces (Windows doesn't like them)
+            result = result.rstrip('. ')
+            # Windows reserved names
+            reserved_names = {'CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'}
+            if result.upper() in reserved_names:
+                result = result + "_"
+        
+        return result
 

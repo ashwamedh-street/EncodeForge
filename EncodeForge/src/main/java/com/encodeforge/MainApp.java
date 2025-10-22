@@ -1,7 +1,10 @@
 package com.encodeforge;
 
+import com.encodeforge.controller.InitializationDialog;
 import com.encodeforge.controller.MainController;
+import com.encodeforge.service.DependencyManager;
 import com.encodeforge.service.PythonBridge;
+import com.encodeforge.util.PathManager;
 import com.encodeforge.util.ResourceExtractor;
 import javafx.application.Application;
 import javafx.application.Platform;
@@ -14,6 +17,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Map;
 
 /**
  * Main Application Entry Point
@@ -22,33 +28,143 @@ import java.io.IOException;
 public class MainApp extends Application {
     private static final Logger logger = LoggerFactory.getLogger(MainApp.class);
     private static final String APP_TITLE = "Encode Forge";
-    private static final String VERSION = "0.3";
+    private static final String VERSION = "0.3.1";
     
+    private DependencyManager dependencyManager;
     private PythonBridge pythonBridge;
     private MainController controller;
+    private boolean pendingDependencyInstall = false;
 
     @Override
     public void init() throws Exception {
         logger.info("Initializing Encode Forge v{}", VERSION);
         
-        // Extract Python runtime and scripts to temporary directory
-        try {
-            ResourceExtractor.extractPythonRuntime();
-            logger.info("Python runtime extracted successfully");
-        } catch (IOException e) {
-            logger.error("Failed to extract Python runtime", e);
-            throw new RuntimeException("Could not initialize Python backend", e);
+        // Check if initialization has already been completed
+        if (isInitializationComplete()) {
+            logger.info("Initialization already completed, skipping dependency checks");
+            
+            // Still need to extract Python scripts and create DependencyManager for runtime
+            try {
+                ResourceExtractor.extractPythonScripts();
+                logger.info("Python scripts extracted successfully (cached)");
+            } catch (IOException e) {
+                logger.error("Failed to extract Python scripts", e);
+                throw new RuntimeException("Could not extract Python scripts", e);
+            }
+            
+            try {
+                dependencyManager = new DependencyManager();
+                logger.info("DependencyManager initialized (cached)");
+            } catch (IOException e) {
+                logger.error("Failed to initialize DependencyManager", e);
+                throw new RuntimeException("Could not initialize dependency manager", e);
+            }
+            initializeRuntime();
+            return;
         }
         
-        // Initialize Python bridge
-        pythonBridge = new PythonBridge();
+        // Extract Python scripts from JAR to app directory
+        try {
+            ResourceExtractor.extractPythonScripts();
+            logger.info("Python scripts extracted successfully");
+        } catch (IOException e) {
+            logger.error("Failed to extract Python scripts", e);
+            throw new RuntimeException("Could not extract Python scripts", e);
+        }
+        
+        // Create DependencyManager
+        try {
+            dependencyManager = new DependencyManager();
+            logger.info("DependencyManager initialized");
+        } catch (IOException e) {
+            logger.error("Failed to initialize DependencyManager", e);
+            throw new RuntimeException("Could not initialize dependency manager", e);
+        }
+        
+        // Check if dependencies are installed
+        Map<String, Boolean> libStatus = dependencyManager.checkRequiredLibraries().get();
+        boolean allLibsInstalled = libStatus.values().stream().allMatch(v -> v);
+        boolean ffmpegInstalled = dependencyManager.checkFFmpeg().get();
+        
+        logger.info("Dependency status:");
+        logger.info("  Python libraries: {}", allLibsInstalled ? "✓" : "✗");
+        logger.info("  FFmpeg: {}", ffmpegInstalled ? "✓" : "✗");
+        
+        // If anything is missing, show initialization dialog on startup
+        if (!allLibsInstalled || !ffmpegInstalled) {
+            logger.info("Some dependencies missing, will show initialization dialog");
+            pendingDependencyInstall = true;
+        } else {
+            // All dependencies are installed, mark initialization as complete
+            markInitializationComplete();
+        }
+        
+        initializeRuntime();
+    }
+    
+    /**
+     * Initialize runtime components (Python bridge, etc.)
+     */
+    private void initializeRuntime() throws IOException {
+        // Initialize Python bridge (will use bundled or system Python)
+        pythonBridge = new PythonBridge(dependencyManager);
         pythonBridge.start();
         logger.info("Python bridge initialized");
+    }
+    
+    /**
+     * Check if initialization has been completed previously
+     */
+    private boolean isInitializationComplete() {
+        try {
+            Path initFlagFile = PathManager.getSettingsDir().resolve("initialization_complete.flag");
+            return Files.exists(initFlagFile);
+        } catch (Exception e) {
+            logger.debug("Could not check initialization flag", e);
+            return false;
+        }
+    }
+    
+    /**
+     * Mark initialization as complete
+     */
+    private void markInitializationComplete() {
+        try {
+            Path initFlagFile = PathManager.getSettingsDir().resolve("initialization_complete.flag");
+            Files.write(initFlagFile, ("Initialization completed on " + java.time.Instant.now()).getBytes());
+            logger.info("Initialization marked as complete");
+        } catch (Exception e) {
+            logger.warn("Could not mark initialization as complete", e);
+        }
+    }
+    
+    /**
+     * Reset initialization flag (for debugging or manual reset)
+     */
+    public static void resetInitializationFlag() {
+        try {
+            Path initFlagFile = PathManager.getSettingsDir().resolve("initialization_complete.flag");
+            Files.deleteIfExists(initFlagFile);
+            logger.info("Initialization flag reset");
+        } catch (Exception e) {
+            logger.warn("Could not reset initialization flag", e);
+        }
     }
 
     @Override
     public void start(Stage primaryStage) {
         try {
+            // Show initialization dialog if dependencies need to be installed
+            if (pendingDependencyInstall) {
+                logger.info("Showing initialization dialog");
+                InitializationDialog initDialog = new InitializationDialog(dependencyManager);
+                initDialog.showAndWait();
+                
+                if (initDialog.isCancelled() && !initDialog.isComplete()) {
+                    logger.warn("User cancelled initialization, some dependencies may be missing");
+                }
+            }
+            
             // Load FXML
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/MainView.fxml"));
             

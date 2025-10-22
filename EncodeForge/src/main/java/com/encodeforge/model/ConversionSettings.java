@@ -7,17 +7,18 @@ import com.google.gson.JsonObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 
 /**
  * Model for conversion settings that will be passed to Python backend
- * Settings are automatically persisted to AppData/Local/EncodeForge/settings/settings.json
+ * Settings are automatically persisted to platform-appropriate location:
+ * - Windows: AppData/Local/EncodeForge/settings/settings.json
+ * - macOS: ~/Library/Application Support/EncodeForge/settings/settings.json  
+ * - Linux: ~/.local/share/EncodeForge/settings/settings.json
  */
 public class ConversionSettings {
     private static final Logger logger = LoggerFactory.getLogger(ConversionSettings.class);

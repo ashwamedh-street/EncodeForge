@@ -6,11 +6,11 @@ Thank you for your interest in contributing! This document provides guidelines a
 
 1. **Fork the repository** and clone your fork locally
 2. **Set up your development environment**:
-   - Install Java 17 or later
+   - Install Java 17 or later with JavaFX
    - Install Python 3.9 or later
-   - Install FFmpeg (optional - bundled version available)
-   - Install Maven (or use the included Maven Wrapper)
+   - Install Maven 3.8+ (or use the included Maven Wrapper)
    - Install Git
+   - FFmpeg will be auto-downloaded on first run
 
 3. **Create a new branch** for your feature or fix:
    ```bash
@@ -28,11 +28,33 @@ cd EncodeForge
 
 ### Python Script Development
 ```bash
+cd EncodeForge
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-python EncodeForge/src/main/resources/python/encodeforge_cli.py --help
+pip install -r ../requirements-core.txt  # Required libraries
+pip install -r ../requirements-ai.txt    # Optional AI libraries
+python src/main/resources/python/encodeforge_cli.py --help
 ```
+
+### Building Installers
+```bash
+# Windows EXE installer
+.\build.bat
+
+# Windows MSI installer
+.\build.bat windows-msi
+
+# Linux DEB package
+./build.sh linux-deb
+
+# Linux RPM package
+./build.sh linux-rpm
+
+# macOS DMG
+./build.sh mac-dmg
+```
+
+See `BUILD.md` for detailed build instructions.
 
 ## Code Style
 
@@ -111,10 +133,14 @@ Use the feature request template. Explain:
 - Test JavaFX UI changes in the desktop application
 - Test Python backend changes with CLI interface
 - Test hardware acceleration (NVENC, AMF, Quick Sync, VideoToolbox)
-- Test subtitle generation with Whisper
+- Test first-time setup with automatic dependency installation
+- Test FFmpeg detection and download (DependencyManager)
+- Test Python library installation via pip
+- Test optional Whisper AI setup wizard
+- Test subtitle generation with Whisper (if installed)
 - Test subtitle downloads with OpenSubtitles
 - Test file renaming with metadata providers
-- Verify log files are generated correctly in `EncodeForge/logs/`
+- Verify log files are generated correctly in `~/.encodeforge/logs/` or `%APPDATA%\.encodeforge\logs\`
 
 ## Questions?
 

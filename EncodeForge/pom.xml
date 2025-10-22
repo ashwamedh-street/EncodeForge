@@ -6,7 +6,7 @@
 
     <groupId>com.encodeforge</groupId>
     <artifactId>encodeforge</artifactId>
-    <version>0.3.0</version>
+    <version>0.3.1</version>
     <packaging>jar</packaging>
 
     <name>Encode Forge</name>
@@ -16,7 +16,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
-        <javafx.version>21.0.1</javafx.version>
+        <javafx.version>17.0.2</javafx.version>
+        <javafx.home>C:\Program Files\Java\javafx-sdk-17.0.2</javafx.home>
         <mainClass>com.encodeforge.MainApp</mainClass>
     </properties>
 
@@ -30,11 +31,6 @@
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-fxml</artifactId>
-            <version>${javafx.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-web</artifactId>
             <version>${javafx.version}</version>
         </dependency>
 
@@ -92,22 +88,7 @@
                     <include>**/*</include>
                 </includes>
             </resource>
-            <!-- Include Python runtime bundle -->
-            <resource>
-                <directory>target/python-runtime</directory>
-                <includes>
-                    <include>**/*</include>
-                </includes>
-                <targetPath>python-runtime</targetPath>
-            </resource>
-            <!-- Include FFmpeg binaries -->
-            <resource>
-                <directory>target/ffmpeg-runtime</directory>
-                <includes>
-                    <include>**/*</include>
-                </includes>
-                <targetPath>ffmpeg-runtime</targetPath>
-            </resource>
+            <!-- Python runtime and FFmpeg are now downloaded on-demand, not bundled -->
         </resources>
 
         <plugins>
@@ -132,33 +113,77 @@
                 </configuration>
             </plugin>
 
-            <!-- Maven Shade Plugin - Creates fat JAR with all dependencies -->
+            <!-- Maven JAR Plugin - Creates JAR with manifest -->
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>3.3.0</version>
+                    <configuration>
+                        <archive>
+                            <manifest>
+                                <mainClass>${mainClass}</mainClass>
+                                <addClasspath>true</addClasspath>
+                                <classpathPrefix>libs/</classpathPrefix>
+                                <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
+                                <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
+                            </manifest>
+                            <manifestEntries>
+                                <Add-Opens>javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED</Add-Opens>
+                                <Add-Opens>javafx.controls/com.sun.javafx.scene.control=ALL-UNNAMED</Add-Opens>
+                                <Add-Opens>javafx.base/com.sun.javafx.binding=ALL-UNNAMED</Add-Opens>
+                                <Add-Opens>javafx.graphics/com.sun.javafx.stage=ALL-UNNAMED</Add-Opens>
+                                <Add-Modules>javafx.controls,javafx.fxml</Add-Modules>
+                                <JavaFX-Feature-Proxy>true</JavaFX-Feature-Proxy>
+                                <JavaFX-Application-Class>com.encodeforge.MainApp</JavaFX-Application-Class>
+                            </manifestEntries>
+                        </archive>
+                    </configuration>
+                </plugin>
+            
+            <!-- Copy JavaFX native libraries -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId>
-                <version>3.5.1</version>
+                <artifactId>maven-resources-plugin</artifactId>
+                <version>3.3.1</version>
                 <executions>
                     <execution>
+                        <id>copy-javafx-libs</id>
                         <phase>package</phase>
                         <goals>
-                            <goal>shade</goal>
+                            <goal>copy-resources</goal>
                         </goals>
                         <configuration>
-                            <transformers>
-                                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>${mainClass}</mainClass>
-                                </transformer>
-                            </transformers>
-                            <filters>
-                                <filter>
-                                    <artifact>*:*</artifact>
-                                    <excludes>
-                                        <exclude>META-INF/*.SF</exclude>
-                                        <exclude>META-INF/*.DSA</exclude>
-                                        <exclude>META-INF/*.RSA</exclude>
-                                    </excludes>
-                                </filter>
-                            </filters>
+                            <outputDirectory>${project.build.directory}/javafx-libs</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${javafx.home}/bin</directory>
+                                    <includes>
+                                        <include>*.dll</include>
+                                        <include>*.so</include>
+                                        <include>*.dylib</include>
+                                    </includes>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Maven Dependency Plugin - Copy dependencies to libs folder -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.6.0</version>
+                <executions>
+                    <execution>
+                        <id>copy-dependencies</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/libs</outputDirectory>
+                            <includeScope>runtime</includeScope>
                         </configuration>
                     </execution>
                 </executions>
@@ -187,97 +212,142 @@
             </plugin>
             -->
 
+
             <!-- JPackage Plugin - Creates native installers -->
+            <!--
+                Note: Only run jpackage on the platform you're building for.
+                On Windows: mvn clean package -P windows
+                On Linux: mvn clean package -P linux  
+                On macOS: mvn clean package -P mac
+                
+                Or use build.bat/build.sh which will run the appropriate profile.
+            -->
             <plugin>
                 <groupId>org.panteleyev</groupId>
                 <artifactId>jpackage-maven-plugin</artifactId>
                 <version>1.6.0</version>
+                <configuration>
+                    <!-- Common configuration -->
+                    <name>EncodeForge</name>
+                    <appVersion>${project.version}</appVersion>
+                    <vendor>EncodeForge</vendor>
+                    <input>target</input>
+                    <mainJar>encodeforge-${project.version}.jar</mainJar>
+                    <mainClass>com.encodeforge.MainApp</mainClass>
+                    
+                    <!-- Don't bundle a runtime image - use system Java -->
+                    <!-- runtimeImage removed to avoid JavaFX module conflicts -->
+                    
+                    <javaOptions>
+                        <option>--module-path</option>
+                        <option>${javafx.home}/lib</option>
+                        <option>--add-modules</option>
+                        <option>javafx.controls,javafx.fxml</option>
+                        <option>-Dfile.encoding=UTF-8</option>
+                        <option>-Xmx2g</option>
+                        <option>--add-opens</option>
+                        <option>javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED</option>
+                        <option>--add-opens</option>
+                        <option>javafx.controls/com.sun.javafx.scene.control=ALL-UNNAMED</option>
+                        <option>--add-opens</option>
+                        <option>javafx.base/com.sun.javafx.binding=ALL-UNNAMED</option>
+                        <option>--add-opens</option>
+                        <option>javafx.graphics/com.sun.javafx.stage=ALL-UNNAMED</option>
+                    </javaOptions>
+                </configuration>
                 <executions>
-                    <!-- Windows Executable -->
+                    <!-- Windows EXE Installer -->
                     <execution>
-                        <id>jpackage-windows</id>
-                        <phase>package</phase>
+                        <id>jpackage-windows-exe</id>
+                        <phase>none</phase> <!-- Activated by profile -->
                         <goals>
                             <goal>jpackage</goal>
                         </goals>
                         <configuration>
-                            <name>EncodeForge</name>
-                            <appVersion>${project.version}</appVersion>
-                            <vendor>Encode Forge</vendor>
                             <destination>target/dist/windows</destination>
-                            <input>target</input>
-                            <mainJar>encodeforge-${project.version}.jar</mainJar>
-                            <mainClass>com.encodeforge.MainApp</mainClass>
                             <type>EXE</type>
-                            <icon>src/main/resources/icons/app-icon.png</icon>
-                            <javaOptions>
-                                <option>-Dfile.encoding=UTF-8</option>
-                                <option>-Xmx2g</option>
-                            </javaOptions>
-                            
-                            <!-- Windows specific -->
+                            <icon>src/main/resources/icons/app-icon.ico</icon>
                             <winDirChooser>true</winDirChooser>
                             <winMenu>true</winMenu>
                             <winShortcut>true</winShortcut>
-                            <winMenuGroup>Encode Forge</winMenuGroup>
-                            <winUpgradeUuid>12345678-1234-1234-1234-123456789012</winUpgradeUuid>
+                            <winMenuGroup>EncodeForge</winMenuGroup>
+                            <winPerUserInstall>false</winPerUserInstall>
+                            <winUpgradeUuid>15365616-42f6-49a7-a80d-8f7b5cec1a0c</winUpgradeUuid>
+                            <winUpdateMode>update</winUpdateMode>
                         </configuration>
                     </execution>
                     
-                    <!-- Linux AppImage -->
+                    <!-- Windows MSI Installer -->
                     <execution>
-                        <id>jpackage-linux</id>
-                        <phase>package</phase>
+                        <id>jpackage-windows-msi</id>
+                        <phase>none</phase> <!-- Activated by profile -->
                         <goals>
                             <goal>jpackage</goal>
                         </goals>
                         <configuration>
-                            <name>EncodeForge</name>
-                            <appVersion>${project.version}</appVersion>
-                            <vendor>Encode Forge</vendor>
+                            <destination>target/dist/windows</destination>
+                            <type>MSI</type>
+                            <icon>src/main/resources/icons/app-icon.ico</icon>
+                            <winDirChooser>true</winDirChooser>
+                            <winMenu>true</winMenu>
+                            <winShortcut>true</winShortcut>
+                            <winMenuGroup>EncodeForge</winMenuGroup>
+                            <winPerUserInstall>false</winPerUserInstall>
+                            <winUpgradeUuid>a1b2c3d4-e5f6-7890-abcd-ef1234567890</winUpgradeUuid>
+                        </configuration>
+                    </execution>
+                    
+                    <!-- Linux DEB Package -->
+                    <execution>
+                        <id>jpackage-linux-deb</id>
+                        <phase>none</phase> <!-- Activated by profile -->
+                        <goals>
+                            <goal>jpackage</goal>
+                        </goals>
+                        <configuration>
                             <destination>target/dist/linux</destination>
-                            <input>target</input>
-                            <mainJar>encodeforge-${project.version}.jar</mainJar>
-                            <mainClass>com.encodeforge.MainApp</mainClass>
-                            <type>APP_IMAGE</type>
+                            <type>DEB</type>
                             <icon>src/main/resources/icons/app-icon.png</icon>
-                            <javaOptions>
-                                <option>-Dfile.encoding=UTF-8</option>
-                                <option>-Xmx2g</option>
-                            </javaOptions>
-                            
-                            <!-- Linux specific -->
                             <linuxShortcut>true</linuxShortcut>
                             <linuxMenuGroup>AudioVideo</linuxMenuGroup>
                             <linuxPackageName>encodeforge</linuxPackageName>
+                            <linuxAppCategory>AudioVideo</linuxAppCategory>
+                            <linuxPackageDeps>ffmpeg</linuxPackageDeps>
                         </configuration>
                     </execution>
                     
-                    <!-- macOS App -->
+                    <!-- Linux RPM Package -->
                     <execution>
-                        <id>jpackage-mac</id>
-                        <phase>package</phase>
+                        <id>jpackage-linux-rpm</id>
+                        <phase>none</phase> <!-- Activated by profile -->
                         <goals>
                             <goal>jpackage</goal>
                         </goals>
                         <configuration>
-                            <name>Encode Forge</name>
-                            <appVersion>${project.version}</appVersion>
-                            <vendor>Encode Forge</vendor>
+                            <destination>target/dist/linux</destination>
+                            <type>RPM</type>
+                            <icon>src/main/resources/icons/app-icon.png</icon>
+                            <linuxShortcut>true</linuxShortcut>
+                            <linuxMenuGroup>AudioVideo</linuxMenuGroup>
+                            <linuxPackageName>encodeforge</linuxPackageName>
+                            <linuxAppCategory>AudioVideo</linuxAppCategory>
+                            <linuxPackageDeps>ffmpeg</linuxPackageDeps>
+                        </configuration>
+                    </execution>
+                    
+                    <!-- macOS DMG -->
+                    <execution>
+                        <id>jpackage-mac-dmg</id>
+                        <phase>none</phase> <!-- Activated by profile -->
+                        <goals>
+                            <goal>jpackage</goal>
+                        </goals>
+                        <configuration>
                             <destination>target/dist/mac</destination>
-                            <input>target</input>
-                            <mainJar>encodeforge-${project.version}.jar</mainJar>
-                            <mainClass>com.encodeforge.MainApp</mainClass>
                             <type>DMG</type>
                             <icon>src/main/resources/icons/app-icon.png</icon>
-                            <javaOptions>
-                                <option>-Dfile.encoding=UTF-8</option>
-                                <option>-Xmx2g</option>
-                            </javaOptions>
-                            
-                            <!-- Mac specific -->
                             <macPackageIdentifier>com.encodeforge.app</macPackageIdentifier>
-                            <macPackageName>Encode Forge</macPackageName>
+                            <macPackageName>EncodeForge</macPackageName>
                             <macSign>false</macSign>
                         </configuration>
                     </execution>
@@ -285,5 +355,113 @@
             </plugin>
         </plugins>
     </build>
+    
+    <!-- Build Profiles for Platform-Specific Installers -->
+    <profiles>
+        <!-- Windows EXE Profile -->
+        <profile>
+            <id>windows-exe</id>
+            <activation>
+                <os>
+                    <family>windows</family>
+                </os>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.panteleyev</groupId>
+                        <artifactId>jpackage-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>jpackage-windows-exe</id>
+                                <phase>package</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        
+        <!-- Windows MSI Profile -->
+        <profile>
+            <id>windows-msi</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.panteleyev</groupId>
+                        <artifactId>jpackage-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>jpackage-windows-msi</id>
+                                <phase>package</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        
+        <!-- Linux DEB Profile -->
+        <profile>
+            <id>linux-deb</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.panteleyev</groupId>
+                        <artifactId>jpackage-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>jpackage-linux-deb</id>
+                                <phase>package</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        
+        <!-- Linux RPM Profile -->
+        <profile>
+            <id>linux-rpm</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.panteleyev</groupId>
+                        <artifactId>jpackage-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>jpackage-linux-rpm</id>
+                                <phase>package</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        
+        <!-- macOS DMG Profile -->
+        <profile>
+            <id>mac-dmg</id>
+            <activation>
+                <os>
+                    <family>mac</family>
+                </os>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.panteleyev</groupId>
+                        <artifactId>jpackage-maven-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>jpackage-mac-dmg</id>
+                                <phase>package</phase>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
 

@@ -373,11 +373,12 @@
 
 .small-button {
     -fx-font-size: 11px;
-    -fx-padding: 4 8;
-    -fx-min-height: 24;
-    -fx-pref-height: 24;
+    -fx-padding: 6 12;
+    -fx-min-height: 28;
+    -fx-pref-height: 28;
     -fx-background-radius: 4;
     -fx-border-radius: 4;
+    -fx-min-width: 80;
 }
 
 .status-label, .toolbar-label {
@@ -1194,12 +1195,15 @@
 .category-list .list-cell {
     -fx-background-color: transparent;
     -fx-text-fill: #ffffff;
-    -fx-padding: 8 12;
+    -fx-padding: 8 16;
     -fx-border-color: transparent;
     -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
     -fx-font-size: 12px;
     -fx-font-weight: 400;
-    -fx-cell-size: 28;
+    -fx-cell-size: 32;
+    -fx-wrap-text: false;
+    -fx-text-overrun: none;
+    -fx-alignment: CENTER_LEFT;
 }
 
 .category-list .list-cell:selected {

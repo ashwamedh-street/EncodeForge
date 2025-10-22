@@ -3,7 +3,7 @@
 <div align="center">
   <img src="EncodeForge/src/main/resources/icons/app-icon.png" alt="Encode Forge Logo" width="128" height="128">
   
-  **Version 0.3**
+  **Version 0.3.1**
   
   *The all-in-one media processing application*
 </div>
@@ -43,19 +43,24 @@ Encode Forge is a comprehensive media processing application that combines video
 - **Queue Management** - Add, remove, and reorder processing jobs
 - **Comprehensive Logging** - Export and filter logs for troubleshooting
 
-### Prebundled In:
-- **FFMPEG** - Prebuilt into the Java app (Supports external selection if needed)
-- **Python** - Prebuilt into the Java app
-
 ## Installation
 
 ### Desktop Application (Recommended)
 Download the latest release for your platform:
-- **Windows**: `.msi` installer
+- **Windows**: `.exe` or `.msi` installer
 - **macOS**: `.dmg` package
 - **Linux**: `.deb` or `.rpm` packages
 
-The desktop application includes everything you need - no additional setup required.
+**First Launch Setup:**
+On first launch, EncodeForge will automatically:
+- Download and install FFmpeg (~100-150 MB)
+- Install required Python libraries (~50 MB)
+- Configure everything for you with a progress window
+
+This one-time setup takes 2-5 minutes depending on your connection. After that, you're ready to go!
+
+**Optional AI Features:**
+AI subtitle generation (OpenAI Whisper) can be installed later through the Tools menu when needed.
 
 ### Alternative Interfaces (Not up to date - Will be updated once Java app is 1.0)
 For developers and advanced users, Encode Forge also provides:
@@ -74,12 +79,15 @@ python ffmpeg_cli.py renamer /path/to/videos --tmdb-api-key YOUR_KEY --preview-o
 
 ## Quick Start
 
-1. **Download** the application for your platform
-2. **Install** using the provided installer
+1. **Download** the installer for your platform from Releases
+2. **Run the installer** and follow the installation wizard
 3. **Launch** Encode Forge
-4. **Add files** by dragging and dropping or using the file browser
-5. **Configure** your processing options
-6. **Start processing** and watch the real-time progress
+4. **Wait for first-time setup** - EncodeForge will download FFmpeg and Python libraries (one-time, 2-5 minutes)
+5. **Add files** by dragging and dropping or using the file browser
+6. **Configure** your processing options
+7. **Start processing** and watch the real-time progress
+
+**Optional:** Install AI subtitle generation via Tools → Setup AI Subtitles for Whisper support.
 
 ## Configuration
 
@@ -152,8 +160,13 @@ Encode Forge is actively being developed. Current work includes:
 - **Windows**: Windows 10 or later
 - **macOS**: macOS 10.15 or later
 - **Linux**: Ubuntu 18.04+ or equivalent
-- **RAM**: 4GB minimum, 8GB recommended
-- **Storage**: 500MB for application, additional space for temporary files
+- **RAM**: 4GB minimum, 8GB recommended for AI subtitle generation
+- **Storage**: 
+  - 100 MB for application installer
+  - 250 MB for dependencies (FFmpeg + Python libraries, auto-downloaded)
+  - 300 MB - 3 GB for AI models (optional, only if using Whisper)
+  - Additional space for temporary files during processing
+- **Internet**: Required for first-time setup and optional AI model downloads
 
 ## Support
 
