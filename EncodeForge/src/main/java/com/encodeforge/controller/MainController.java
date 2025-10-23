@@ -1067,25 +1067,22 @@ public class MainController {
         
         new Thread(() -> {
             try {
-                JsonObject response = pythonBridge.scanDirectory(directory.getAbsolutePath(), true);
+                // Scan directory recursively for video files using pure Java
+                List<File> videoFiles = new ArrayList<>();
+                scanDirectoryRecursive(directory, videoFiles);
                 
+                final int fileCount = videoFiles.size();
                 Platform.runLater(() -> {
-                    if (response.get("status").getAsString().equals("success")) {
-                        JsonArray filesArray = response.getAsJsonArray("files");
-                        List<File> files = new ArrayList<>();
-                        filesArray.forEach(element -> files.add(new File(element.getAsString())));
-                        
-                        addFilesToQueue(files);
-                        statusLabel.setText("Scan complete - " + files.size() + " files found");
+                    if (fileCount > 0) {
+                        addFilesToQueue(videoFiles);
+                        statusLabel.setText("Scan complete - " + fileCount + " file(s) found");
                     } else {
-                        String error = response.has("message") ? response.get("message").getAsString() : "Scan failed";
-                        showError("Scan Error", error);
-                        statusLabel.setText("Ready");
+                        statusLabel.setText("No video files found");
                     }
                     addFolderButton.setDisable(false);
                 });
                 
-            } catch (IOException | TimeoutException e) {
+            } catch (Exception e) {
                 logger.error("Error scanning directory", e);
                 Platform.runLater(() -> {
                     showError("Scan Error", "Failed to scan directory: " + e.getMessage());
@@ -1094,6 +1091,39 @@ public class MainController {
                 });
             }
         }).start();
+    }
+    
+    /**
+     * Recursively scan directory for video files
+     */
+    private void scanDirectoryRecursive(File directory, List<File> videoFiles) {
+        if (directory == null || !directory.exists() || !directory.isDirectory()) {
+            return;
+        }
+        
+        File[] files = directory.listFiles();
+        if (files == null) {
+            return;
+        }
+        
+        for (File file : files) {
+            if (file.isDirectory()) {
+                // Recursively scan subdirectories
+                scanDirectoryRecursive(file, videoFiles);
+            } else if (file.isFile() && isVideoFile(file)) {
+                videoFiles.add(file);
+            }
+        }
+    }
+    
+    /**
+     * Check if a file is a video file based on extension
+     */
+    private boolean isVideoFile(File file) {
+        String name = file.getName().toLowerCase();
+        return name.endsWith(".mkv") || name.endsWith(".mp4") || name.endsWith(".avi") ||
+               name.endsWith(".mov") || name.endsWith(".wmv") || name.endsWith(".flv") ||
+               name.endsWith(".webm");
     }
     
     @FXML

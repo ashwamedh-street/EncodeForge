@@ -27,7 +27,28 @@
     </properties>
 
     <dependencies>
-        <!-- JavaFX - resolved per-platform in profiles so native libs/classifiers are correct -->
+        <!-- JavaFX - base dependencies for development/compilation -->
+        <!-- Platform-specific classifiers added by profiles for native installers -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-controls</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-fxml</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-base</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-graphics</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
 
         <!-- JSON processing -->
         <dependency>
