@@ -10,9 +10,9 @@ Class-Path: libs/javafx-controls-21.0.1.jar libs/javafx-controls-21.0.1-
  .jar libs/ikonli-javafx-12.3.1.jar libs/ikonli-core-12.3.1.jar libs/iko
  nli-fontawesome5-pack-12.3.1.jar
 Specification-Title: Encode Forge
-Specification-Version: 0.3
+Specification-Version: 0.4
 Implementation-Title: Encode Forge
-Implementation-Version: 0.3.3
+Implementation-Version: 0.4.0
 Main-Class: com.encodeforge.MainApp
 Add-Opens: javafx.graphics/com.sun.javafx.stage=ALL-UNNAMED
 

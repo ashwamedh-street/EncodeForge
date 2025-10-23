@@ -26,7 +26,7 @@ If applicable, add screenshots to help explain the problem.
 
 ## Environment
 - **OS**: [e.g., Windows 11, macOS 14, Ubuntu 22.04]
-- **Application Version**: [e.g., 0.3.3]
+- **Application Version**: [e.g., 0.4.0]
 - **FFmpeg Version**: [Check in Settings → FFmpeg Status]
 - **Python Libraries Installed**: [Yes/No - Check in Help → About]
 - **Whisper AI Installed**: [Yes/No - Optional feature]

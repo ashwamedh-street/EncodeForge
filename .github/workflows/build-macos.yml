@@ -98,9 +98,9 @@ jobs:
       
       - name: Verify JAR build
         run: |
-          if [ -f "EncodeForge/target/encodeforge-0.3.1.jar" ]; then
+          if [ -f "EncodeForge/target/encodeforge-0.4.0.jar" ]; then
             echo "✓ JAR build successful"
-            ls -lh EncodeForge/target/encodeforge-0.3.1.jar
+            ls -lh EncodeForge/target/encodeforge-0.4.0.jar
           else
             echo "✗ JAR build failed"
             exit 1
@@ -142,14 +142,14 @@ jobs:
           name: encodeforge-macos-x64-${{ github.run_number }}
           path: |
             EncodeForge/target/dist/mac/*.dmg
-            EncodeForge/target/encodeforge-0.3.1.jar
-          retention-days: 30
+            EncodeForge/target/encodeforge-0.4.0.jar
+          retention-days: 7
       
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
         with:
           name: encodeforge-jar-x64
-          path: EncodeForge/target/encodeforge-0.3.1.jar
+          path: EncodeForge/target/encodeforge-0.4.0.jar
           retention-days: 30
       
       - name: Build summary
@@ -250,9 +250,9 @@ jobs:
       
       - name: Verify JAR build
         run: |
-          if [ -f "EncodeForge/target/encodeforge-0.3.1.jar" ]; then
+          if [ -f "EncodeForge/target/encodeforge-0.4.0.jar" ]; then
             echo "✓ JAR build successful"
-            ls -lh EncodeForge/target/encodeforge-0.3.1.jar
+            ls -lh EncodeForge/target/encodeforge-0.4.0.jar
           else
             echo "✗ JAR build failed"
             exit 1
@@ -294,14 +294,14 @@ jobs:
           name: encodeforge-macos-arm64-${{ github.run_number }}
           path: |
             EncodeForge/target/dist/mac/*.dmg
-            EncodeForge/target/encodeforge-0.3.1.jar
+            EncodeForge/target/encodeforge-0.4.0.jar
           retention-days: 30
       
       - name: Upload JAR artifact
         uses: actions/upload-artifact@v4
         with:
           name: encodeforge-jar-arm64
-          path: EncodeForge/target/encodeforge-0.3.1.jar
+          path: EncodeForge/target/encodeforge-0.4.0.jar
           retention-days: 30
       
       - name: Build summary

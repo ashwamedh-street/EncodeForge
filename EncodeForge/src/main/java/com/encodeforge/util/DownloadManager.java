@@ -39,7 +39,7 @@ public class DownloadManager {
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                 connection.setConnectTimeout(CONNECT_TIMEOUT);
                 connection.setReadTimeout(READ_TIMEOUT);
-                connection.setRequestProperty("User-Agent", "EncodeForge/0.3.3");
+                connection.setRequestProperty("User-Agent", "EncodeForge/0.4.0");
 
                 int responseCode = connection.getResponseCode();
                 if (responseCode != HttpURLConnection.HTTP_OK) {

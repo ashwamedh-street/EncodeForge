@@ -37,7 +37,7 @@ mvn clean package -DskipTests
 mvn package -P windows-exe
 ```
 
-Output: `target/dist/windows/EncodeForge-0.3.3.exe`
+Output: `target/dist/windows/EncodeForge-0.4.0.exe`
 
 ### Linux
 ```bash
@@ -52,7 +52,7 @@ mvn clean package -DskipTests
 mvn package -P linux-deb
 ```
 
-Output: `target/dist/linux/encodeforge_0.3.3-1_amd64.deb`
+Output: `target/dist/linux/encodeforge_0.4.0-1_amd64.deb`
 
 ### macOS
 ```bash
@@ -70,7 +70,7 @@ mvn clean package -DskipTests
 mvn package -P mac-dmg-x64
 ```
 
-Output: `target/dist/mac/EncodeForge-0.3.3.dmg`
+Output: `target/dist/mac/EncodeForge-0.4.0.dmg`
 
 ## Development
 
@@ -86,7 +86,7 @@ mvn javafx:run
 mvn clean package -DskipTests
 ```
 
-Output: `target/encodeforge-0.3.3.jar`
+Output: `target/encodeforge-0.4.0.jar`
 
 ## Build Profiles
 

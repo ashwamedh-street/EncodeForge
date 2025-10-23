@@ -2031,7 +2031,7 @@ public class MainController {
         appName.setStyle("-fx-fill: #16c60c; -fx-font-size: 24px; -fx-font-weight: bold;");
         
         // Version
-        javafx.scene.text.Text versionText = new javafx.scene.text.Text("Version 0.3.3");
+        javafx.scene.text.Text versionText = new javafx.scene.text.Text("Version 0.4.0");
         versionText.setStyle("-fx-fill: #4ec9b0; -fx-font-size: 14px;");
         
         // Description
