@@ -214,6 +214,30 @@
 
 
             <!-- JPackage Plugin - Creates native installers -->
+            <!-- Create a custom runtime image containing required Java and JavaFX modules -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jlink-plugin</artifactId>
+                <version>3.4.0</version>
+                <executions>
+                    <execution>
+                        <id>create-jlink-image</id>
+                        <goals>
+                            <goal>jlink</goal>
+                        </goals>
+                        <phase>package</phase>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/jlink-image</outputDirectory>
+                            <!-- Include JavaFX modules used by the app -->
+                            <addModules>javafx.controls,javafx.fxml,java.base,java.desktop,java.logging,java.xml,java.prefs,java.scripting,java.sql,java.rmi,java.naming,java.datatransfer</addModules>
+                            <compress>2</compress>
+                            <stripDebug>true</stripDebug>
+                            <noHeaderFiles>true</noHeaderFiles>
+                            <noManPages>true</noManPages>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <!--
                 Note: Only run jpackage on the platform you're building for.
                 On Windows: mvn clean package -P windows
@@ -234,15 +258,12 @@
                     <input>target</input>
                     <mainJar>encodeforge-${project.version}.jar</mainJar>
                     <mainClass>com.encodeforge.MainApp</mainClass>
-                    
-                    <!-- Don't bundle a runtime image - use system Java -->
-                    <!-- runtimeImage removed to avoid JavaFX module conflicts -->
-                    
+
+                    <!-- Use a jlink-created runtime image so JavaFX modules are bundled -->
+                    <runtimeImage>${project.build.directory}/jlink-image</runtimeImage>
+
+                    <!-- Keep a few JVM options; module-path is not required when runtimeImage contains modules -->
                     <javaOptions>
-                        <option>--module-path</option>
-                        <option>${javafx.home}/lib</option>
-                        <option>--add-modules</option>
-                        <option>javafx.controls,javafx.fxml</option>
                         <option>-Dfile.encoding=UTF-8</option>
                         <option>-Xmx2g</option>
                         <option>--add-opens</option>
