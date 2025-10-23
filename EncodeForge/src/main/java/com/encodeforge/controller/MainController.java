@@ -1726,9 +1726,21 @@ public class MainController {
             
             // Best-effort cancel in backend
             try {
-                logger.info("Sending stop conversion command to Python bridge...");
-                pythonBridge.requestStopConversion();
-                logger.info("Stop conversion command sent successfully");
+                logger.info("Broadcasting stop conversion command to all workers...");
+                if (processPool != null) {
+                    // Broadcast stop to all workers (conversion could be on any worker)
+                    processPool.broadcastCommand("stop_conversion", new JsonObject())
+                        .thenAccept(stopResult -> {
+                            logger.info("Stop conversion result: {}", stopResult);
+                        })
+                        .exceptionally(ex -> {
+                            logger.error("Stop conversion failed: {}", ex.getMessage());
+                            return null;
+                        });
+                    logger.info("Stop conversion broadcast sent to all workers");
+                } else {
+                    logger.warn("Process pool is null, cannot send stop command");
+                }
             } catch (Exception e) {
                 logger.error("Stop command failed: {}", e.getMessage(), e);
             }
@@ -4671,7 +4683,8 @@ public class MainController {
         // Send to Python backend asynchronously
         CompletableFuture.runAsync(() -> {
             try {
-                com.google.gson.JsonObject jsonResponse = pythonBridge.sendCommand(request);
+                // Use process pool instead of pythonBridge
+                com.google.gson.JsonObject jsonResponse = processPool.submitQuickTask("preview_rename", request).join();
                 String status = jsonResponse.get("status").getAsString();
                 
                 if ("success".equals(status)) {
@@ -6036,9 +6049,14 @@ public class MainController {
                                     progressUpdate.get("message").getAsString() : "Processing...";
                                 
                                 Platform.runLater(() -> {
-                                    log(String.format("Progress: %.1f%% - %s", overallProgress, message));
+                                    if (fileProgress < 100) {  // Only log non-completion progress
+                                        log(String.format("Progress: %.1f%% - %s", overallProgress, message));
+                                    }
                                     if (subtitleTotalProgressBar != null) {
                                         subtitleTotalProgressBar.setProgress(overallProgress / 100.0);
+                                    }
+                                    if (subtitleProgressStatusLabel != null) {
+                                        subtitleProgressStatusLabel.setText(message);
                                     }
                                 });
                             }
@@ -6138,13 +6156,21 @@ public class MainController {
                                     }
                                 }
                             });
-                            successCount.incrementAndGet();
                             
-                            // Update progress label
+                            // Update counters and progress
+                            int success = successCount.incrementAndGet();
                             final int completed = completedCount.incrementAndGet();
+                            
+                            logger.info("🔢 Progress Update: {} / {} files completed ({} success, {} failed)", 
+                                completed, totalFiles, success, failedCount.get());
+                            
                             Platform.runLater(() -> {
                                 if (subtitleProgressLabel != null) {
-                                    subtitleProgressLabel.setText(completed + " / " + totalFiles + " files");
+                                    String labelText = completed + " / " + totalFiles + " files";
+                                    subtitleProgressLabel.setText(labelText);
+                                    logger.info("📊 Updated progress label to: {}", labelText);
+                                } else {
+                                    logger.warn("⚠️ subtitleProgressLabel is null!");
                                 }
                             });
                         } else {
@@ -6282,17 +6308,30 @@ public class MainController {
             }
             
             Platform.runLater(() -> {
-                log("AI subtitle generation complete: " + finalSuccess + " success, " + finalFailed + " failed");
+                log("✅ AI subtitle generation complete: " + finalSuccess + " success, " + finalFailed + " failed");
                 
-                // Reset progress UI
+                // Set progress to 100%
                 if (subtitleTotalProgressBar != null) {
-                    subtitleTotalProgressBar.setProgress(1.0); // Show 100%
+                    subtitleTotalProgressBar.setProgress(1.0);
                 }
+                
+                // Update file counter to show completion
                 if (subtitleProgressLabel != null) {
                     subtitleProgressLabel.setText(totalFiles + " / " + totalFiles + " files");
                 }
+                
+                // Show completion status
                 if (subtitleProgressStatusLabel != null) {
-                    subtitleProgressStatusLabel.setText("Complete: " + finalSuccess + " succeeded, " + finalFailed + " failed");
+                    subtitleProgressStatusLabel.setText("✅ Complete: " + finalSuccess + " succeeded, " + finalFailed + " failed");
+                }
+                
+                // Refresh the Available Subtitles table if visible
+                if (availableSubtitlesTable != null && currentlySelectedFile != null) {
+                    ObservableList<SubtitleItem> subs = subtitlesByFile.get(currentlySelectedFile);
+                    if (subs != null) {
+                        availableSubtitlesTable.setItems(subs);
+                        availableSubtitlesTable.refresh();
+                    }
                 }
                 
                 // Don't show dialog if shutting down (double-check)
@@ -6302,13 +6341,16 @@ public class MainController {
                             finalSuccess + finalFailed, finalSuccess, finalFailed));
                 }
                 
-                // Reset progress bar after a short delay to let user see 100%
+                // Reset progress UI after delay
                 new Thread(() -> {
                     try {
-                        Thread.sleep(2000);
+                        Thread.sleep(3000);  // 3 second delay to let user see completion
                         Platform.runLater(() -> {
                             if (subtitleTotalProgressBar != null) {
                                 subtitleTotalProgressBar.setProgress(0.0);
+                            }
+                            if (subtitleProgressLabel != null) {
+                                subtitleProgressLabel.setText("");
                             }
                             if (subtitleProgressStatusLabel != null) {
                                 subtitleProgressStatusLabel.setText("");

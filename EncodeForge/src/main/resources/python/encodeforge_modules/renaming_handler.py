@@ -686,6 +686,23 @@ class RenamingHandler:
                     providers.append("Error")
                     errors.append(str(e))
             
+            # Actually process the files using ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                # Submit all files for parallel processing
+                future_to_file = {executor.submit(process_single_file, fp): fp for fp in file_paths}
+                
+                # Collect results as they complete
+                for future in as_completed(future_to_file):
+                    file_path = future_to_file[future]
+                    try:
+                        # The function already appends to the shared lists
+                        future.result()
+                    except Exception as e:
+                        logger.error(f"Error processing {file_path}: {e}", exc_info=True)
+                        suggested_metadata.append({})
+                        providers.append("Error")
+                        errors.append(str(e))
+            
             logger.info(f"=== Preview Complete: {len(suggested_metadata)} file(s) processed ===")
             logger.info(f"Provider results: {list(provider_metadata.keys())}")
             

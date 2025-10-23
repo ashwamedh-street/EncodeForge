@@ -85,10 +85,31 @@ class EncodeForgeCore:
         """Lazy initialize handlers (called before first use)"""
         if not hasattr(self, 'file_handler'):
             logger.info("Initializing EncodeForge handlers")
-            self.file_handler = FileHandler(self.settings, self.ffmpeg_mgr)
-            self.subtitle_handler = SubtitleHandler(self.settings, self.whisper_mgr, self.subtitle_providers)
-            self.renaming_handler = RenamingHandler(self.settings, self.renamer)
-            self.conversion_handler = ConversionHandler(self.settings, self.ffmpeg_mgr)
+            try:
+                logger.info("Creating FileHandler...")
+                self.file_handler = FileHandler(self.settings, self.ffmpeg_mgr)
+                logger.info("FileHandler created successfully")
+                
+                logger.info("Creating SubtitleHandler...")
+                logger.info("About to call SubtitleHandler constructor...")
+                # Pass None instead of self to avoid triggering lazy whisper_mgr loading during handler init
+                # SubtitleHandler will get whisper_mgr from the parent later when actually needed
+                self.subtitle_handler = SubtitleHandler(self.settings, None, self.subtitle_providers)
+                logger.info("SubtitleHandler constructor returned")
+                logger.info("SubtitleHandler created successfully")
+                
+                logger.info("Creating RenamingHandler...")
+                self.renaming_handler = RenamingHandler(self.settings, self.renamer)
+                logger.info("RenamingHandler created successfully")
+                
+                logger.info("Creating ConversionHandler...")
+                self.conversion_handler = ConversionHandler(self.settings, self.ffmpeg_mgr)
+                logger.info("ConversionHandler created successfully")
+                
+                logger.info("All handlers initialized successfully")
+            except Exception as e:
+                logger.error(f"Error initializing handlers: {e}", exc_info=True)
+                raise
     
     # ======================
     # FFmpeg & Whisper Setup
@@ -274,8 +295,12 @@ class EncodeForgeCore:
     
     def convert_files(self, file_paths: List[str], progress_callback: Optional[Callable] = None) -> Dict:
         """Convert multiple files"""
+        logger.info(f"EncodeForgeCore.convert_files called with {len(file_paths)} files")
         self._ensure_handlers_initialized()
-        return self.conversion_handler.convert_files(file_paths, progress_callback)
+        logger.info("Handlers initialized, calling conversion_handler.convert_files")
+        result = self.conversion_handler.convert_files(file_paths, progress_callback)
+        logger.info(f"conversion_handler.convert_files returned: {result}")
+        return result
     
     def cancel_current(self) -> Dict:
         """Cancel current conversion"""

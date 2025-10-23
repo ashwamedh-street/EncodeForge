@@ -398,6 +398,71 @@ public class PythonProcessPool {
     }
     
     /**
+     * Broadcast a command to all workers (useful for stop_conversion)
+     * Returns as soon as any worker reports success
+     */
+    public CompletableFuture<JsonObject> broadcastCommand(String action, JsonObject params) {
+        logger.info("Broadcasting command '{}' to all {} workers", action, workers.size());
+        
+        JsonObject command = new JsonObject();
+        command.addProperty("action", action);
+        
+        // Merge params
+        for (String key : params.keySet()) {
+            command.add(key, params.get(key));
+        }
+        
+        List<CompletableFuture<JsonObject>> futures = new ArrayList<>();
+        
+        for (PythonWorker worker : workers) {
+            CompletableFuture<JsonObject> future = CompletableFuture.supplyAsync(() -> {
+                try {
+                    logger.debug("Sending broadcast command '{}' to {}", action, worker.getWorkerId());
+                    JsonObject result = worker.sendCommand(command);
+                    logger.debug("Worker {} responded to '{}': {}", worker.getWorkerId(), action, result);
+                    return result;
+                } catch (Exception e) {
+                    logger.warn("Worker {} failed to handle broadcast '{}': {}", worker.getWorkerId(), action, e.getMessage());
+                    JsonObject error = new JsonObject();
+                    error.addProperty("status", "error");
+                    error.addProperty("message", e.getMessage());
+                    return error;
+                }
+            }, taskExecutor);
+            futures.add(future);
+        }
+        
+        // Wait for all workers to respond, then return the first success or last error
+        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+            .thenApply(v -> {
+                // Check if any worker reported success
+                for (CompletableFuture<JsonObject> future : futures) {
+                    try {
+                        JsonObject result = future.get();
+                        if (result.has("status") && "success".equals(result.get("status").getAsString())) {
+                            logger.info("Broadcast '{}' succeeded on at least one worker", action);
+                            return result;
+                        }
+                    } catch (Exception e) {
+                        // Ignore individual failures
+                    }
+                }
+                
+                // No success, return first error
+                try {
+                    JsonObject firstResult = futures.get(0).get();
+                    logger.warn("Broadcast '{}' did not succeed on any worker", action);
+                    return firstResult;
+                } catch (Exception e) {
+                    JsonObject error = new JsonObject();
+                    error.addProperty("status", "error");
+                    error.addProperty("message", "All workers failed");
+                    return error;
+                }
+            });
+    }
+    
+    /**
      * Get pool statistics
      */
     public Map<String, Object> getStatistics() {
@@ -413,24 +478,27 @@ public class PythonProcessPool {
      * Shutdown all workers
      */
     public void shutdown() {
+        // Prevent double shutdown
+        if (taskExecutor.isShutdown()) {
+            logger.debug("Process pool already shut down");
+            return;
+        }
+        
         logger.info("Shutting down Python process pool");
         isRunning = false;
         
-        // Stop health monitoring
-        healthMonitor.shutdown();
-        
-        // Shutdown all workers in parallel
-        List<CompletableFuture<Void>> shutdownFutures = new ArrayList<>();
-        for (PythonWorker worker : workers) {
-            CompletableFuture<Void> future = CompletableFuture.runAsync(worker::shutdown, taskExecutor);
-            shutdownFutures.add(future);
+        // Stop health monitoring first
+        if (!healthMonitor.isShutdown()) {
+            healthMonitor.shutdown();
         }
         
-        // Wait for all workers to shutdown
-        try {
-            CompletableFuture.allOf(shutdownFutures.toArray(new CompletableFuture[0])).get(10, TimeUnit.SECONDS);
-        } catch (Exception e) {
-            logger.warn("Not all workers shut down cleanly", e);
+        // Shutdown all workers directly (synchronously to avoid executor issues during shutdown)
+        for (PythonWorker worker : workers) {
+            try {
+                worker.shutdown();
+            } catch (Exception e) {
+                logger.warn("Error shutting down worker: {}", e.getMessage());
+            }
         }
         
         // Shutdown executors

@@ -920,14 +920,20 @@ class ConversionHandler:
                                 if key == 'progress' and value == 'continue':
                                     # Calculate metrics from accumulated buffer
                                     try:
-                                        # Get raw values from FFmpeg
-                                        current_frame = int(progress_buffer.get('frame', 0))
-                                        encoding_fps = float(progress_buffer.get('fps', 0))
+                                        # Get raw values from FFmpeg (handle N/A values gracefully)
+                                        frame_str = progress_buffer.get('frame', '0')
+                                        current_frame = int(frame_str) if frame_str and frame_str != 'N/A' else 0
+                                        
+                                        # Handle fps (can be N/A during startup)
+                                        fps_str = progress_buffer.get('fps', '0')
+                                        encoding_fps = float(fps_str) if fps_str and fps_str != 'N/A' else 0.0
+                                        
+                                        # Handle speed (can be N/A during startup)
                                         speed_str = progress_buffer.get('speed', '0x').replace('x', '').strip()
-                                        encoding_speed = float(speed_str) if speed_str else 0.0
+                                        encoding_speed = float(speed_str) if speed_str and speed_str != 'N/A' else 0.0
                                         
                                         # Calculate progress percentage from frames (most reliable)
-                                        # This avoids the frozen out_time_us issue
+                                        # This works even when other metrics are N/A
                                         if current_frame > 0 and video_info["total_frames"] > 0:
                                             progress_pct = (current_frame / video_info["total_frames"]) * 100
                                         else:
@@ -940,7 +946,7 @@ class ConversionHandler:
                                         current_time_seconds = current_frame / video_info["fps"] if video_info["fps"] > 0 else 0
                                         
                                         # Calculate ETA from frames and encoding fps
-                                        if encoding_fps > 0 and video_info["total_frames"] > 0:
+                                        if encoding_fps > 0 and video_info["total_frames"] > 0 and current_frame > 0:
                                             remaining_frames = video_info["total_frames"] - current_frame
                                             eta_seconds = remaining_frames / encoding_fps
                                             eta_formatted = self._format_time(int(eta_seconds))
@@ -951,8 +957,10 @@ class ConversionHandler:
                                         if video_info["fps"] > 0 and encoding_fps > 0:
                                             actual_speed = encoding_fps / video_info["fps"]
                                             speed_formatted = f"{actual_speed:.2f}x"
-                                        else:
+                                        elif encoding_speed > 0:
                                             speed_formatted = f"{encoding_speed:.2f}x"  # Fallback to FFmpeg's reported speed
+                                        else:
+                                            speed_formatted = "N/A"  # Initial state - show N/A rather than 0.00x
                                         
                                         # Build complete progress dict
                                         progress_info = {
@@ -969,19 +977,35 @@ class ConversionHandler:
                                         
                                         last_progress_data = progress_info
                                         
-                                        # Throttle updates to once every 0.2 seconds for smoother real-time updates
+                                        # Send progress even during initial state (when fps/speed are N/A)
+                                        # as long as we have frame count for progress percentage
                                         current_time = time.time()
-                                        if current_time - last_progress_time >= 0.2:
-                                            last_progress_time = current_time
+                                        should_send = False
+                                        
+                                        # Always send if we have meaningful progress (>0%)
+                                        if progress_pct > 0:
+                                            # Throttle to once every 0.5 seconds during initial state
+                                            if current_time - last_progress_time >= 0.5:
+                                                should_send = True
+                                                last_progress_time = current_time
+                                        
+                                        if should_send:
                                             progress_count += 1
-                                            logger.info(f"✓ Progress: {progress_pct:.1f}% | Frame: {current_frame}/{video_info['total_frames']} | FPS: {encoding_fps:.1f} | Speed: {speed_formatted} | ETA: {eta_formatted}")
+                                            # Format log message based on available data
+                                            if encoding_fps > 0:
+                                                logger.info(f"✓ Progress: {progress_pct:.1f}% | Frame: {current_frame}/{video_info['total_frames']} | FPS: {encoding_fps:.1f} | Speed: {speed_formatted} | ETA: {eta_formatted}")
+                                            else:
+                                                logger.info(f"✓ Progress: {progress_pct:.1f}% | Frame: {current_frame}/{video_info['total_frames']} (initializing...)")
+                                            
                                             try:
                                                 progress_callback(progress_info)
                                             except Exception as cb_error:
                                                 logger.error(f"Error in progress callback: {cb_error}")
                                         
-                                    except (ValueError, ZeroDivisionError) as e:
-                                        logger.debug(f"Error calculating progress metrics: {e}")
+                                    except (ValueError, ZeroDivisionError, TypeError) as e:
+                                        # Only log if it's not the common N/A case
+                                        if 'N/A' not in str(e):
+                                            logger.debug(f"Error calculating progress metrics: {e}")
                                     
                                     # Clear buffer for next update
                                     progress_buffer = {}
@@ -1193,15 +1217,21 @@ class ConversionHandler:
         progress_callback: Optional[Callable] = None
     ) -> Dict:
         """Convert multiple files with full queue tracking"""
+        logger.info(f"ConversionHandler.convert_files ENTRY: {len(file_paths)} files, progress_callback={progress_callback is not None}")
+        logger.info(f"File paths: {file_paths}")
+        
         results = []
         total_files = len(file_paths)
+        logger.info(f"Initialized: total_files={total_files}")
         
         # Initialize queue tracking
         self._file_queue = []
         self._current_index = 0
         self._completed_files = []
         self._failed_files = []
+        logger.info("Queue tracking initialized")
         
+        logger.info(f"Starting loop over {total_files} files")
         for idx, file_path in enumerate(file_paths, 1):
             logger.info(f"=== Processing {idx}/{total_files}: {Path(file_path).name} ===")
             

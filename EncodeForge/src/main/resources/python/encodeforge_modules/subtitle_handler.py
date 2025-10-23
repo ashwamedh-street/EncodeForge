@@ -16,10 +16,48 @@ logger = logging.getLogger(__name__)
 class SubtitleHandler:
     """Handles all subtitle generation, search, and download operations"""
     
-    def __init__(self, settings: ConversionSettings, whisper_mgr, subtitle_providers):
+    def __init__(self, settings: ConversionSettings, core_or_whisper_mgr, subtitle_providers):
+        logger.info("SubtitleHandler.__init__ ENTRY")
         self.settings = settings
-        self.whisper_mgr = whisper_mgr
+        logger.info("SubtitleHandler.__init__ - settings assigned")
+        # Support three modes: None (truly lazy), parent core, or direct whisper_mgr
+        if core_or_whisper_mgr is None:
+            logger.info("SubtitleHandler.__init__ - no core/whisper_mgr provided, will load lazily when needed")
+            self._core = None
+            self._whisper_mgr = None
+            self._lazy_load = True
+        elif hasattr(core_or_whisper_mgr, 'whisper_mgr'):
+            logger.info("SubtitleHandler.__init__ - detected parent core, setting up lazy access")
+            # It's the parent core - access whisper_mgr lazily
+            self._core = core_or_whisper_mgr
+            self._whisper_mgr = None
+            self._lazy_load = False
+        else:
+            logger.info("SubtitleHandler.__init__ - using direct whisper_mgr")
+            # It's whisper_mgr directly (backwards compatibility)
+            self._core = None
+            self._whisper_mgr = core_or_whisper_mgr
+            self._lazy_load = False
+        logger.info("SubtitleHandler.__init__ - assigning subtitle_providers")
         self.subtitle_providers = subtitle_providers
+        logger.info("SubtitleHandler.__init__ EXIT - initialization complete")
+    
+    @property
+    def whisper_mgr(self):
+        """Lazy access to whisper_mgr"""
+        if self._lazy_load and self._whisper_mgr is None:
+            # Truly lazy - import and create WhisperManager only when first accessed
+            logger.info("Lazy loading WhisperManager for the first time...")
+            try:
+                from subtitle_providers.whisper_manager import WhisperManager
+                self._whisper_mgr = WhisperManager()
+                logger.info("WhisperManager loaded successfully")
+            except ImportError:
+                logger.info("WhisperManager not available (optional feature)")
+                self._whisper_mgr = None
+        elif self._core is not None:
+            return self._core.whisper_mgr
+        return self._whisper_mgr
     
     def generate_subtitles(self, video_path: str, language: Optional[str] = None, 
                           progress_callback: Optional[Callable] = None) -> Dict:

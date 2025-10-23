@@ -196,9 +196,80 @@ class WhisperManager:
             "model_sizes": self.MODEL_SIZES,
         }
     
+    def _detect_gpu_type(self) -> str:
+        """
+        Detect GPU type to install appropriate PyTorch version
+        Returns: 'nvidia', 'amd', 'apple', or 'none'
+        """
+        import platform
+        system = platform.system()
+        
+        try:
+            # macOS - Apple Silicon (ARM64) or Intel
+            if system == "Darwin":
+                machine = platform.machine()
+                if machine == "arm64":
+                    return "apple"  # Apple Silicon - use MPS
+                return "none"  # Intel Mac - no GPU support
+            
+            # Windows/Linux - Check for NVIDIA or AMD
+            if system in ["Windows", "Linux"]:
+                # Try to detect NVIDIA via nvidia-smi
+                try:
+                    result = subprocess.run(
+                        ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+                        capture_output=True,
+                        text=True,
+                        timeout=2
+                    )
+                    if result.returncode == 0 and result.stdout.strip():
+                        logger.info(f"Detected NVIDIA GPU: {result.stdout.strip()}")
+                        return "nvidia"
+                except (FileNotFoundError, subprocess.TimeoutExpired):
+                    pass
+                
+                # Try to detect AMD via rocm-smi (Linux) or other methods (Windows)
+                try:
+                    result = subprocess.run(
+                        ["rocm-smi", "--showproductname"],
+                        capture_output=True,
+                        text=True,
+                        timeout=2
+                    )
+                    if result.returncode == 0:
+                        logger.info("Detected AMD GPU with ROCm")
+                        return "amd"
+                except (FileNotFoundError, subprocess.TimeoutExpired):
+                    pass
+                
+                # Windows - Check via wmic for AMD GPU
+                if system == "Windows":
+                    try:
+                        result = subprocess.run(
+                            ["wmic", "path", "win32_VideoController", "get", "name"],
+                            capture_output=True,
+                            text=True,
+                            timeout=2
+                        )
+                        if result.returncode == 0:
+                            output = result.stdout.lower()
+                            if "radeon" in output or "amd" in output:
+                                logger.info("Detected AMD GPU via wmic")
+                                return "amd"
+                            elif "nvidia" in output or "geforce" in output or "quadro" in output:
+                                logger.info("Detected NVIDIA GPU via wmic")
+                                return "nvidia"
+                    except (FileNotFoundError, subprocess.TimeoutExpired):
+                        pass
+        
+        except Exception as e:
+            logger.warning(f"Error detecting GPU: {e}")
+        
+        return "none"
+    
     def install_whisper(self, progress_callback=None) -> tuple[bool, str]:
         """
-        Install Whisper library
+        Install Whisper library with appropriate PyTorch version for detected GPU
         
         Args:
             progress_callback: Function to call with progress updates
@@ -207,17 +278,80 @@ class WhisperManager:
             (success, message)
         """
         try:
+            import sys
+            
+            # Step 1: Detect GPU type
             if progress_callback:
                 progress_callback({
                     "status": "installing",
-                    "progress": 0,
-                    "message": "Installing Whisper..."
+                    "progress": 10,
+                    "message": "Detecting GPU hardware..."
+                })
+            
+            gpu_type = self._detect_gpu_type()
+            logger.info(f"Detected GPU type: {gpu_type}")
+            
+            # Step 2: Install PyTorch with appropriate backend
+            if progress_callback:
+                progress_callback({
+                    "status": "installing",
+                    "progress": 20,
+                    "message": f"Installing PyTorch for {gpu_type.upper()} GPU..."
+                })
+            
+            # Determine PyTorch installation command based on GPU
+            if gpu_type == "nvidia":
+                # NVIDIA CUDA 12.1
+                logger.info("Installing PyTorch with CUDA 12.1 support...")
+                torch_cmd = [
+                    sys.executable, "-m", "pip", "install", 
+                    "torch", "torchvision", "torchaudio",
+                    "--index-url", "https://download.pytorch.org/whl/cu121"
+                ]
+                gpu_msg = "NVIDIA CUDA"
+            elif gpu_type == "amd":
+                # AMD ROCm 6.0
+                logger.info("Installing PyTorch with ROCm 6.0 support...")
+                torch_cmd = [
+                    sys.executable, "-m", "pip", "install",
+                    "torch", "torchvision", "torchaudio",
+                    "--index-url", "https://download.pytorch.org/whl/rocm6.0"
+                ]
+                gpu_msg = "AMD ROCm"
+            elif gpu_type == "apple":
+                # Apple Silicon - default PyTorch includes MPS
+                logger.info("Installing PyTorch with Apple Silicon MPS support...")
+                torch_cmd = [
+                    sys.executable, "-m", "pip", "install",
+                    "torch", "torchvision", "torchaudio"
+                ]
+                gpu_msg = "Apple Silicon MPS"
+            else:
+                # CPU-only
+                logger.info("Installing CPU-only PyTorch...")
+                torch_cmd = [
+                    sys.executable, "-m", "pip", "install",
+                    "torch", "torchvision", "torchaudio",
+                    "--index-url", "https://download.pytorch.org/whl/cpu"
+                ]
+                gpu_msg = "CPU"
+            
+            result = subprocess.run(torch_cmd, capture_output=True, text=True)
+            
+            if result.returncode != 0:
+                error = result.stderr or "PyTorch installation failed"
+                logger.error(f"PyTorch installation failed: {error}")
+                return False, f"PyTorch installation failed: {error}"
+            
+            # Step 3: Install Whisper
+            if progress_callback:
+                progress_callback({
+                    "status": "installing",
+                    "progress": 70,
+                    "message": "Installing Whisper AI..."
                 })
             
             logger.info("Installing openai-whisper...")
-            
-            # Install using pip
-            import sys
             result = subprocess.run(
                 [sys.executable, "-m", "pip", "install", "-U", "openai-whisper"],
                 capture_output=True,
@@ -227,17 +361,22 @@ class WhisperManager:
             if result.returncode == 0:
                 self.whisper_available = True
                 
+                # Verify GPU detection after installation
+                self.device = self._detect_device()
+                
                 if progress_callback:
                     progress_callback({
                         "status": "complete",
                         "progress": 100,
-                        "message": "Whisper installed successfully"
+                        "message": f"Whisper installed successfully with {gpu_msg} support"
                     })
                 
-                return True, "Whisper installed successfully"
+                success_msg = f"Whisper installed successfully!\nGPU Support: {gpu_msg}"
+                logger.info(success_msg)
+                return True, success_msg
             else:
                 error = result.stderr or "Installation failed"
-                return False, f"Installation failed: {error}"
+                return False, f"Whisper installation failed: {error}"
                 
         except Exception as e:
             logger.error(f"Error installing Whisper: {e}")

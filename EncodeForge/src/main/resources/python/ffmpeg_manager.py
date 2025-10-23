@@ -146,6 +146,11 @@ class FFmpegManager:
             localappdata = os.getenv("LOCALAPPDATA", "")
             if localappdata:
                 paths_to_check.extend([
+                    # EncodeForge embedded FFmpeg location (highest priority for LOCALAPPDATA)
+                    os.path.join(localappdata, "EncodeForge\\ffmpeg\\bin\\ffmpeg.exe"),
+                    os.path.join(localappdata, "EncodeForge\\ffmpeg\\ffmpeg.exe"),
+                    os.path.join(localappdata, "EncodeForge\\ffmpeg.exe"),
+                    # Generic FFmpeg installation
                     os.path.join(localappdata, "ffmpeg\\bin\\ffmpeg.exe"),
                     os.path.join(localappdata, "ffmpeg\\ffmpeg.exe"),
                 ])
@@ -761,6 +766,15 @@ class FFmpegManager:
             "decode": [],
             "encode": []
         }
+        
+        # Auto-detect FFmpeg if not already done (lazy detection)
+        if not self.ffmpeg_path:
+            logger.info("FFmpeg path not set, attempting auto-detection for hardware acceleration...")
+            success, info = self.detect_ffmpeg()
+            if not success:
+                logger.warning("FFmpeg auto-detection failed, no hardware acceleration available")
+                return options
+            logger.info(f"FFmpeg auto-detected: {info.get('ffmpeg_path')}")
         
         if not self.ffmpeg_path:
             logger.debug("No FFmpeg path available for hardware detection")
