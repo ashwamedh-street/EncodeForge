@@ -33,7 +33,7 @@ import java.util.Locale;
 public class UpdateChecker {
     private static final Logger logger = LoggerFactory.getLogger(UpdateChecker.class);
     private static final String GITHUB_API_URL = "https://api.github.com/repos/SirStig/EncodeForge/releases/latest";
-    private static final String CURRENT_VERSION = "0.3.1";
+    private static final String CURRENT_VERSION = "0.3.3";
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
     
     private static final HttpClient httpClient = HttpClient.newBuilder()

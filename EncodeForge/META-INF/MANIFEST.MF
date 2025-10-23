@@ -12,7 +12,7 @@ Class-Path: libs/javafx-controls-21.0.1.jar libs/javafx-controls-21.0.1-
 Specification-Title: Encode Forge
 Specification-Version: 0.3
 Implementation-Title: Encode Forge
-Implementation-Version: 0.3.1
+Implementation-Version: 0.3.3
 Main-Class: com.encodeforge.MainApp
 Add-Opens: javafx.graphics/com.sun.javafx.stage=ALL-UNNAMED
 
