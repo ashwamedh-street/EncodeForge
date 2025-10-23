@@ -43,8 +43,8 @@
     -fx-background-color: linear-gradient(to bottom, #0a0a0a 0%, #1c1c1e 100%);
     -fx-border-color: rgba(58, 58, 60, 0.6);
     -fx-border-width: 1;
-    -fx-border-radius: 12;
-    -fx-background-radius: 12;
+    -fx-border-radius: 0;
+    -fx-background-radius: 0;
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.9), 40, 0.15, 0, 8);
 }
 
@@ -116,7 +116,7 @@
     -fx-border-width: 0 0 0.5 0;
     -fx-padding: 0;
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.3), 8, 0, 0, 2);
-    -fx-background-radius: 12 12 0 0;
+    -fx-background-radius: 0;
     -fx-min-height: 44;
     -fx-pref-height: 44;
 }
@@ -156,16 +156,16 @@
     -fx-text-fill: #e5e5e7 !important;
     -fx-border-color: transparent !important;
     -fx-border-width: 0 !important;
-    -fx-border-radius: 8 !important;
-    -fx-background-radius: 8 !important;
+    -fx-border-radius: 0 !important;
+    -fx-background-radius: 0 !important;
     -fx-padding: 0 !important;
     -fx-cursor: hand;
-    -fx-min-width: 44;
-    -fx-pref-width: 44;
-    -fx-min-height: 44;
-    -fx-pref-height: 44;
-    -fx-max-width: 44;
-    -fx-max-height: 44;
+    -fx-min-width: 32 !important;
+    -fx-pref-width: 32 !important;
+    -fx-max-width: 32 !important;
+    -fx-min-height: 32 !important;
+    -fx-pref-height: 32 !important;
+    -fx-max-height: 32 !important;
     -fx-alignment: center;
     -fx-effect: none !important;
     -fx-background-insets: 0 !important;
@@ -173,6 +173,7 @@
     -fx-focus-color: transparent !important;
     -fx-faint-focus-color: transparent !important;
     -fx-content-display: graphic-only;
+    -fx-font-size: 9px;
 }
 
 .window-control-button:hover {
@@ -246,7 +247,7 @@
 
 .main-menu-bar .menu:hover {
     -fx-background-color: #0078d422;
-    -fx-background-radius: 4;
+    -fx-background-radius: 0;
 }
 
 .main-menu-bar .menu-item {
@@ -266,8 +267,8 @@
     -fx-background-color: #252525;
     -fx-border-color: #3a3a3a;
     -fx-border-width: 1;
-    -fx-border-radius: 6;
-    -fx-background-radius: 6;
+    -fx-border-radius: 0;
+    -fx-background-radius: 0;
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.3), 12, 0, 0, 2);
 }
 
@@ -300,8 +301,8 @@
     -fx-text-fill: #ffffff;
     -fx-border-color: rgba(72, 72, 74, 0.6);
     -fx-border-width: 0.5;
-    -fx-border-radius: 6;
-    -fx-background-radius: 6;
+    -fx-border-radius: 0;
+    -fx-background-radius: 0;
     -fx-padding: 5 10;
     -fx-cursor: hand;
     -fx-font-family: "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
@@ -383,8 +384,8 @@
     -fx-padding: 6 12;
     -fx-min-height: 28;
     -fx-pref-height: 28;
-    -fx-background-radius: 6;
-    -fx-border-radius: 6;
+    -fx-background-radius: 0;
+    -fx-border-radius: 0;
     -fx-min-width: 75;
     -fx-pref-width: -1;
 }
@@ -396,6 +397,12 @@
     -fx-font-weight: 400;
 }
 
+/* Global label styles to prevent text truncation */
+.label {
+    -fx-min-width: -1;
+    -fx-pref-width: -1;
+}
+
 /* ========================================
    ELEVATED BUTTONS WITH DEPTH
    ======================================== */
@@ -404,8 +411,8 @@
     -fx-text-fill: #ffffff;
     -fx-border-color: rgba(72, 72, 74, 0.6);
     -fx-border-width: 0.5;
-    -fx-border-radius: 7;
-    -fx-background-radius: 7;
+    -fx-border-radius: 0;
+    -fx-background-radius: 0;
     -fx-padding: 7 14;
     -fx-cursor: hand;
     -fx-font-family: "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
@@ -448,8 +455,8 @@
     -fx-text-fill: #ffffff;
     -fx-border-color: rgba(72, 72, 74, 0.4);
     -fx-border-width: 0.5;
-    -fx-border-radius: 8;
-    -fx-background-radius: 8;
+    -fx-border-radius: 0;
+    -fx-background-radius: 0;
     -fx-padding: 10 14;
     -fx-prompt-text-fill: rgba(160, 160, 160, 0.7);
     -fx-font-family: "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
@@ -479,8 +486,8 @@
     -fx-text-fill: #ffffff;
     -fx-border-color: rgba(72, 72, 74, 0.4);
     -fx-border-width: 0.5;
-    -fx-border-radius: 8;
-    -fx-background-radius: 8;
+    -fx-border-radius: 0;
+    -fx-background-radius: 0;
     -fx-padding: 10 14;
     -fx-prompt-text-fill: rgba(160, 160, 160, 0.7);
     -fx-font-family: "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
@@ -504,8 +511,8 @@
     -fx-background-color: #252525;
     -fx-border-color: #3a3a3a;
     -fx-border-width: 1;
-    -fx-border-radius: 4;
-    -fx-background-radius: 4;
+    -fx-border-radius: 0;
+    -fx-background-radius: 0;
     -fx-min-height: 28;
     -fx-pref-height: 28;
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.05), 2, 0, 0, 1);
@@ -542,8 +549,8 @@
     -fx-background-color: #252525;
     -fx-border-color: #3a3a3a;
     -fx-border-width: 1;
-    -fx-border-radius: 4;
-    -fx-background-radius: 4;
+    -fx-border-radius: 0;
+    -fx-background-radius: 0;
     -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.3), 12, 0, 0, 2);
 }
 

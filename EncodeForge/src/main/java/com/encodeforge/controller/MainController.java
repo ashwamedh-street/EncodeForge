@@ -170,6 +170,7 @@ public class MainController {
     @FXML private ComboBox<String> quickQualityCombo;
     @FXML private ComboBox<String> quickPresetCombo;
     @FXML private CheckBox quickHwAccelCheck;
+    @FXML private CheckBox quickAudioNormalizeCheck;
     @FXML private CheckBox quickDownloadSubsCheck;
     @FXML private CheckBox quickRenameCheck;
     @FXML private Button configSubtitlesButton;
@@ -3101,6 +3102,10 @@ public class MainController {
             settings.setHardwareDecoding(quickHwAccelCheck.isSelected());
         }
         
+        if (quickAudioNormalizeCheck != null) {
+            settings.setAudioNormalize(quickAudioNormalizeCheck.isSelected());
+        }
+        
         if (quickDownloadSubsCheck != null) {
             settings.setDownloadSubtitles(quickDownloadSubsCheck.isSelected());
         }
@@ -3714,6 +3719,11 @@ public class MainController {
         if (quickHwAccelCheck != null) {
             quickHwAccelCheck.setSelected(settings.isHardwareDecoding());
             logger.debug("Loaded saved hardware acceleration: {}", settings.isHardwareDecoding());
+        }
+        
+        if (quickAudioNormalizeCheck != null) {
+            quickAudioNormalizeCheck.setSelected(settings.isAudioNormalize());
+            logger.debug("Loaded saved audio normalize: {}", settings.isAudioNormalize());
         }
         
         if (quickDownloadSubsCheck != null) {

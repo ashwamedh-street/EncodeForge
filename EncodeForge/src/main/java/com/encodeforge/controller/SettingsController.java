@@ -98,6 +98,7 @@ public class SettingsController {
     @FXML private RadioButton audioLanguageRadio;
     @FXML private TextField audioLanguageField;
     @FXML private ComboBox<String> audioBitrateCombo;
+    @FXML private CheckBox audioNormalizeCheck;
     
     // Subtitle Settings
     @FXML private CheckBox convertSubsCheck;
@@ -397,6 +398,7 @@ public class SettingsController {
         crfSpinner.getValueFactory().setValue(settings.getNvencCq());
         
         audioCodecCombo.setValue(settings.getAudioCodec());
+        audioNormalizeCheck.setSelected(settings.isAudioNormalize());
         
         convertSubsCheck.setSelected(settings.isConvertSubtitles());
         subtitleFormatCombo.setValue(settings.getSubtitleFormat());
@@ -458,6 +460,7 @@ public class SettingsController {
         settings.setNvencCq(crfSpinner.getValue());
         
         settings.setAudioCodec(audioCodecCombo.getValue());
+        settings.setAudioNormalize(audioNormalizeCheck.isSelected());
         
         settings.setConvertSubtitles(convertSubsCheck.isSelected());
         settings.setSubtitleFormat(subtitleFormatCombo.getValue());

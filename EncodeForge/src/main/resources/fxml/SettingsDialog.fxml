@@ -175,6 +175,13 @@
                         <Label text="Audio Bitrate:" styleClass="setting-label"/>
                         <ComboBox fx:id="audioBitrateCombo" maxWidth="Infinity"/>
                     </VBox>
+                    
+                    <Separator/>
+                    
+                    <VBox spacing="10">
+                        <CheckBox fx:id="audioNormalizeCheck" text="Normalize audio volume" selected="false"/>
+                        <Label text="Automatically adjust audio levels to a consistent volume across all files" styleClass="hint-label"/>
+                    </VBox>
                 </VBox>
                 
                 <!-- Subtitle Settings -->

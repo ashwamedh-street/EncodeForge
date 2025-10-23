@@ -163,6 +163,7 @@ def _setup_fallback_classes():
             # Audio settings
             self.audio_codec = "copy"
             self.audio_bitrate = None
+            self.normalize_audio = False
             
             # General settings
             self.output_format = "mp4"
@@ -1491,6 +1492,8 @@ class FFmpegAPI:
                 self.settings.audio_bitrate = bitrate
             else:
                 self.settings.audio_bitrate = None
+        if "audio_normalize" in settings_dict:
+            self.settings.normalize_audio = settings_dict["audio_normalize"]
         if "audio_languages" in settings_dict:
             # Store for potential future use
             pass

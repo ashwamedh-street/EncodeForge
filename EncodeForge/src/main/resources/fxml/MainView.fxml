@@ -232,6 +232,7 @@
                             <Label text="Processing Options" styleClass="group-label"/>
                             <HBox spacing="15">
                                 <CheckBox fx:id="quickHwAccelCheck" text="Hardware Acceleration" styleClass="quick-check" selected="true"/>
+                                <CheckBox fx:id="quickAudioNormalizeCheck" text="Normalize Audio" styleClass="quick-check"/>
                                 <CheckBox fx:id="quickDownloadSubsCheck" text="Download Subtitles" styleClass="quick-check" disable="true"/>
                                 <CheckBox fx:id="quickRenameCheck" text="Rename Files" styleClass="quick-check" disable="true"/>
                             </HBox>

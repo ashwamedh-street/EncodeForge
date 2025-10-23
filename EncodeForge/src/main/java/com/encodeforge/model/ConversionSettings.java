@@ -66,6 +66,7 @@ public class ConversionSettings {
     private String audioTrackSelection = "all";
     private String audioLanguages = "eng";
     private String audioBitrate = "Auto";
+    private boolean audioNormalize = false;
     
     // Subtitle settings
     private boolean convertSubtitles = true;
@@ -177,6 +178,9 @@ public class ConversionSettings {
     
     public String getAudioBitrate() { return audioBitrate; }
     public void setAudioBitrate(String audioBitrate) { this.audioBitrate = audioBitrate; }
+    
+    public boolean isAudioNormalize() { return audioNormalize; }
+    public void setAudioNormalize(boolean audioNormalize) { this.audioNormalize = audioNormalize; }
     
     public boolean isConvertSubtitles() { return convertSubtitles; }
     public void setConvertSubtitles(boolean convertSubtitles) { this.convertSubtitles = convertSubtitles; }
@@ -439,6 +443,7 @@ public class ConversionSettings {
         json.addProperty("audio_track_selection", audioTrackSelection);
         json.addProperty("audio_languages", audioLanguages);
         json.addProperty("audio_bitrate", audioBitrate);
+        json.addProperty("audio_normalize", audioNormalize);
         
         // Subtitles
         json.addProperty("convert_subtitles", convertSubtitles);

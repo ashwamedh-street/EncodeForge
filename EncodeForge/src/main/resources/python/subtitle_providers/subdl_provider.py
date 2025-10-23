@@ -2,7 +2,7 @@
 """
 SubDL Provider
 Good for movies and TV shows with free API
-Updated to use latest API structure
+Updated to use latest API structure with web scraping fallback
 """
 
 import gzip
@@ -16,6 +16,13 @@ import zipfile
 from io import BytesIO
 from typing import Dict, List
 
+try:
+    from bs4 import BeautifulSoup
+    BS4_AVAILABLE = True
+except ImportError:
+    BS4_AVAILABLE = False
+    logging.getLogger(__name__).warning("BeautifulSoup not available for SubDL web scraping fallback")
+
 from .base_provider import BaseSubtitleProvider
 
 logger = logging.getLogger(__name__)
@@ -27,6 +34,9 @@ class SubDLProvider(BaseSubtitleProvider):
     def __init__(self):
         super().__init__()
         self.provider_name = "SubDL"
+        # SubDL provides free API keys without login (no rate limits on free keys)
+        # This key was obtained from their website and works without authentication
+        self.api_key = "0kzwwW12CndUyeuPru5DtdRwpIXfH9H9"
     
     def search(self, video_path: str, languages: List[str]) -> List[Dict]:
         """Search SubDL (subdl.com) - improved API integration"""
@@ -70,7 +80,7 @@ class SubDLProvider(BaseSubtitleProvider):
             if season and episode:
                 url = f"https://api.subdl.com/api/v1/subtitles"
                 params = {
-                    'api_key': 'free',
+                    'api_key': self.api_key,
                     'film_name': search_term,
                     'type': 'tv',
                     'season_number': str(season),
@@ -86,7 +96,7 @@ class SubDLProvider(BaseSubtitleProvider):
                 # Also try with episode in the name
                 search_with_ep = f"{search_term} S{season:02d}E{episode:02d}"
                 params2 = {
-                    'api_key': 'free',
+                    'api_key': self.api_key,
                     'film_name': search_with_ep,
                     'languages': ','.join(subdl_languages)
                 }
@@ -99,7 +109,7 @@ class SubDLProvider(BaseSubtitleProvider):
                 # Movie search
                 url = f"https://api.subdl.com/api/v1/subtitles"
                 params = {
-                    'api_key': 'free',
+                    'api_key': self.api_key,
                     'film_name': search_term,
                     'type': 'movie',
                     'languages': ','.join(subdl_languages)
@@ -114,7 +124,7 @@ class SubDLProvider(BaseSubtitleProvider):
                 
                 # Also try without specifying type
                 params_general = {
-                    'api_key': 'free',
+                    'api_key': self.api_key,
                     'film_name': search_term,
                     'languages': ','.join(subdl_languages)
                 }
@@ -167,10 +177,19 @@ class SubDLProvider(BaseSubtitleProvider):
                             
                 except urllib.error.HTTPError as e:
                     logger.warning(f"SubDL HTTP error {e.code}: {e.reason}")
+                    if e.code == 403:
+                        logger.info("SubDL API returned 403, will try web scraping fallback")
                     continue
                 except Exception as e:
                     logger.warning(f"SubDL search failed: {e}")
                     continue
+            
+            # If API failed (403 or no results), try web scraping fallback
+            if (not data or not data.get('subtitles')) and BS4_AVAILABLE:
+                logger.info("SubDL API search failed, trying web scraping fallback...")
+                results = self._search_web_fallback(search_term, season, episode, subdl_languages)
+                if results:
+                    return results
             
             if not data or not data.get('subtitles'):
                 logger.info("SubDL: No results found after all search strategies")
@@ -216,6 +235,102 @@ class SubDLProvider(BaseSubtitleProvider):
         except Exception as e:
             logger.error(f"Error searching SubDL: {e}", exc_info=True)
             
+        return results
+    
+    def _search_web_fallback(self, search_term: str, season, episode, languages: List[str]) -> List[Dict]:
+        """Web scraping fallback when API returns 403"""
+        results = []
+        
+        if not BS4_AVAILABLE:
+            return results
+        
+        try:
+            # Build search URL
+            query = search_term.replace(' ', '-').lower()
+            if season and episode:
+                search_url = f"https://subdl.com/subtitle/{query}/english"
+            else:
+                search_url = f"https://subdl.com/subtitle/{query}/english"
+            
+            logger.info(f"SubDL web scraping: {search_url}")
+            
+            headers = {
+                'User-Agent': self.session_headers['User-Agent'],
+                'Accept': 'text/html,application/xhtml+xml',
+                'Accept-Language': 'en-US,en;q=0.9'
+            }
+            
+            req = urllib.request.Request(search_url, headers=headers)
+            time.sleep(1.0)  # Be respectful
+            
+            with urllib.request.urlopen(req, timeout=15) as response:
+                html = response.read().decode('utf-8', errors='ignore')
+            
+            soup = BeautifulSoup(html, 'html.parser')
+            
+            # Find subtitle entries
+            subtitle_entries = soup.find_all('div', class_='item') or soup.find_all('a', class_='subtitle-entry')
+            
+            for entry in subtitle_entries[:20]:
+                try:
+                    # Extract subtitle info from web page
+                    name_elem = entry.find('h5') or entry.find('span', class_='title') or entry.find('a')
+                    if not name_elem:
+                        continue
+                    
+                    file_name = name_elem.get_text(strip=True)
+                    
+                    # Get download link
+                    link_elem = entry.find('a', href=True)
+                    if link_elem:
+                        download_url = link_elem['href']
+                        if not download_url.startswith('http'):
+                            download_url = 'https://subdl.com' + download_url
+                    else:
+                        download_url = ''
+                    
+                    # Extract file ID from URL
+                    file_id = download_url.split('/')[-1] if download_url else ''
+                    
+                    # Try to extract language
+                    lang_elem = entry.find('span', class_='language') or entry.find('span', class_='lang')
+                    lang_code = 'en'  # default
+                    if lang_elem:
+                        lang_text = lang_elem.get_text(strip=True).lower()
+                        if 'spanish' in lang_text or 'español' in lang_text:
+                            lang_code = 'es'
+                        elif 'french' in lang_text or 'français' in lang_text:
+                            lang_code = 'fr'
+                        elif 'german' in lang_text or 'deutsch' in lang_text:
+                            lang_code = 'de'
+                    
+                    # Filter by season/episode if TV show
+                    if season and episode:
+                        se_pattern = f"s{season:02d}e{episode:02d}"
+                        if se_pattern not in file_name.lower():
+                            continue
+                    
+                    results.append({
+                        "provider": "SubDL",
+                        "file_name": file_name,
+                        "language": lang_code,
+                        "downloads": 0,
+                        "rating": 0,
+                        "file_id": file_id,
+                        "download_url": download_url,
+                        "movie_name": search_term,
+                        "format": "srt"
+                    })
+                    
+                except Exception as e:
+                    logger.debug(f"Error parsing SubDL web entry: {e}")
+                    continue
+            
+            logger.info(f"SubDL web scraping found {len(results)} subtitle(s)")
+            
+        except Exception as e:
+            logger.warning(f"SubDL web scraping failed: {e}")
+        
         return results
     
     def download(self, file_id: str, download_url: str, output_path: str) -> tuple:

@@ -85,15 +85,20 @@ public class MainApp extends Application {
         }
         
         // Check if dependencies are installed
+        // ALWAYS check on every startup to detect newly-added requirements (e.g., bs4, lxml)
         Map<String, Boolean> libStatus = dependencyManager.checkRequiredLibraries().get();
         boolean allLibsInstalled = libStatus.values().stream().allMatch(v -> v);
         boolean ffmpegInstalled = dependencyManager.checkFFmpeg().get();
         
         logger.info("Dependency status:");
         logger.info("  Python libraries: {}", allLibsInstalled ? "✓" : "✗");
+        libStatus.forEach((lib, installed) -> 
+            logger.info("    - {}: {}", lib, installed ? "✓" : "✗"));
         logger.info("  FFmpeg: {}", ffmpegInstalled ? "✓" : "✗");
         
         // If anything is missing, show initialization dialog on startup
+        // This ensures new libraries (like bs4/lxml) get installed even if
+        // the app was previously initialized
         if (!allLibsInstalled || !ffmpegInstalled) {
             logger.info("Some dependencies missing, will show initialization dialog");
             pendingDependencyInstall = true;

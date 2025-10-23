@@ -510,6 +510,11 @@ class ConversionHandler:
             if self.settings.audio_bitrate:
                 cmd.extend(["-b:a", self.settings.audio_bitrate])
         
+        # Add audio normalization filter
+        if self.settings.normalize_audio:
+            logger.info("Applying audio normalization (loudnorm)")
+            cmd.extend(["-af", "loudnorm=I=-16:TP=-1.5:LRA=11"])
+        
         # Add faststart for MP4
         if self.settings.use_faststart and self.settings.output_format in ["mp4", "m4v"]:
             cmd.extend(["-movflags", "+faststart"])
@@ -721,6 +726,11 @@ class ConversionHandler:
                 cmd.extend(["-c:a", self.settings.audio_codec])
                 if self.settings.audio_bitrate and self.settings.audio_bitrate != "Auto":
                     cmd.extend(["-b:a", self.settings.audio_bitrate])
+            
+            # Add audio normalization filter
+            if self.settings.normalize_audio:
+                logger.info("Applying audio normalization (loudnorm)")
+                cmd.extend(["-af", "loudnorm=I=-16:TP=-1.5:LRA=11"])
             
             # Subtitle handling with comprehensive format support
             temp_subtitle_files = []
