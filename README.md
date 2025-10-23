@@ -16,19 +16,21 @@ Encode Forge is a comprehensive media processing application that combines video
 
 ## Features
 
-### 🎬 Video Encoding
+### Video Encoding
 - **Hardware Acceleration** - Supports NVIDIA NVENC, AMD AMF, Intel Quick Sync, and Apple VideoToolbox
 - **Smart Codec Selection** - Automatically chooses the best codec for your hardware
 - **Batch Processing** - Process entire libraries with real-time progress tracking
 - **Stream Copying** - Preserve quality while converting containers
+- **Audio Normalization** - Ensure consistent audio levels across all media files
 
-### 💬 Subtitle Generation
+### Subtitle Generation
 - **AI-Powered Subtitles** - Can't find subtitles you want? Generate subtitles using OpenAI Whisper (90+ languages)
+- **GPU Acceleration** - 10x-20x faster subtitle generation with NVIDIA, AMD, or Apple Silicon GPUs
 - **9 Subtitle Providers** - Download from multiple sources including anime-specific providers (Note: Most Web Scrapping Providers do not work. Currently only OpenSubtitles works.)
 - **Multiple Language Support** - Handle multiple audio tracks and subtitle languages
 - **Preview Mode** - Review subtitles before applying (WIP/ComingSoon)
 
-### 📝 Smart File Renaming
+### Smart File Renaming
 - **10 Metadata Providers** - TMDB, TVDB, OMDB, Trakt, Fanart.tv + 5 free providers (no API key needed)
 - **4 Free Providers Always Available** - AniDB, Kitsu, Jikan/MAL, TVmaze (no configuration needed) (Note: AniDB is rate limited heavily)
 - **Movie Support** - Automatically detect and rename movies using multiple database
@@ -37,7 +39,7 @@ Encode Forge is a comprehensive media processing application that combines video
 - **Custom Patterns** - Define your own naming conventions with powerful variables (Example: {title} - S##E## - {episode-title})
 - **Preview Changes** - See exactly what will be renamed before applying
 
-### 🖥️ Modern Interface
+### Modern Interface
 - **Dark Theme** - Easy on the eyes during long processing sessions
 - **Real-time Progress** - See exactly what's happening with detailed progress bars
 - **Queue Management** - Add, remove, and reorder processing jobs
@@ -60,7 +62,7 @@ On first launch, EncodeForge will automatically:
 This one-time setup takes 2-5 minutes depending on your connection. After that, you're ready to go!
 
 **Optional AI Features:**
-AI subtitle generation (OpenAI Whisper) can be installed later through the Tools menu when needed.
+AI subtitle generation (OpenAI Whisper) can be installed later through the Tools menu when needed. The installer automatically detects your GPU (NVIDIA, AMD, Apple Silicon) and downloads the appropriate PyTorch version for maximum performance.
 
 ### Alternative Interfaces (Not up to date - Will be updated once Java app is 1.0)
 For developers and advanced users, Encode Forge also provides:
@@ -96,10 +98,10 @@ python ffmpeg_cli.py renamer /path/to/videos --tmdb-api-key YOUR_KEY --preview-o
 **Metadata Providers (File Renaming)**
 
 *Free Providers - No API Key Required:*
-- ✅ **AniDB** - Anime metadata (always available)
-- ✅ **Kitsu** - Anime metadata (always available)
-- ✅ **Jikan (MyAnimeList)** - Anime metadata (always available, read-only)
-- ✅ **TVmaze** - TV show metadata (always available)
+- **AniDB** - Anime metadata (always available)
+- **Kitsu** - Anime metadata (always available)
+- **Jikan (MyAnimeList)** - Anime metadata (always available, read-only)
+- **TVmaze** - TV show metadata (always available)
 
 *API Key Providers - Free Keys Available:*
 
@@ -114,14 +116,14 @@ python ffmpeg_cli.py renamer /path/to/videos --tmdb-api-key YOUR_KEY --preview-o
 **Subtitle Providers**
 
 *Free Providers - WIP*
-- ✅ **Addic7ed** - Movies, TV shows, and anime subtitles
-- ✅ **SubDL** - Movie & TV subtitles
-- ✅ **Subf2m** - Movie & TV subtitles
-- ✅ **YIFY Subtitles** - Movie subtitles
-- ✅ **Podnapisi** - Multilingual subtitles (all content types)
-- ✅ **SubDivX** - Spanish subtitles
-- ✅ **Kitsunekko** - Anime subtitles (English & Japanese)
-- ✅ **Jimaku** - Anime subtitles (multiple languages)
+- **Addic7ed** - Movies, TV shows, and anime subtitles
+- **SubDL** - Movie & TV subtitles
+- **Subf2m** - Movie & TV subtitles
+- **YIFY Subtitles** - Movie subtitles
+- **Podnapisi** - Multilingual subtitles (all content types)
+- **SubDivX** - Spanish subtitles
+- **Kitsunekko** - Anime subtitles (English & Japanese)
+- **Jimaku** - Anime subtitles (multiple languages)
 
 *Account Providers*
 
@@ -142,18 +144,25 @@ Encode Forge automatically detects and uses available hardware acceleration:
 
 *Screenshots will be added here showing the main window with the three modes and the settings window.*
 
-## Work in Progress
+## Recent Updates (v0.4.0)
 
-Encode Forge is actively being developed. Current work includes:
-- **Plugin Support** - Extensible architecture for custom processing plugins, themes, and so on
+### What's New
+- **Audio Normalization** - Ensure consistent volume levels across all your media files
+- **GPU-Accelerated AI Subtitles** - 10x-20x faster Whisper subtitle generation with automatic GPU detection
+- **Performance Improvements** - Faster startup times and reduced memory usage through lazy loading
+- **UI Enhancements** - Improved visual depth, better component scaling, and enhanced dark theme
+
+See [CHANGELOG.md](CHANGELOG.md) for complete release notes.
+
+## Roadmap
+
+Encode Forge is actively being developed. Planned features include:
+- **Plugin Support** (v1.0) - Extensible architecture for custom processing plugins, themes, and so on
 - **Jellyfin Integration** - Direct integration with Jellyfin media servers
 - **Plex Integration** - Direct integration with Plex media servers
-- **UI Improvements** - Enhanced user experience and additional customization options
-- **Performance Optimizations** - Faster processing and better resource management
-- **Full MetaData Grabber** - Grab all missing metadata info for files, including artwork
-- **Preview Window** - Visual Preview of applied subtitles
-- **Audio Normalization** - Implement loudness normalization
-- **Audio Syncing** - Fix Audio/Subtitle syncing intelligently
+- **Preview Window** - Visual preview of applied subtitles
+- **Full Metadata Grabber** - Grab all missing metadata info for files, including artwork
+- **Audio Syncing** - Intelligent audio/subtitle synchronization fixes
 
 ## System Requirements
 
@@ -170,17 +179,12 @@ Encode Forge is actively being developed. Current work includes:
 
 ## Support
 
-- 🐛 **Bug Reports**: [GitHub Issues](https://github.com/yourusername/encodeforge/issues)
-- 💡 **Feature Requests**: [GitHub Discussions](https://github.com/yourusername/encodeforge/discussions)
-- 📖 **Documentation**: [Wiki](https://github.com/yourusername/encodeforge/wiki)
+- **Bug Reports**: [GitHub Issues](https://github.com/SirStig/EncodeForge/issues)
+- **Feature Requests**: [GitHub Discussions](https://github.com/SirStig/EncodeForge/discussions)
+- **Documentation**: [Wiki](https://github.com/SirStig/EncodeForge/wiki)
 
 ## License
 
 MIT License - Use it, modify it, share it, sell it, whatever.
 
 ---
-
-<div align="center">
-  <sub>If Encode Forge has helped you, consider ⭐ starring the repository!</sub>
-</div>
-
