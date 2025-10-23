@@ -92,7 +92,7 @@ jobs:
         run: |
           echo "Building EncodeForge JAR..."
           echo "JavaFX Home: $JAVAFX_HOME"
-          mvn clean package -DskipTests \
+          mvn clean package -DskipTests -P mac-dmg-x64 \
             -Djavafx.home="$JAVAFX_HOME" \
             -Dmaven.javadoc.skip=true
       
@@ -244,7 +244,26 @@ jobs:
         run: |
           echo "Building EncodeForge JAR..."
           echo "JavaFX Home: $JAVAFX_HOME"
-          mvn clean package -DskipTests \
+          mvn clean package -DskipTests -P mac-dmg-arm64 \
+            -Djavafx.home="$JAVAFX_HOME" \
+            -Dmaven.javadoc.skip=true
+      
+      - name: Verify JAR build
+        run: |
+          if [ -f "EncodeForge/target/encodeforge-0.4.0.jar" ]; then
+            echo "✓ JAR build successful"
+            ls -lh EncodeForge/target/encodeforge-0.4.0.jar
+          else
+            echo "✗ JAR build failed"
+            exit 1
+          fi
+      
+      - name: Build macOS DMG
+        working-directory: EncodeForge
+        run: |
+          echo "Building macOS DMG installer for ARM64..."
+          echo "JavaFX Home: $JAVAFX_HOME"
+          mvn package -P mac-dmg-arm64 \
             -Djavafx.home="$JAVAFX_HOME" \
             -Dmaven.javadoc.skip=true
       

@@ -117,8 +117,8 @@
                         <archive>
                             <manifest>
                                 <mainClass>${mainClass}</mainClass>
-                                <addClasspath>true</addClasspath>
-                                <classpathPrefix>libs/</classpathPrefix>
+                                <!-- Don't add classpath here - jpackage handles it -->
+                                <addClasspath>false</addClasspath>
                                 <addDefaultImplementationEntries>true</addDefaultImplementationEntries>
                                 <addDefaultSpecificationEntries>true</addDefaultSpecificationEntries>
                             </manifest>
@@ -127,8 +127,6 @@
                                 <Add-Opens>javafx.controls/com.sun.javafx.scene.control=ALL-UNNAMED</Add-Opens>
                                 <Add-Opens>javafx.base/com.sun.javafx.binding=ALL-UNNAMED</Add-Opens>
                                 <Add-Opens>javafx.graphics/com.sun.javafx.stage=ALL-UNNAMED</Add-Opens>
-                                <Add-Modules>javafx.controls,javafx.fxml</Add-Modules>
-                                <JavaFX-Feature-Proxy>true</JavaFX-Feature-Proxy>
                                 <JavaFX-Application-Class>com.encodeforge.MainApp</JavaFX-Application-Class>
                             </manifestEntries>
                         </archive>
@@ -181,6 +179,19 @@
                             <includeScope>runtime</includeScope>
                         </configuration>
                     </execution>
+                    <!-- Copy libs to top level of target for jpackage -->
+                    <execution>
+                        <id>copy-libs-for-jpackage</id>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}</outputDirectory>
+                            <includeScope>runtime</includeScope>
+                            <!-- Flatten to top level so jpackage can find them -->
+                        </configuration>
+                    </execution>
                 </executions>
             </plugin>
 
@@ -209,21 +220,21 @@
 
 
             <!-- JPackage Plugin - Creates native installers -->
-            <!-- Create a custom runtime image containing required Java and JavaFX modules -->
+            <!-- Note: jlink is disabled as JavaFX doesn't work with jlink automatic modules -->
+            <!-- jpackage will bundle the current JRE instead -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jlink-plugin</artifactId>
-                <version>3.4.0</version>
+                <version>3.2.0</version>
                 <executions>
                     <execution>
                         <id>create-jlink-image</id>
                         <goals>
                             <goal>jlink</goal>
                         </goals>
-                        <phase>package</phase>
+                        <phase>none</phase>
                         <configuration>
                             <outputDirectory>${project.build.directory}/jlink-image</outputDirectory>
-                            <!-- Include JavaFX modules used by the app -->
                             <addModules>javafx.controls,javafx.fxml,java.base,java.desktop,java.logging,java.xml,java.prefs,java.scripting,java.sql,java.rmi,java.naming,java.datatransfer</addModules>
                             <compress>2</compress>
                             <stripDebug>true</stripDebug>
@@ -235,9 +246,9 @@
             </plugin>
             <!--
                 Note: Only run jpackage on the platform you're building for.
-                On Windows: mvn clean package -P windows
-                On Linux: mvn clean package -P linux  
-                On macOS: mvn clean package -P mac
+                On Windows: mvn clean package -P windows-exe
+                On Linux: mvn clean package -P linux-deb  
+                On macOS: mvn clean package -P mac-dmg-x64
                 
                 Or use build.bat/build.sh which will run the appropriate profile.
             -->
@@ -250,25 +261,24 @@
                     <name>EncodeForge</name>
                     <appVersion>${project.version}</appVersion>
                     <vendor>EncodeForge</vendor>
+                    <!-- Input directory - jpackage will copy everything here to the app -->
                     <input>target</input>
                     <mainJar>encodeforge-${project.version}.jar</mainJar>
                     <mainClass>com.encodeforge.MainApp</mainClass>
 
-                    <!-- Use a jlink-created runtime image so JavaFX modules are bundled -->
-                    <runtimeImage>${project.build.directory}/jlink-image</runtimeImage>
+                    <!-- Use current runtime instead of jlink image -->
+                    <!-- <runtimeImage>${project.build.directory}/jlink-image</runtimeImage> -->
 
-                    <!-- Keep a few JVM options; module-path is not required when runtimeImage contains modules -->
+                    <!-- Add JVM options -->
+                    <!-- jpackage auto-generates app.classpath from JARs, so don't override it -->
+                    <!-- Use module-path for JavaFX to load native libraries correctly -->
                     <javaOptions>
                         <option>-Dfile.encoding=UTF-8</option>
                         <option>-Xmx2g</option>
-                        <option>--add-opens</option>
-                        <option>javafx.controls/com.sun.javafx.scene.control.behavior=ALL-UNNAMED</option>
-                        <option>--add-opens</option>
-                        <option>javafx.controls/com.sun.javafx.scene.control=ALL-UNNAMED</option>
-                        <option>--add-opens</option>
-                        <option>javafx.base/com.sun.javafx.binding=ALL-UNNAMED</option>
-                        <option>--add-opens</option>
-                        <option>javafx.graphics/com.sun.javafx.stage=ALL-UNNAMED</option>
+                        <option>--module-path</option>
+                        <option>$APPDIR</option>
+                        <option>--add-modules</option>
+                        <option>javafx.controls,javafx.fxml</option>
                     </javaOptions>
                 </configuration>
                 <executions>
@@ -414,9 +424,26 @@
             <dependencies>
                 <dependency>
                     <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-base</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.win}</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-graphics</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.win}</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
                     <artifactId>javafx-controls</artifactId>
                     <version>${javafx.version}</version>
                     <classifier>${javafx.classifier.win}</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-fxml</artifactId>
+                    <version>${javafx.version}</version>
                 </dependency>
                 <dependency>
                     <groupId>org.openjfx</groupId>
@@ -447,6 +474,18 @@
             <id>windows-msi</id>
             <!-- Windows MSI needs JavaFX native artifacts as well -->
             <dependencies>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-base</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.win}</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-graphics</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.win}</classifier>
+                </dependency>
                 <dependency>
                     <groupId>org.openjfx</groupId>
                     <artifactId>javafx-controls</artifactId>
@@ -484,9 +523,26 @@
             <dependencies>
                 <dependency>
                     <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-base</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.linux}</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-graphics</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.linux}</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
                     <artifactId>javafx-controls</artifactId>
                     <version>${javafx.version}</version>
                     <classifier>${javafx.classifier.linux}</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-fxml</artifactId>
+                    <version>${javafx.version}</version>
                 </dependency>
                 <dependency>
                     <groupId>org.openjfx</groupId>
@@ -519,9 +575,26 @@
             <dependencies>
                 <dependency>
                     <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-base</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.linux}</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-graphics</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.linux}</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
                     <artifactId>javafx-controls</artifactId>
                     <version>${javafx.version}</version>
                     <classifier>${javafx.classifier.linux}</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-fxml</artifactId>
+                    <version>${javafx.version}</version>
                 </dependency>
                 <dependency>
                     <groupId>org.openjfx</groupId>
@@ -563,9 +636,26 @@
             <dependencies>
                 <dependency>
                     <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-base</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.mac}</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-graphics</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.mac}</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
                     <artifactId>javafx-controls</artifactId>
                     <version>${javafx.version}</version>
                     <classifier>${javafx.classifier.mac}</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-fxml</artifactId>
+                    <version>${javafx.version}</version>
                 </dependency>
                 <dependency>
                     <groupId>org.openjfx</groupId>
@@ -598,9 +688,26 @@
             <dependencies>
                 <dependency>
                     <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-base</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.mac.aarch}</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-graphics</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.mac.aarch}</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
                     <artifactId>javafx-controls</artifactId>
                     <version>${javafx.version}</version>
                     <classifier>${javafx.classifier.mac.aarch}</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-fxml</artifactId>
+                    <version>${javafx.version}</version>
                 </dependency>
                 <dependency>
                     <groupId>org.openjfx</groupId>
