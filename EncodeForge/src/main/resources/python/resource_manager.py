@@ -76,13 +76,15 @@ class ResourceManager:
         - Medium: ~10GB
         - Large: ~15GB
         
-        We assume Base model (2GB) as default, with 2GB buffer for system
+        We assume Small model (5GB) as default, with 4GB buffer for system
+        Uses AVAILABLE RAM (not total) to avoid overloading the system
         """
-        # Conservative estimate: 4GB per Whisper instance (2GB model + 2GB working memory)
-        gb_per_instance = 4.0
+        # Conservative estimate: 5GB per Whisper instance (small model is most common)
+        # Adjust based on actual model being used
+        gb_per_instance = 5.0
         
-        # Reserve 2GB for system
-        available_for_whisper = max(0, self.available_ram_gb - 2)
+        # Reserve 4GB for system and other processes
+        available_for_whisper = max(0, self.available_ram_gb - 4)
         
         # Calculate how many instances we can run
         max_instances = int(available_for_whisper / gb_per_instance)
@@ -93,7 +95,9 @@ class ResourceManager:
         # At least 1, at most 4 (diminishing returns beyond 4 parallel transcriptions)
         optimal = max(1, min(4, max_instances))
         
-        logger.info(f"Whisper workers: {optimal} (based on {self.available_ram_gb:.2f}GB available RAM)")
+        logger.info(f"Whisper workers: {optimal} (based on {self.available_ram_gb:.2f}GB available RAM, {gb_per_instance}GB per instance)")
+        logger.info(f"  Available RAM after system reserve: {available_for_whisper:.2f}GB")
+        logger.info(f"  Theoretical max instances: {int(available_for_whisper / gb_per_instance)}, using: {optimal}")
         return optimal
     
     def get_system_info(self) -> Dict:

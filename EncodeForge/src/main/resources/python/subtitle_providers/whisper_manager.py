@@ -75,7 +75,73 @@ class WhisperManager:
     def __init__(self):
         self.whisper_available = False
         self.installed_models = []
+        self.device = self._detect_device()
         self._check_installation()
+    
+    def _detect_device(self) -> str:
+        """
+        Detect best available device for PyTorch/Whisper
+        Supports: NVIDIA CUDA, AMD ROCm (Windows/Linux), Apple Silicon MPS (macOS)
+        """
+        try:
+            import torch
+            
+            # NVIDIA CUDA or AMD ROCm (both use torch.cuda API)
+            # ROCm on Windows: Requires PyTorch built with ROCm support
+            # Install with: pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm5.7
+            if torch.cuda.is_available():
+                device = "cuda"
+                try:
+                    gpu_name = torch.cuda.get_device_name(0)
+                    # Detect AMD vs NVIDIA
+                    if 'AMD' in gpu_name.upper() or 'RADEON' in gpu_name.upper():
+                        # Check if ROCm is actually being used
+                        if hasattr(torch.version, 'hip') and torch.version.hip:
+                            logger.info(f"🔴 AMD GPU with ROCm detected: {gpu_name}")
+                            logger.info(f"   ROCm version: {torch.version.hip} - Whisper will use GPU acceleration")
+                        else:
+                            logger.info(f"🔴 AMD GPU detected: {gpu_name} - Whisper will use ROCm/CUDA acceleration")
+                    else:
+                        cuda_version = torch.version.cuda if hasattr(torch.version, 'cuda') else "Unknown"
+                        logger.info(f"🎮 NVIDIA GPU detected: {gpu_name}")
+                        logger.info(f"   CUDA version: {cuda_version} - Whisper will use GPU acceleration")
+                except Exception as e:
+                    logger.info(f"🎮 GPU detected - Whisper will use CUDA/ROCm acceleration")
+                    logger.debug(f"GPU detection details failed: {e}")
+                return device
+            
+            # Apple Silicon M1/M2/M3/M4 (macOS ARM64)
+            if hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                device = "mps"
+                logger.info(f"🍎 Apple Silicon GPU detected - Whisper will use Metal Performance Shaders (MPS)")
+                logger.info(f"   This provides significant speedup on M-series Macs")
+                return device
+            
+            # DirectML support (experimental - requires special PyTorch build)
+            # Not currently supported by Whisper, but may work with custom builds
+            
+        except ImportError:
+            logger.debug("PyTorch not available for GPU detection")
+            pass
+        except Exception as e:
+            logger.warning(f"Error detecting GPU: {e}")
+        
+        # Fallback to CPU
+        import platform
+        system = platform.system()
+        logger.info("💻 No GPU detected - Whisper will use CPU")
+        
+        # Provide helpful hints based on platform
+        if system == "Windows":
+            logger.info("   💡 For AMD GPU: Install PyTorch with ROCm support")
+            logger.info("   💡 For NVIDIA GPU: Install PyTorch with CUDA support")
+        elif system == "Darwin":  # macOS
+            logger.info("   💡 For Apple Silicon (M1/M2/M3): Install PyTorch with MPS support")
+        elif system == "Linux":
+            logger.info("   💡 For AMD GPU: Install PyTorch with ROCm support")
+            logger.info("   💡 For NVIDIA GPU: Install PyTorch with CUDA support")
+        
+        return "cpu"
     
     def _convert_language_code(self, lang_code: Optional[str]) -> Optional[str]:
         """Convert 3-letter ISO 639-2 code to 2-letter ISO 639-1 code for Whisper"""
@@ -269,9 +335,9 @@ class WhisperManager:
                 # This will download the model if not already present
                 # Whisper handles checksum verification internally - trust it!
                 # The download can take several minutes for large models
-                logger.info(f"Calling whisper.load_model('{model_name}')...")
-                model = whisper.load_model(model_name, download_root=str(model_dir))
-                logger.info(f"Model {model_name} loaded and verified by Whisper library")
+                logger.info(f"Calling whisper.load_model('{model_name}') with device={self.device}...")
+                model = whisper.load_model(model_name, download_root=str(model_dir), device=self.device)
+                logger.info(f"Model {model_name} loaded and verified by Whisper library on {self.device}")
             finally:
                 # Restore stderr
                 sys.stderr.close()
@@ -369,9 +435,10 @@ class WhisperManager:
                 sys.stderr = open(os.devnull, 'w')
                 
                 # Load model - Whisper handles its own checksum verification
-                model = whisper.load_model(model_name)
+                logger.info(f"Loading model on device: {self.device}")
+                model = whisper.load_model(model_name, device=self.device)
                 
-                logger.info(f"Transcribing: {video_path}")
+                logger.info(f"Transcribing: {video_path} using {self.device.upper()}")
                 
                 # Send initial progress if callback provided
                 if progress_callback:

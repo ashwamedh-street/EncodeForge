@@ -1,3 +1,4 @@
-# No external Python dependencies required for core functionality
-# All Python scripts use only standard library modules
+# Core Python dependencies for EncodeForge
+# Required for resource management and parallel processing optimization
+psutil>=5.9.0
 

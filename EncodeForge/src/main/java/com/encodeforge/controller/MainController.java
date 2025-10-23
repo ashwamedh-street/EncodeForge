@@ -52,6 +52,10 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -85,8 +89,13 @@ public class MainController {
     
     private final ConversionSettings settings;
     private boolean isProcessing = false;
+    private volatile boolean isShuttingDown = false;  // Flag to prevent dialogs during shutdown
     private File lastDirectory;
     private Stage primaryStage;
+    
+    // Active background threads and executors for proper shutdown
+    private volatile ExecutorService activeWhisperExecutor = null;
+    private final List<Thread> activeBackgroundThreads = new java.util.concurrent.CopyOnWriteArrayList<>();
     
     // Window dragging variables
     private double xOffset = 0;
@@ -3404,6 +3413,7 @@ public class MainController {
     
     public void shutdown() {
         logger.info("Shutting down main controller");
+        isShuttingDown = true;  // Set flag to prevent dialogs
         
         if (isProcessing) {
             logger.info("Forcefully stopping all ongoing operations...");
@@ -3416,8 +3426,10 @@ public class MainController {
                 // Send shutdown command in a separate thread with timeout
                 Thread shutdownThread = new Thread(() -> {
                     try {
-                        pythonBridge.sendCommand(command);
-                        logger.info("Shutdown command sent to Python bridge");
+                        if (pythonBridge != null) {
+                            pythonBridge.sendCommand(command);
+                            logger.info("Shutdown command sent to Python bridge");
+                        }
                     } catch (Exception e) {
                         logger.error("Failed to send shutdown command", e);
                     }
@@ -3437,10 +3449,51 @@ public class MainController {
                 logger.error("Error during shutdown", e);
             }
             
-            // Update all jobs to cancelled state (already handled earlier)
-            // Processing files are moved back to queued with cancelled status
-            
             isProcessing = false;
+        }
+        
+        // Shutdown active Whisper executor if running
+        if (activeWhisperExecutor != null) {
+            logger.info("Shutting down active Whisper executor");
+            try {
+                activeWhisperExecutor.shutdownNow();  // Interrupt running tasks
+                if (!activeWhisperExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
+                    logger.warn("Whisper executor did not terminate cleanly");
+                }
+            } catch (InterruptedException e) {
+                logger.warn("Interrupted while waiting for Whisper executor shutdown");
+                Thread.currentThread().interrupt();
+            } catch (Exception e) {
+                logger.error("Error shutting down Whisper executor", e);
+            } finally {
+                activeWhisperExecutor = null;
+            }
+        }
+        
+        // Interrupt all active background threads
+        if (!activeBackgroundThreads.isEmpty()) {
+            logger.info("Interrupting {} active background thread(s)", activeBackgroundThreads.size());
+            for (Thread thread : activeBackgroundThreads) {
+                try {
+                    thread.interrupt();
+                } catch (Exception e) {
+                    logger.warn("Error interrupting thread: " + thread.getName(), e);
+                }
+            }
+            activeBackgroundThreads.clear();
+        }
+        
+        // Shutdown process pool (shuts down all Python workers)
+        if (processPool != null) {
+            logger.info("Shutting down Python process pool");
+            try {
+                processPool.shutdown();
+            } catch (RejectedExecutionException e) {
+                // Pool already shut down, ignore
+                logger.debug("Process pool already shut down");
+            } catch (Exception e) {
+                logger.error("Error shutting down process pool", e);
+            }
         }
         
         // Save settings before shutdown (with timeout)
@@ -4084,15 +4137,28 @@ public class MainController {
             // Step 1: Download the subtitle
             Platform.runLater(() -> log(logPrefix + "⬇️  Downloading from " + subtitle.getProvider() + "..."));
             
-            JsonObject downloadRequest = new JsonObject();
-            downloadRequest.addProperty("action", "download_subtitle");
-            downloadRequest.addProperty("file_id", subtitle.getFileId());
-            downloadRequest.addProperty("provider", subtitle.getProvider());
-            downloadRequest.addProperty("video_path", videoPath);
-            downloadRequest.addProperty("language", subtitle.getLanguage());
-            downloadRequest.addProperty("download_url", subtitle.getDownloadUrl());
+            JsonObject downloadParams = new JsonObject();
+            downloadParams.addProperty("file_id", subtitle.getFileId());
+            downloadParams.addProperty("provider", subtitle.getProvider());
+            downloadParams.addProperty("video_path", videoPath);
+            downloadParams.addProperty("language", subtitle.getLanguage());
+            downloadParams.addProperty("download_url", subtitle.getDownloadUrl());
             
-            JsonObject downloadResponse = pythonBridge.sendCommand(downloadRequest);
+            JsonObject downloadResponse;
+            if (processPool != null) {
+                downloadResponse = processPool.submitQuickTask("download_subtitle", downloadParams).get();
+            } else if (pythonBridge != null) {
+                JsonObject downloadRequest = new JsonObject();
+                downloadRequest.addProperty("action", "download_subtitle");
+                downloadRequest.addProperty("file_id", subtitle.getFileId());
+                downloadRequest.addProperty("provider", subtitle.getProvider());
+                downloadRequest.addProperty("video_path", videoPath);
+                downloadRequest.addProperty("language", subtitle.getLanguage());
+                downloadRequest.addProperty("download_url", subtitle.getDownloadUrl());
+                downloadResponse = pythonBridge.sendCommand(downloadRequest);
+            } else {
+                throw new IllegalStateException("Neither processPool nor pythonBridge available");
+            }
             
             // Check if download succeeded
             if (!downloadResponse.has("status") || !"success".equals(downloadResponse.get("status").getAsString())) {
@@ -4113,14 +4179,26 @@ public class MainController {
             // Step 2: Apply the subtitle
             Platform.runLater(() -> log(logPrefix + "🔧 Applying subtitle in '" + mode + "' mode..."));
             
-            JsonObject applyRequest = new JsonObject();
-            applyRequest.addProperty("action", "apply_subtitles");
-            applyRequest.addProperty("video_path", videoPath);
-            applyRequest.addProperty("subtitle_path", subtitlePath);
-            applyRequest.addProperty("mode", mode);
-            applyRequest.addProperty("language", subtitle.getLanguage());
+            JsonObject applyParams = new JsonObject();
+            applyParams.addProperty("video_path", videoPath);
+            applyParams.addProperty("subtitle_path", subtitlePath);
+            applyParams.addProperty("mode", mode);
+            applyParams.addProperty("language", subtitle.getLanguage());
             
-            JsonObject applyResponse = pythonBridge.sendCommand(applyRequest);
+            JsonObject applyResponse;
+            if (processPool != null) {
+                applyResponse = processPool.submitQuickTask("apply_subtitles", applyParams).get();
+            } else if (pythonBridge != null) {
+                JsonObject applyRequest = new JsonObject();
+                applyRequest.addProperty("action", "apply_subtitles");
+                applyRequest.addProperty("video_path", videoPath);
+                applyRequest.addProperty("subtitle_path", subtitlePath);
+                applyRequest.addProperty("mode", mode);
+                applyRequest.addProperty("language", subtitle.getLanguage());
+                applyResponse = pythonBridge.sendCommand(applyRequest);
+            } else {
+                throw new IllegalStateException("Neither processPool nor pythonBridge available");
+            }
             
             if (applyResponse.has("status") && "success".equals(applyResponse.get("status").getAsString())) {
                 String outputPath = applyResponse.has("output_path") ? applyResponse.get("output_path").getAsString() : "unknown";
@@ -4883,10 +4961,17 @@ public class MainController {
         new Thread(() -> {
             try {
                 // Update settings once
-                JsonObject updateSettings = new JsonObject();
-                updateSettings.addProperty("action", "update_settings");
-                updateSettings.add("settings", settings.toJson());
-                pythonBridge.sendCommand(updateSettings);
+                JsonObject settingsParams = new JsonObject();
+                settingsParams.add("settings", settings.toJson());
+                
+                if (processPool != null) {
+                    processPool.submitQuickTask("update_settings", settingsParams);
+                } else if (pythonBridge != null) {
+                    JsonObject updateSettings = new JsonObject();
+                    updateSettings.addProperty("action", "update_settings");
+                    updateSettings.add("settings", settings.toJson());
+                    pythonBridge.sendCommand(updateSettings);
+                }
                 
                 // Track how many files have completed
                 final int totalFilesToProcess = queuedFiles.size();
@@ -4939,36 +5024,69 @@ public class MainController {
                 });
                 
                 // Create batch search request
-                JsonObject request = new JsonObject();
-                request.addProperty("action", "batch_search_subtitles");
-                request.add("files", filesArray);
+                JsonObject params = new JsonObject();
+                params.add("files", filesArray);
                 
                 // Send batch search with streaming callback
-                pythonBridge.sendStreamingCommand(request, response -> {
-                    Platform.runLater(() -> {
-                        try {
-                            // Check if this is a file-specific update (has file_id)
-                            if (response.has("file_id")) {
-                                String fid = response.get("file_id").getAsString();
-                                String fileName = fileIdToName.get(fid);
-                                
-                                if (fileName == null) {
-                                    logger.warn("Received response for unknown file_id: {}", fid);
-                                    return;
+                if (processPool != null) {
+                    processPool.submitStreamingTask("batch_search_subtitles", params, response -> {
+                        Platform.runLater(() -> {
+                            try {
+                                // Check if this is a file-specific update (has file_id)
+                                if (response.has("file_id")) {
+                                    String fid = response.get("file_id").getAsString();
+                                    String fileName = fileIdToName.get(fid);
+                                    
+                                    if (fileName == null) {
+                                        logger.warn("Received response for unknown file_id: {}", fid);
+                                        return;
+                                    }
+                                    
+                                    // Process progress/results for this specific file
+                                    processFileSearchResponse(fileName, response, filesCompleted, totalFilesToProcess);
+                                } else if (response.has("complete") && response.get("complete").getAsBoolean()) {
+                                    // Final batch completion message
+                                    logger.info("Batch search completed");
+                                    showFinalSubtitleSearchSummary();
                                 }
-                                
-                                // Process progress/results for this specific file
-                                processFileSearchResponse(fileName, response, filesCompleted, totalFilesToProcess);
-                            } else if (response.has("complete") && response.get("complete").getAsBoolean()) {
-                                // Final batch completion message
-                                logger.info("Batch search completed");
-                                showFinalSubtitleSearchSummary();
+                            } catch (Exception e) {
+                                logger.error("Error processing batch search response", e);
                             }
-                        } catch (Exception e) {
-                            logger.error("Error processing batch search response", e);
-                        }
+                        });
                     });
-                });
+                } else if (pythonBridge != null) {
+                    // Fallback to legacy bridge
+                    JsonObject request = new JsonObject();
+                    request.addProperty("action", "batch_search_subtitles");
+                    request.add("files", filesArray);
+                    pythonBridge.sendStreamingCommand(request, response -> {
+                        Platform.runLater(() -> {
+                            try {
+                                // Check if this is a file-specific update (has file_id)
+                                if (response.has("file_id")) {
+                                    String fid = response.get("file_id").getAsString();
+                                    String fileName = fileIdToName.get(fid);
+                                    
+                                    if (fileName == null) {
+                                        logger.warn("Received response for unknown file_id: {}", fid);
+                                        return;
+                                    }
+                                    
+                                    // Process progress/results for this specific file
+                                    processFileSearchResponse(fileName, response, filesCompleted, totalFilesToProcess);
+                                } else if (response.has("complete") && response.get("complete").getAsBoolean()) {
+                                    // Final batch completion message
+                                    logger.info("Batch search completed");
+                                    showFinalSubtitleSearchSummary();
+                                }
+                            } catch (Exception e) {
+                                logger.error("Error processing batch search response", e);
+                            }
+                        });
+                    });
+                } else {
+                    throw new IllegalStateException("Neither processPool nor pythonBridge available");
+                }
                 
             } catch (Exception e) {
                 logger.error("Error in batch subtitle search", e);
@@ -5721,48 +5839,166 @@ public class MainController {
         log("Generating AI subtitles with Whisper...");
         log("Using model: " + settings.getWhisperModel() + ", language: " + settings.getWhisperLanguages());
         
-        // Process each queued file
-        new Thread(() -> {
-            int successCount = 0;
-            int failedCount = 0;
-            int totalFiles = queuedFiles.size();
-            AtomicInteger currentFileIndex = new AtomicInteger(0);
-            
-            // Initialize progress UI
-            Platform.runLater(() -> {
-                if (subtitleTotalProgressBar != null) {
-                    subtitleTotalProgressBar.setProgress(0.0);
-                }
-                if (subtitleProgressLabel != null) {
-                    subtitleProgressLabel.setText("0 / " + totalFiles + " files");
-                }
-                if (subtitleProgressStatusLabel != null) {
-                    subtitleProgressStatusLabel.setText("Starting AI subtitle generation...");
-                }
-            });
-            
-            for (ConversionJob job : queuedFiles) {
-                String filePath = job.getInputPath();
-                String fileName = new File(filePath).getName();
-                int fileIndex = currentFileIndex.getAndIncrement();
-                
-                Platform.runLater(() -> {
-                    log("Generating subtitles for: " + fileName + " (" + (fileIndex + 1) + "/" + totalFiles + ")");
-                    if (subtitleProgressLabel != null) {
-                        subtitleProgressLabel.setText(fileIndex + " / " + totalFiles + " files");
-                    }
-                    if (subtitleProgressStatusLabel != null) {
-                        subtitleProgressStatusLabel.setText("Processing: " + fileName);
-                    }
-                });
-                
+        // Get optimal worker count from Python resource manager
+        Thread setupThread = new Thread(() -> {
+            try {
+                // Query resource manager for optimal Whisper workers
+                int maxWorkers = 1;  // Default to sequential
                 try {
-                    JsonObject params = new JsonObject();
-                    params.addProperty("video_path", filePath);
-                    
-                    // Use language from settings, or null for auto-detect
-                    String language = settings.getWhisperLanguages();
-                    if (language != null && !language.trim().isEmpty() && !"auto".equalsIgnoreCase(language)) {
+                    if (processPool != null) {
+                        JsonObject sysResourcesResponse = processPool.submitQuickTask("get_system_resources").get(5, TimeUnit.SECONDS);
+                        if (sysResourcesResponse != null && sysResourcesResponse.has("optimal_workers")) {
+                            JsonObject optimalWorkers = sysResourcesResponse.getAsJsonObject("optimal_workers");
+                            if (optimalWorkers.has("whisper")) {
+                                maxWorkers = optimalWorkers.get("whisper").getAsInt();
+                                log(String.format("💡 System resources: Using %d parallel Whisper worker(s)", maxWorkers));
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.warn("Could not get optimal worker count, defaulting to sequential processing", e);
+                    log("⚠️  Using sequential processing (1 file at a time)");
+                }
+                
+                final int parallelWorkers = maxWorkers;
+                processWhisperBatch(parallelWorkers);
+                
+            } catch (Exception e) {
+                logger.error("Error in AI subtitle generation", e);
+                Platform.runLater(() -> showError("Error", "Failed to start subtitle generation: " + e.getMessage()));
+            } finally {
+                // Remove from tracking when done
+                activeBackgroundThreads.remove(Thread.currentThread());
+            }
+        }, "WhisperSetup");
+        
+        activeBackgroundThreads.add(setupThread);
+        setupThread.start();
+    }
+    
+    /**
+     * Process Whisper batch with intelligent parallelization
+     */
+    private void processWhisperBatch(int maxWorkers) {
+        int totalFiles = queuedFiles.size();
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger failedCount = new AtomicInteger(0);
+        AtomicInteger completedCount = new AtomicInteger(0);
+        
+        // Initialize progress UI
+        Platform.runLater(() -> {
+            if (subtitleTotalProgressBar != null) {
+                subtitleTotalProgressBar.setProgress(0.0);
+            }
+            if (subtitleProgressLabel != null) {
+                subtitleProgressLabel.setText("0 / " + totalFiles + " files");
+            }
+            if (subtitleProgressStatusLabel != null) {
+                subtitleProgressStatusLabel.setText("Starting AI subtitle generation...");
+            }
+        });
+        
+        // Process files in parallel or sequential based on available workers
+        Thread batchThread = new Thread(() -> {
+            try {
+                if (maxWorkers > 1) {
+                    // Parallel processing
+                    log(String.format("🚀 Processing %d files with %d parallel workers", totalFiles, maxWorkers));
+                    processFilesInParallel(maxWorkers, successCount, failedCount, completedCount, totalFiles);
+                } else {
+                    // Sequential processing (low RAM systems)
+                    log(String.format("📝 Processing %d files sequentially (1 at a time)", totalFiles));
+                    processFilesSequentially(successCount, failedCount, completedCount, totalFiles);
+                }
+            } finally {
+                // Remove from tracking when done
+                activeBackgroundThreads.remove(Thread.currentThread());
+            }
+        }, "WhisperBatch");
+        
+        activeBackgroundThreads.add(batchThread);
+        batchThread.start();
+    }
+    
+    /**
+     * Process files in parallel using ThreadPoolExecutor
+     */
+    private void processFilesInParallel(int maxWorkers, AtomicInteger successCount, 
+                                        AtomicInteger failedCount, AtomicInteger completedCount, int totalFiles) {
+        ExecutorService executor = Executors.newFixedThreadPool(maxWorkers);
+        activeWhisperExecutor = executor;  // Track for shutdown
+        
+        List<Future<?>> futures = new ArrayList<>();
+        
+        // Create snapshot of queued files to avoid concurrent modification
+        List<ConversionJob> filesToProcess = new ArrayList<>(queuedFiles);
+        
+        AtomicInteger fileIndex = new AtomicInteger(0);
+        
+        for (ConversionJob job : filesToProcess) {
+            final int currentIndex = fileIndex.getAndIncrement();
+            Future<?> future = executor.submit(() -> {
+                processWhisperFile(job, currentIndex, totalFiles, successCount, failedCount, completedCount);
+            });
+            futures.add(future);
+        }
+        
+        // Wait for all to complete
+        executor.shutdown();
+        try {
+            executor.awaitTermination(2, TimeUnit.HOURS);  // 2 hour timeout for all files
+        } catch (InterruptedException e) {
+            logger.error("Whisper batch processing interrupted", e);
+            Thread.currentThread().interrupt();
+        } finally {
+            activeWhisperExecutor = null;  // Clear tracking when done
+        }
+        
+        // Show final summary
+        showWhisperCompletionSummary(successCount.get(), failedCount.get(), totalFiles);
+    }
+    
+    /**
+     * Process files sequentially (one at a time)
+     */
+    private void processFilesSequentially(AtomicInteger successCount, AtomicInteger failedCount, 
+                                         AtomicInteger completedCount, int totalFiles) {
+        // Create snapshot of queued files to avoid concurrent modification
+        List<ConversionJob> filesToProcess = new ArrayList<>(queuedFiles);
+        
+        int fileIndex = 0;
+        for (ConversionJob job : filesToProcess) {
+            processWhisperFile(job, fileIndex, totalFiles, successCount, failedCount, completedCount);
+            fileIndex++;
+        }
+        
+        // Show final summary
+        showWhisperCompletionSummary(successCount.get(), failedCount.get(), totalFiles);
+    }
+    
+    /**
+     * Process a single file with Whisper AI
+     */
+    private void processWhisperFile(ConversionJob job, int fileIndex, int totalFiles,
+                                    AtomicInteger successCount, AtomicInteger failedCount, 
+                                    AtomicInteger completedCount) {
+        String filePath = job.getInputPath();
+        String fileName = new File(filePath).getName();
+        
+        Platform.runLater(() -> {
+            log("Generating subtitles for: " + fileName + " (" + (fileIndex + 1) + "/" + totalFiles + ")");
+            if (subtitleProgressStatusLabel != null) {
+                subtitleProgressStatusLabel.setText("Processing: " + fileName);
+            }
+        });
+        
+        try {
+            JsonObject params = new JsonObject();
+            params.addProperty("video_path", filePath);
+            
+            // Use language from settings, or null for auto-detect
+            String language = settings.getWhisperLanguages();
+            if (language != null && !language.trim().isEmpty() && !"auto".equalsIgnoreCase(language)) {
                         // Extract first language if multiple are specified
                         String[] langs = language.split(",");
                         params.addProperty("language", langs[0].trim());
@@ -5902,10 +6138,10 @@ public class MainController {
                                     }
                                 }
                             });
-                            successCount++;
+                            successCount.incrementAndGet();
                             
                             // Update progress label
-                            final int completed = successCount + failedCount;
+                            final int completed = completedCount.incrementAndGet();
                             Platform.runLater(() -> {
                                 if (subtitleProgressLabel != null) {
                                     subtitleProgressLabel.setText(completed + " / " + totalFiles + " files");
@@ -5917,10 +6153,10 @@ public class MainController {
                             Platform.runLater(() -> {
                                 log("❌ Failed: " + fileName + " - " + errorMsg);
                             });
-                            failedCount++;
+                            failedCount.incrementAndGet();
                             
                             // Update progress label
-                            final int completed2 = successCount + failedCount;
+                            final int completed2 = completedCount.incrementAndGet();
                             Platform.runLater(() -> {
                                 if (subtitleProgressLabel != null) {
                                     subtitleProgressLabel.setText(completed2 + " / " + totalFiles + " files");
@@ -5947,41 +6183,67 @@ public class MainController {
                             Platform.runLater(() -> {
                                 log("✅ Generated: " + new File(subtitlePath).getName() + " - " + message);
                             });
-                            successCount++;
+                            successCount.incrementAndGet();
+                            completedCount.incrementAndGet();
                         } else {
                             String errorMsg = response.has("message") ? 
                                 response.get("message").getAsString() : "Unknown error";
                             Platform.runLater(() -> {
                                 log("❌ Failed: " + fileName + " - " + errorMsg);
                             });
-                            failedCount++;
+                            failedCount.incrementAndGet();
+                            completedCount.incrementAndGet();
                         }
                     }
                     
                 } catch (TimeoutException e) {
                     logger.error("Timeout generating subtitles for: " + fileName, e);
-                    Platform.runLater(() -> {
-                        log("❌ Timeout: " + fileName + " - Generation took too long. Try a smaller model.");
-                    });
-                    failedCount++;
+                    if (!isShuttingDown) {
+                        Platform.runLater(() -> {
+                            log("❌ Timeout: " + fileName + " - Generation took too long. Try a smaller model.");
+                        });
+                    }
+                    failedCount.incrementAndGet();
+                    completedCount.incrementAndGet();
+                } catch (InterruptedException e) {
+                    // Likely interrupted during shutdown
+                    logger.info("Subtitle generation interrupted for: " + fileName + " (shutting down)");
+                    failedCount.incrementAndGet();
+                    completedCount.incrementAndGet();
+                    Thread.currentThread().interrupt();  // Restore interrupt status
+                } catch (RejectedExecutionException e) {
+                    // Process pool shut down during operation
+                    logger.info("Subtitle generation rejected for: " + fileName + " (pool shut down)");
+                    if (!isShuttingDown) {
+                        Platform.runLater(() -> {
+                            log("⚠️  Cancelled: " + fileName + " - Operation interrupted");
+                        });
+                    }
+                    failedCount.incrementAndGet();
+                    completedCount.incrementAndGet();
                 } catch (Exception e) {
                     logger.error("Error generating subtitles for: " + fileName, e);
                     
+                    // Don't show error dialogs during shutdown
                     String errorMsg = e.getMessage();
-                    if (errorMsg != null) {
+                    if (errorMsg != null && !isShuttingDown) {
                         if (errorMsg.contains("model") && errorMsg.contains("not")) {
                             Platform.runLater(() -> {
                                 log("❌ Model Error: " + fileName + " - Whisper model not found. Download it from Settings.");
-                                showError("Whisper Model Missing", 
-                                    "The selected Whisper model is not installed.\n\n" +
-                                    "Please go to Settings > Subtitles and download a model first.");
+                                if (!isShuttingDown) {
+                                    showError("Whisper Model Missing", 
+                                        "The selected Whisper model is not installed.\n\n" +
+                                        "Please go to Settings > Subtitles and download a model first.");
+                                }
                             });
                         } else if (errorMsg.contains("memory") || errorMsg.contains("OOM")) {
                             Platform.runLater(() -> {
                                 log("❌ Memory Error: " + fileName + " - Out of memory. Try a smaller model.");
-                                showError("Out of Memory", 
-                                    "Not enough memory to run this Whisper model.\n\n" +
-                                    "Try using a smaller model like 'tiny' or 'base'.");
+                                if (!isShuttingDown) {
+                                    showError("Out of Memory", 
+                                        "Not enough memory to run this Whisper model.\n\n" +
+                                        "Try using a smaller model like 'tiny' or 'base'.");
+                                }
                             });
                         } else {
                             Platform.runLater(() -> {
@@ -5993,13 +6255,32 @@ public class MainController {
                             log("❌ Error: " + fileName + " - Unknown error occurred");
                         });
                     }
-                    failedCount++;
+                    failedCount.incrementAndGet();
+                    completedCount.incrementAndGet();
                 }
+                
+                // Update progress after each file completes
+                final int currentCompleted = completedCount.get();
+                Platform.runLater(() -> {
+                    if (subtitleProgressLabel != null) {
+                        subtitleProgressLabel.setText(currentCompleted + " / " + totalFiles + " files");
+                    }
+                });
             }
-            
-            // Show completion message
+        
+        /**
+         * Show Whisper completion summary
+         */
+        private void showWhisperCompletionSummary(int successCount, int failedCount, int totalFiles) {
             final int finalSuccess = successCount;
             final int finalFailed = failedCount;
+            
+            // Don't show dialogs if shutting down
+            if (isShuttingDown) {
+                logger.info("Skipping completion summary - application is shutting down");
+                return;
+            }
+            
             Platform.runLater(() -> {
                 log("AI subtitle generation complete: " + finalSuccess + " success, " + finalFailed + " failed");
                 
@@ -6014,9 +6295,12 @@ public class MainController {
                     subtitleProgressStatusLabel.setText("Complete: " + finalSuccess + " succeeded, " + finalFailed + " failed");
                 }
                 
-                showInfo("AI Generation Complete", 
-                    String.format("Generated subtitles for %d file(s).\n%d succeeded, %d failed.", 
-                        finalSuccess + finalFailed, finalSuccess, finalFailed));
+                // Don't show dialog if shutting down (double-check)
+                if (!isShuttingDown) {
+                    showInfo("AI Generation Complete", 
+                        String.format("Generated subtitles for %d file(s).\n%d succeeded, %d failed.", 
+                            finalSuccess + finalFailed, finalSuccess, finalFailed));
+                }
                 
                 // Reset progress bar after a short delay to let user see 100%
                 new Thread(() -> {
@@ -6031,13 +6315,11 @@ public class MainController {
                             }
                         });
                     } catch (InterruptedException e) {
-                        // Ignore
+                        // Ignore - likely shutting down
                     }
                 }).start();
             });
-            
-        }, "SubtitleGeneration").start();
-    }
+        }
     
     // ========================================
     // WINDOW CONTROL METHODS
@@ -6512,6 +6794,9 @@ public class MainController {
             case SE:
                 cursor = javafx.scene.Cursor.NW_RESIZE;
                 break;
+            case NONE:
+                cursor = javafx.scene.Cursor.DEFAULT;
+                break;
         }
         
         primaryStage.getScene().setCursor(cursor);
@@ -6563,6 +6848,9 @@ public class MainController {
                 newX = resizeStartStageX + deltaX;
                 newWidth = resizeStartWidth - deltaX;
                 newHeight = resizeStartHeight + deltaY;
+                break;
+            case NONE:
+                // No resize needed
                 break;
         }
         
