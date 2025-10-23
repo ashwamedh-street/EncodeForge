@@ -120,6 +120,81 @@ public class ResourceExtractor {
     }
     
     /**
+     * Validate that critical Python scripts were extracted correctly
+     */
+    public static boolean validateExtractedScripts() {
+        if (extractedScriptsDir == null) {
+            logger.error("Scripts directory not initialized");
+            return false;
+        }
+        
+        // List of critical files that must exist
+        String[] criticalFiles = {
+            "encodeforge_api.py",
+            "encodeforge_core.py",
+            "ffmpeg_core.py",
+            "ffmpeg_manager.py",
+            "metadata_grabber.py",
+            "subtitle_manager.py",
+            "path_manager.py",
+            "profile_manager.py",
+            "resource_manager.py"
+        };
+        
+        // List of critical subdirectories
+        String[] criticalDirs = {
+            "subtitle_providers",
+            "metadata_providers",
+            "encodeforge_modules"
+        };
+        
+        boolean allValid = true;
+        
+        // Check critical files
+        for (String file : criticalFiles) {
+            Path filePath = extractedScriptsDir.resolve(file);
+            if (!Files.exists(filePath)) {
+                logger.error("Missing critical Python file: {}", file);
+                allValid = false;
+            } else {
+                logger.debug("Found: {}", file);
+            }
+        }
+        
+        // Check critical directories and their contents
+        for (String dir : criticalDirs) {
+            Path dirPath = extractedScriptsDir.resolve(dir);
+            if (!Files.exists(dirPath) || !Files.isDirectory(dirPath)) {
+                logger.error("Missing critical Python directory: {}", dir);
+                allValid = false;
+            } else {
+                try {
+                    long fileCount = Files.list(dirPath)
+                        .filter(p -> p.toString().endsWith(".py"))
+                        .count();
+                    logger.debug("Found directory: {} ({} Python files)", dir, fileCount);
+                    
+                    if (fileCount == 0) {
+                        logger.error("Directory {} exists but contains no Python files", dir);
+                        allValid = false;
+                    }
+                } catch (IOException e) {
+                    logger.error("Could not list directory: {}", dir, e);
+                    allValid = false;
+                }
+            }
+        }
+        
+        if (allValid) {
+            logger.info("Python scripts validation passed");
+        } else {
+            logger.error("Python scripts validation FAILED - some files/directories are missing");
+        }
+        
+        return allValid;
+    }
+    
+    /**
      * Clean up extracted resources (optional, called on app exit)
      */
     public static void cleanup() {

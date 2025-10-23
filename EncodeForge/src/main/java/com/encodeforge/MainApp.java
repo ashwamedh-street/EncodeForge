@@ -41,6 +41,9 @@ public class MainApp extends Application {
     @Override
     public void init() throws Exception {
         logger.info("Initializing Encode Forge v{}", VERSION);
+        logger.info("Java version: {}", System.getProperty("java.version"));
+        logger.info("OS: {} {}", System.getProperty("os.name"), System.getProperty("os.version"));
+        logger.info("User home: {}", System.getProperty("user.home"));
         
         // Check if initialization has already been completed
         if (isInitializationComplete()) {
@@ -50,8 +53,23 @@ public class MainApp extends Application {
             try {
                 ResourceExtractor.extractPythonScripts();
                 logger.info("Python scripts extracted successfully (cached)");
+                
+                // Validate critical Python modules are present
+                if (!ResourceExtractor.validateExtractedScripts()) {
+                    logger.warn("Python scripts validation failed, re-extracting...");
+                    markInitializationIncomplete();
+                    ResourceExtractor.extractPythonScripts();
+                    if (!ResourceExtractor.validateExtractedScripts()) {
+                        throw new RuntimeException("Python scripts validation failed after re-extraction");
+                    }
+                }
             } catch (IOException e) {
                 logger.error("Failed to extract Python scripts", e);
+                showEarlyError("Python Script Extraction Failed", 
+                    "Could not extract Python scripts from application bundle.\n\n" +
+                    "Error: " + e.getMessage() + "\n\n" +
+                    "Please check if you have write permissions to:\n" +
+                    System.getProperty("user.home") + "\\.encodeforge");
                 throw new RuntimeException("Could not extract Python scripts", e);
             }
             
@@ -60,6 +78,9 @@ public class MainApp extends Application {
                 logger.info("DependencyManager initialized (cached)");
             } catch (IOException e) {
                 logger.error("Failed to initialize DependencyManager", e);
+                showEarlyError("Initialization Failed", 
+                    "Could not initialize dependency manager.\n\n" +
+                    "Error: " + e.getMessage());
                 throw new RuntimeException("Could not initialize dependency manager", e);
             }
             initializeRuntime();
@@ -70,8 +91,28 @@ public class MainApp extends Application {
         try {
             ResourceExtractor.extractPythonScripts();
             logger.info("Python scripts extracted successfully");
+            
+            // Validate extraction
+            if (!ResourceExtractor.validateExtractedScripts()) {
+                logger.error("Python scripts validation failed after extraction");
+                showEarlyError("Python Scripts Missing",
+                    "Failed to extract Python scripts from application bundle.\n\n" +
+                    "Some required files or directories are missing.\n\n" +
+                    "This may indicate:\n" +
+                    "- Corrupted installation\n" +
+                    "- Incomplete JAR packaging\n" +
+                    "- Antivirus blocking file extraction\n\n" +
+                    "Please check logs at:\n" +
+                    PathManager.getBaseDir().resolve("logs"));
+                throw new RuntimeException("Python scripts validation failed");
+            }
         } catch (IOException e) {
             logger.error("Failed to extract Python scripts", e);
+            showEarlyError("Python Script Extraction Failed",
+                "Could not extract Python scripts from application bundle.\n\n" +
+                "Error: " + e.getMessage() + "\n\n" +
+                "Please check if you have write permissions to:\n" +
+                System.getProperty("user.home") + "\\.encodeforge");
             throw new RuntimeException("Could not extract Python scripts", e);
         }
         
@@ -173,6 +214,19 @@ public class MainApp extends Application {
     }
     
     /**
+     * Mark initialization as incomplete (for re-initialization)
+     */
+    private void markInitializationIncomplete() {
+        try {
+            Path initFlagFile = PathManager.getSettingsDir().resolve("initialization_complete.flag");
+            Files.deleteIfExists(initFlagFile);
+            logger.info("Initialization flag cleared");
+        } catch (Exception e) {
+            logger.warn("Could not clear initialization flag", e);
+        }
+    }
+    
+    /**
      * Reset initialization flag (for debugging or manual reset)
      */
     public static void resetInitializationFlag() {
@@ -182,6 +236,40 @@ public class MainApp extends Application {
             logger.info("Initialization flag reset");
         } catch (Exception e) {
             logger.warn("Could not reset initialization flag", e);
+        }
+    }
+    
+    /**
+     * Show error dialog before JavaFX is initialized
+     * This writes to a file and tries to show a native dialog
+     */
+    private void showEarlyError(String title, String message) {
+        // Log to console
+        System.err.println("FATAL ERROR: " + title);
+        System.err.println(message);
+        
+        // Try to write error to a visible location
+        try {
+            Path errorFile = Path.of(System.getProperty("user.home"), "encodeforge_error.txt");
+            String errorContent = title + "\n" + "=".repeat(title.length()) + "\n\n" + message + 
+                "\n\nTimestamp: " + java.time.Instant.now() +
+                "\n\nLogs location: " + PathManager.getBaseDir().resolve("logs");
+            Files.writeString(errorFile, errorContent);
+            System.err.println("\nError details written to: " + errorFile);
+        } catch (Exception e) {
+            System.err.println("Could not write error file: " + e.getMessage());
+        }
+        
+        // Try to show native dialog (AWT works before JavaFX)
+        try {
+            javax.swing.JOptionPane.showMessageDialog(
+                null, 
+                message, 
+                title, 
+                javax.swing.JOptionPane.ERROR_MESSAGE
+            );
+        } catch (Exception e) {
+            System.err.println("Could not show error dialog: " + e.getMessage());
         }
     }
 
@@ -389,7 +477,104 @@ public class MainApp extends Application {
     }
 
     public static void main(String[] args) {
-        launch(args);
+        // Set up uncaught exception handler for init() failures
+        Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
+            System.err.println("FATAL ERROR in thread " + thread.getName());
+            throwable.printStackTrace();
+            
+            // Try to write error file
+            try {
+                Path errorFile = Path.of(System.getProperty("user.home"), "encodeforge_error.txt");
+                String errorContent = "EncodeForge Fatal Error\n" +
+                    "======================\n\n" +
+                    "Thread: " + thread.getName() + "\n" +
+                    "Error: " + throwable.getMessage() + "\n\n" +
+                    "Stack Trace:\n";
+                
+                StringBuilder stackTrace = new StringBuilder(errorContent);
+                for (StackTraceElement element : throwable.getStackTrace()) {
+                    stackTrace.append("  at ").append(element.toString()).append("\n");
+                }
+                
+                if (throwable.getCause() != null) {
+                    stackTrace.append("\nCaused by: ").append(throwable.getCause().getMessage()).append("\n");
+                    for (StackTraceElement element : throwable.getCause().getStackTrace()) {
+                        stackTrace.append("  at ").append(element.toString()).append("\n");
+                    }
+                }
+                
+                stackTrace.append("\nTimestamp: ").append(java.time.Instant.now());
+                stackTrace.append("\nJava Version: ").append(System.getProperty("java.version"));
+                stackTrace.append("\nOS: ").append(System.getProperty("os.name")).append(" ").append(System.getProperty("os.version"));
+                
+                Files.writeString(errorFile, stackTrace.toString());
+                System.err.println("\nError details written to: " + errorFile);
+                
+                // Try to show AWT dialog
+                try {
+                    javax.swing.JOptionPane.showMessageDialog(
+                        null,
+                        "EncodeForge failed to start.\n\n" +
+                        "Error: " + throwable.getMessage() + "\n\n" +
+                        "Details saved to:\n" + errorFile.toString(),
+                        "EncodeForge Fatal Error",
+                        javax.swing.JOptionPane.ERROR_MESSAGE
+                    );
+                } catch (Exception e) {
+                    System.err.println("Could not show error dialog");
+                }
+            } catch (Exception e) {
+                System.err.println("Could not write error file: " + e.getMessage());
+            }
+            
+            System.exit(1);
+        });
+        
+        try {
+            launch(args);
+        } catch (Exception e) {
+            // JavaFX launch exceptions
+            System.err.println("FATAL: JavaFX launch failed");
+            e.printStackTrace();
+            
+            // Write error file
+            try {
+                Path errorFile = Path.of(System.getProperty("user.home"), "encodeforge_launch_error.txt");
+                String errorContent = "EncodeForge Launch Failed\n" +
+                    "=========================\n\n" +
+                    "Error: " + e.getMessage() + "\n\n" +
+                    "This usually indicates:\n" +
+                    "1. Java/JavaFX version incompatibility\n" +
+                    "2. Missing JavaFX runtime\n" +
+                    "3. Corrupted installation\n\n" +
+                    "Java Version: " + System.getProperty("java.version") + "\n" +
+                    "OS: " + System.getProperty("os.name") + " " + System.getProperty("os.version") + "\n\n" +
+                    "Stack Trace:\n";
+                
+                StringBuilder stackTrace = new StringBuilder(errorContent);
+                for (StackTraceElement element : e.getStackTrace()) {
+                    stackTrace.append("  at ").append(element.toString()).append("\n");
+                }
+                
+                Files.writeString(errorFile, stackTrace.toString());
+                System.err.println("\nError details written to: " + errorFile);
+                
+                // Show AWT dialog
+                javax.swing.JOptionPane.showMessageDialog(
+                    null,
+                    "EncodeForge failed to launch.\n\n" +
+                    "Error: " + e.getMessage() + "\n\n" +
+                    "This may indicate a Java/JavaFX issue.\n\n" +
+                    "Details saved to:\n" + errorFile.toString(),
+                    "EncodeForge Launch Error",
+                    javax.swing.JOptionPane.ERROR_MESSAGE
+                );
+            } catch (Exception ex) {
+                System.err.println("Could not write error file: " + ex.getMessage());
+            }
+            
+            System.exit(1);
+        }
     }
 }
 
