@@ -27,14 +27,18 @@ public class PythonProcessPool {
     private volatile boolean isStartupComplete = false;
     
     /**
-     * Create a new Python process pool
+     * Create a new Python process pool with intelligent sizing
      * @param dependencyManager Dependency manager for Python paths
-     * @param poolSize Number of worker processes (recommended: 4-5)
+     * @param poolSize Number of worker processes (0 for auto-detect based on system resources)
      */
     public PythonProcessPool(DependencyManager dependencyManager, int poolSize) {
         this.dependencyManager = dependencyManager;
-        this.poolSize = poolSize;
-        this.workers = new ArrayList<>(poolSize);
+        
+        // If poolSize is 0, we'll detect optimal size after first worker starts
+        // For now use a reasonable default of 4
+        this.poolSize = poolSize > 0 ? poolSize : 4;
+        
+        this.workers = new ArrayList<>(this.poolSize);
         this.taskRouter = new TaskRouter(workers);
         
         // Health monitoring executor
@@ -51,7 +55,7 @@ public class PythonProcessPool {
             return t;
         });
         
-        logger.info("PythonProcessPool created with {} workers", poolSize);
+        logger.info("PythonProcessPool created with {} workers", this.poolSize);
     }
     
     /**
@@ -329,6 +333,47 @@ public class PythonProcessPool {
                 throw new CompletionException(e);
             }
         }, taskExecutor);
+    }
+    
+    /**
+     * Submit a streaming task with progress callbacks
+     * Used for long-running operations like model downloads
+     */
+    public void submitStreamingTask(String action, JsonObject params, java.util.function.Consumer<JsonObject> progressCallback) {
+        JsonObject command = new JsonObject();
+        command.addProperty("action", action);
+        
+        // Merge params
+        for (String key : params.keySet()) {
+            command.add(key, params.get(key));
+        }
+        
+        taskExecutor.submit(() -> {
+            try {
+                PythonWorker worker = taskRouter.selectWorker(command, TaskRouter.TaskPriority.IMMEDIATE);
+                
+                if (worker == null) {
+                    logger.error("No worker available for streaming task: {}", action);
+                    JsonObject error = new JsonObject();
+                    error.addProperty("status", "error");
+                    error.addProperty("message", "No worker available");
+                    error.addProperty("complete", true);
+                    progressCallback.accept(error);
+                    return;
+                }
+                
+                logger.debug("Submitting streaming task {} to {}", action, worker.getWorkerId());
+                worker.sendStreamingCommand(command, progressCallback);
+                
+            } catch (Exception e) {
+                logger.error("Error executing streaming task {}", action, e);
+                JsonObject error = new JsonObject();
+                error.addProperty("status", "error");
+                error.addProperty("message", e.getMessage());
+                error.addProperty("complete", true);
+                progressCallback.accept(error);
+            }
+        });
     }
     
     /**

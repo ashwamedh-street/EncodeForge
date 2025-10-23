@@ -8,6 +8,7 @@ import com.encodeforge.service.PythonProcessPool;
 import com.encodeforge.util.HardwareDetector;
 import com.encodeforge.util.PathManager;
 import com.encodeforge.util.StatusManager;
+import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import javafx.application.Platform;
@@ -18,6 +19,7 @@ import javafx.fxml.FXMLLoader;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.Alert.AlertType;
+import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.control.Tooltip;
@@ -49,14 +51,18 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Main window controller for the modernized UI
  */
 public class MainController {
     private static final Logger logger = LoggerFactory.getLogger(MainController.class);
+    private static final Gson gson = new Gson();
     
     private final PythonBridge pythonBridge; // Legacy mode
     private final PythonProcessPool processPool; // Multi-worker mode
@@ -1141,8 +1147,20 @@ public class MainController {
         // Start conversion in background
         new Thread(() -> {
             try {
-                pythonBridge.convertFiles(settings.toJson(), filePaths, this::handleProgressUpdate);
-            } catch (IOException e) {
+                if (processPool != null) {
+                    // Use process pool for better performance and resource management
+                    JsonObject params = new JsonObject();
+                    params.add("settings", settings.toJson());
+                    params.add("file_paths", gson.toJsonTree(filePaths));
+                    
+                    log("Using process pool for encoding with intelligent worker allocation");
+                    processPool.submitStreamingTask("convert_files", params, this::handleProgressUpdate);
+                } else {
+                    // Fallback to legacy bridge
+                    log("Process pool not available, using legacy Python bridge");
+                    pythonBridge.convertFiles(settings.toJson(), filePaths, this::handleProgressUpdate);
+                }
+            } catch (Exception e) {
                 logger.error("Error starting conversion", e);
                 Platform.runLater(() -> {
                     showError("Encoding Error", "Failed to start encoding: " + e.getMessage());
@@ -1174,15 +1192,27 @@ public class MainController {
                     
                     // Try to generate subtitles with Whisper first
                     if (settings.isEnableWhisper()) {
-                        JsonObject whisperRequest = new JsonObject();
-                        whisperRequest.addProperty("action", "generate_subtitles");
-                        whisperRequest.addProperty("video_path", filePath);
-                        whisperRequest.addProperty("language", settings.getWhisperLanguages());
+                        JsonObject whisperParams = new JsonObject();
+                        whisperParams.addProperty("video_path", filePath);
+                        whisperParams.addProperty("language", settings.getWhisperLanguages());
                         
                         try {
-                            JsonObject response = pythonBridge.sendCommand(whisperRequest);
-                            if (response.get("status").getAsString().equals("success")) {
-                                log("Generated subtitles for: " + new File(filePath).getName());
+                            JsonObject response;
+                            if (processPool != null) {
+                                // Use multi-worker pool - TaskRouter will route to dedicated Whisper worker
+                                response = processPool.submitQuickTask("generate_subtitles", whisperParams).get();
+                            } else {
+                                // Fallback to legacy bridge
+                                JsonObject whisperRequest = new JsonObject();
+                                whisperRequest.addProperty("action", "generate_subtitles");
+                                whisperRequest.addProperty("video_path", filePath);
+                                whisperRequest.addProperty("language", settings.getWhisperLanguages());
+                                response = pythonBridge.sendCommand(whisperRequest);
+                            }
+                            
+                            if (response != null && !response.get("status").isJsonNull() && 
+                                response.get("status").getAsString().equals("success")) {
+                                log("✅ Generated subtitles for: " + new File(filePath).getName());
                                 Platform.runLater(() -> {
                                     queuedFiles.stream()
                                         .filter(job -> job.getInputPath().equals(filePath))
@@ -1190,23 +1220,38 @@ public class MainController {
                                         .ifPresent(job -> job.setStatus("✅ Completed"));
                                 });
                             } else {
-                                log("Failed to generate subtitles: " + response.get("message").getAsString());
+                                String errorMsg = (response != null && !response.get("message").isJsonNull()) 
+                                    ? response.get("message").getAsString() 
+                                    : "Unknown error";
+                                log("❌ Failed to generate subtitles: " + errorMsg);
                             }
                         } catch (Exception e) {
-                            log("Error generating subtitles: " + e.getMessage());
+                            logger.error("Error generating subtitles for " + filePath, e);
+                            log("❌ Error generating subtitles: " + e.getMessage());
                         }
                     }
                     
                     // Try to download subtitles
                     if (settings.isDownloadSubtitles()) {
-                        JsonObject downloadRequest = new JsonObject();
-                        downloadRequest.addProperty("action", "download_subtitles");
-                        downloadRequest.addProperty("video_path", filePath);
+                        JsonObject downloadParams = new JsonObject();
+                        downloadParams.addProperty("video_path", filePath);
                         
                         try {
-                            JsonObject response = pythonBridge.sendCommand(downloadRequest);
-                            if (response.get("status").getAsString().equals("success")) {
-                                log("Downloaded subtitles for: " + new File(filePath).getName());
+                            JsonObject response;
+                            if (processPool != null) {
+                                // Use quick worker for subtitle downloads
+                                response = processPool.submitQuickTask("download_subtitles", downloadParams).get();
+                            } else {
+                                // Fallback to legacy bridge
+                                JsonObject downloadRequest = new JsonObject();
+                                downloadRequest.addProperty("action", "download_subtitles");
+                                downloadRequest.addProperty("video_path", filePath);
+                                response = pythonBridge.sendCommand(downloadRequest);
+                            }
+                            
+                            if (response != null && !response.get("status").isJsonNull() && 
+                                response.get("status").getAsString().equals("success")) {
+                                log("✅ Downloaded subtitles for: " + new File(filePath).getName());
                                 Platform.runLater(() -> {
                                     queuedFiles.stream()
                                         .filter(job -> job.getInputPath().equals(filePath))
@@ -1214,10 +1259,11 @@ public class MainController {
                                         .ifPresent(job -> job.setStatus("✅ Completed"));
                                 });
                             } else {
-                                log("No subtitles found for: " + new File(filePath).getName());
+                                log("ℹ️  No subtitles found for: " + new File(filePath).getName());
                             }
                         } catch (Exception e) {
-                            log("Error downloading subtitles: " + e.getMessage());
+                            logger.error("Error downloading subtitles for " + filePath, e);
+                            log("❌ Error downloading subtitles: " + e.getMessage());
                         }
                     }
                 }
@@ -1737,6 +1783,7 @@ public class MainController {
             controller.setDialogStage(dialogStage);
             controller.setSettings(settings);
             controller.setPythonBridge(pythonBridge);
+            controller.setProcessPool(processPool);  // Pass process pool for non-blocking operations
             controller.setDependencyManager(dependencyManager);  // Pass DependencyManager for FFmpeg detection
             controller.setStatusManager(statusManager);  // Pass StatusManager for status display
             
@@ -2556,6 +2603,24 @@ public class MainController {
         pauseButton.setDisable(true);
         stopButton.setDisable(true);
         statusLabel.setText("Ready");
+    }
+    
+    /**
+     * Get the base file name of the currently selected file in the queue
+     * @return Base file name without extension, or null if no file selected
+     */
+    private String getCurrentlySelectedFileName() {
+        ConversionJob selectedJob = queuedTable.getSelectionModel().getSelectedItem();
+        if (selectedJob != null) {
+            String inputPath = selectedJob.getInputPath();
+            if (inputPath != null) {
+                File file = new File(inputPath);
+                String fileName = file.getName();
+                // Remove extension
+                return fileName.replaceFirst("\\.[^.]+$", "");
+            }
+        }
+        return null;
     }
     
     /**
@@ -3951,17 +4016,13 @@ public class MainController {
             // Open Whisper setup wizard
             try {
                 WhisperSetupDialog setupDialog = new WhisperSetupDialog(dependencyManager);
+                setupDialog.setProcessPool(processPool);
                 setupDialog.showAndWait();
                 
                 // Refresh status after installation
                 if (setupDialog.isInstallationComplete()) {
-                    // Reset Python core to detect newly installed Whisper
-                    try {
-                        pythonBridge.resetCore();
-                        logger.info("Python core reset after Whisper installation");
-                    } catch (Exception e) {
-                        logger.warn("Failed to reset Python core", e);
-                    }
+                    // No need to reset Python core - workers will detect new installations automatically
+                    logger.info("Whisper installation completed, refreshing status");
                     
                     // Refresh status to update UI
                     CompletableFuture.runAsync(this::updateAllStatus);
@@ -5605,16 +5666,50 @@ public class MainController {
             if (result.isPresent() && result.get() == ButtonType.OK) {
                 handleConfigureWhisper(); // Open setup dialog
             }
+            return;
+        }
+        
+        // Check if any models are installed
+        try {
+            JsonObject whisperStatus;
+            if (processPool != null) {
+                // Use process pool for Whisper status check
+                whisperStatus = processPool.submitQuickTask("check_whisper").get(5, TimeUnit.SECONDS);
+            } else {
+                // Fallback to legacy bridge
+                whisperStatus = pythonBridge.checkWhisper();
+            }
+            
+            // Check if Whisper is available AND has models
+            boolean whisperAvailable = whisperStatus.has("whisper_available") && 
+                                     whisperStatus.get("whisper_available").getAsBoolean();
+            boolean hasModels = whisperStatus.has("installed_models") && 
+                              whisperStatus.get("installed_models").getAsJsonArray().size() > 0;
+            
+            if (!whisperAvailable) {
+                Alert alert = new Alert(Alert.AlertType.WARNING);
+                alert.setTitle("Whisper Not Available");
+                alert.setHeaderText("Whisper AI is not properly installed");
+                alert.setContentText("Please install Whisper from Settings > Subtitles.");
+                alert.showAndWait();
                 return;
             }
             
-            // Check if model is installed
-        try {
-            JsonObject whisperStatus = pythonBridge.checkWhisper();
-            if (!whisperStatus.has("installed_models") || whisperStatus.get("installed_models").getAsJsonArray().size() == 0) {
-                showWarning("Whisper Model Not Downloaded", 
-                    "No Whisper models are installed. Please download a model from Settings > Subtitles.\n\n" +
+            if (!hasModels) {
+                Alert alert = new Alert(Alert.AlertType.WARNING);
+                alert.setTitle("No Whisper Models");
+                alert.setHeaderText("No Whisper models are installed");
+                alert.setContentText("Please download a model from Settings > Subtitles.\n\n" +
                     "Recommended: 'base' model for good balance of speed and quality.");
+                
+                ButtonType openSettings = new ButtonType("Open Settings");
+                ButtonType cancel = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+                alert.getButtonTypes().setAll(openSettings, cancel);
+                
+                Optional<ButtonType> result = alert.showAndWait();
+                if (result.isPresent() && result.get() == openSettings) {
+                    openSettings("Subtitles");  // Open settings to Subtitles tab
+                }
                 return;
             }
         } catch (Exception e) {
@@ -5630,52 +5725,237 @@ public class MainController {
         new Thread(() -> {
             int successCount = 0;
             int failedCount = 0;
+            int totalFiles = queuedFiles.size();
+            AtomicInteger currentFileIndex = new AtomicInteger(0);
+            
+            // Initialize progress UI
+            Platform.runLater(() -> {
+                if (subtitleTotalProgressBar != null) {
+                    subtitleTotalProgressBar.setProgress(0.0);
+                }
+                if (subtitleProgressLabel != null) {
+                    subtitleProgressLabel.setText("0 / " + totalFiles + " files");
+                }
+                if (subtitleProgressStatusLabel != null) {
+                    subtitleProgressStatusLabel.setText("Starting AI subtitle generation...");
+                }
+            });
             
             for (ConversionJob job : queuedFiles) {
                 String filePath = job.getInputPath();
                 String fileName = new File(filePath).getName();
+                int fileIndex = currentFileIndex.getAndIncrement();
                 
-                Platform.runLater(() -> log("Generating subtitles for: " + fileName));
+                Platform.runLater(() -> {
+                    log("Generating subtitles for: " + fileName + " (" + (fileIndex + 1) + "/" + totalFiles + ")");
+                    if (subtitleProgressLabel != null) {
+                        subtitleProgressLabel.setText(fileIndex + " / " + totalFiles + " files");
+                    }
+                    if (subtitleProgressStatusLabel != null) {
+                        subtitleProgressStatusLabel.setText("Processing: " + fileName);
+                    }
+                });
                 
                 try {
-                    JsonObject request = new JsonObject();
-                    request.addProperty("action", "generate_subtitles");
-                    request.addProperty("video_path", filePath);
+                    JsonObject params = new JsonObject();
+                    params.addProperty("video_path", filePath);
                     
                     // Use language from settings, or null for auto-detect
                     String language = settings.getWhisperLanguages();
                     if (language != null && !language.trim().isEmpty() && !"auto".equalsIgnoreCase(language)) {
                         // Extract first language if multiple are specified
                         String[] langs = language.split(",");
-                        request.addProperty("language", langs[0].trim());
+                        params.addProperty("language", langs[0].trim());
                     }
                     
                     // Update settings in Python backend to ensure correct model is used
-                    JsonObject updateSettings = new JsonObject();
-                    updateSettings.addProperty("action", "update_settings");
-                    updateSettings.add("settings", settings.toJson());
-                    pythonBridge.sendCommand(updateSettings);
+                    JsonObject settingsParams = new JsonObject();
+                    settingsParams.add("settings", settings.toJson());
                     
-                    // Generate subtitles
-                    JsonObject response = pythonBridge.sendCommand(request);
-                    
-                    if (response.has("status") && "success".equals(response.get("status").getAsString())) {
-                        String subtitlePath = response.has("subtitle_path") ? 
-                            response.get("subtitle_path").getAsString() : "unknown";
-                        String message = response.has("message") ? 
-                            response.get("message").getAsString() : "Subtitles generated successfully";
-                        
-                        Platform.runLater(() -> {
-                            log("✅ Generated: " + new File(subtitlePath).getName() + " - " + message);
-                        });
-                        successCount++;
+                    if (processPool != null) {
+                        processPool.submitQuickTask("update_settings", settingsParams).get(2, TimeUnit.SECONDS);
                     } else {
-                        String errorMsg = response.has("message") ? 
-                            response.get("message").getAsString() : "Unknown error";
-                        Platform.runLater(() -> {
-                            log("❌ Failed: " + fileName + " - " + errorMsg);
+                        JsonObject updateSettings = new JsonObject();
+                        updateSettings.addProperty("action", "update_settings");
+                        updateSettings.add("settings", settings.toJson());
+                        pythonBridge.sendCommand(updateSettings);
+                    }
+                    
+                    // Generate subtitles with streaming progress
+                    AtomicReference<JsonObject> finalResponse = new AtomicReference<>();
+                    CountDownLatch completionLatch = new CountDownLatch(1);
+                    
+                    if (processPool != null) {
+                        // Use streaming task for real-time progress updates
+                        processPool.submitStreamingTask("generate_subtitles", params, progressUpdate -> {
+                            // Calculate overall progress (each file is a portion of total)
+                            double fileProgressWeight = 100.0 / totalFiles;
+                            double baseProgress = fileIndex * fileProgressWeight;
+                            
+                            if (progressUpdate.has("progress")) {
+                                double fileProgress = progressUpdate.get("progress").getAsDouble();
+                                double overallProgress = baseProgress + (fileProgress / 100.0 * fileProgressWeight);
+                                
+                                String message = progressUpdate.has("message") ? 
+                                    progressUpdate.get("message").getAsString() : "Processing...";
+                                
+                                Platform.runLater(() -> {
+                                    log(String.format("Progress: %.1f%% - %s", overallProgress, message));
+                                    if (subtitleTotalProgressBar != null) {
+                                        subtitleTotalProgressBar.setProgress(overallProgress / 100.0);
+                                    }
+                                });
+                            }
+                            
+                            // Check if this is the final response
+                            if (progressUpdate.has("complete") && progressUpdate.get("complete").getAsBoolean()) {
+                                finalResponse.set(progressUpdate);
+                                completionLatch.countDown();
+                            }
                         });
-                        failedCount++;
+                        
+                        // Wait for completion with timeout
+                        if (!completionLatch.await(1800, TimeUnit.SECONDS)) {
+                            throw new TimeoutException("Subtitle generation timed out");
+                        }
+                        
+                        JsonObject response = finalResponse.get();
+                        if (response == null) {
+                            throw new Exception("No response received from subtitle generation");
+                        }
+                        
+                        // Process response
+                        if (response.has("status") && "success".equals(response.get("status").getAsString())) {
+                            // Check for subtitle metadata
+                            JsonObject subtitleInfo = null;
+                            if (response.has("subtitle")) {
+                                subtitleInfo = response.get("subtitle").getAsJsonObject();
+                            }
+                            
+                            String subtitlePath = "unknown";
+                            String subtitleLanguage = "unknown";
+                            String subtitleProvider = "Whisper AI";
+                            double subtitleScore = 95.0;
+                            String subtitleFormat = "srt";
+                            
+                            if (subtitleInfo != null) {
+                                if (subtitleInfo.has("file_path")) {
+                                    subtitlePath = subtitleInfo.get("file_path").getAsString();
+                                }
+                                if (subtitleInfo.has("language")) {
+                                    subtitleLanguage = subtitleInfo.get("language").getAsString();
+                                }
+                                if (subtitleInfo.has("provider")) {
+                                    subtitleProvider = subtitleInfo.get("provider").getAsString();
+                                }
+                                if (subtitleInfo.has("score")) {
+                                    subtitleScore = subtitleInfo.get("score").getAsDouble();
+                                }
+                                if (subtitleInfo.has("format")) {
+                                    subtitleFormat = subtitleInfo.get("format").getAsString();
+                                }
+                            } else if (response.has("subtitle_path")) {
+                                subtitlePath = response.get("subtitle_path").getAsString();
+                            }
+                            
+                            String message = response.has("message") ? 
+                                response.get("message").getAsString() : "Subtitles generated successfully";
+                            
+                            final String finalSubtitlePath = subtitlePath;
+                            final String finalLanguage = subtitleLanguage;
+                            final String finalProvider = subtitleProvider;
+                            final double finalScore = subtitleScore;
+                            final String finalFormat = subtitleFormat;
+                            final String finalFileName = fileName;
+                            
+                            Platform.runLater(() -> {
+                                log("✅ Generated: " + new File(finalSubtitlePath).getName() + " - " + message);
+                                
+                                // Add to Available Subtitles list
+                                String baseFileName = finalFileName.replaceFirst("\\.[^.]+$", ""); // Remove extension
+                                ObservableList<SubtitleItem> fileSubtitles = subtitlesByFile.computeIfAbsent(
+                                    baseFileName, 
+                                    k -> FXCollections.observableArrayList()
+                                );
+                                
+                                // Create subtitle item (use file path as both fileId and downloadUrl for local files)
+                                SubtitleItem aiSubtitle = new SubtitleItem(
+                                    false,                    // not selected by default
+                                    finalLanguage,            // language
+                                    finalProvider,            // provider (Whisper AI)
+                                    finalScore,               // score (95.0)
+                                    finalFormat,              // format (srt)
+                                    finalSubtitlePath,        // fileId (local path)
+                                    finalSubtitlePath,        // downloadUrl (local path)
+                                    false                     // not manual download only
+                                );
+                                
+                                fileSubtitles.add(aiSubtitle);
+                                log("📋 Added AI-generated subtitle to Available Subtitles list");
+                                
+                                // Update table if this is the currently selected file
+                                if (availableSubtitlesTable != null) {
+                                    String currentSelectedFile = getCurrentlySelectedFileName();
+                                    if (currentSelectedFile != null && currentSelectedFile.equals(baseFileName)) {
+                                        availableSubtitlesTable.setItems(fileSubtitles);
+                                        availableSubtitlesTable.refresh();
+                                    }
+                                }
+                            });
+                            successCount++;
+                            
+                            // Update progress label
+                            final int completed = successCount + failedCount;
+                            Platform.runLater(() -> {
+                                if (subtitleProgressLabel != null) {
+                                    subtitleProgressLabel.setText(completed + " / " + totalFiles + " files");
+                                }
+                            });
+                        } else {
+                            String errorMsg = response.has("message") ? 
+                                response.get("message").getAsString() : "Unknown error";
+                            Platform.runLater(() -> {
+                                log("❌ Failed: " + fileName + " - " + errorMsg);
+                            });
+                            failedCount++;
+                            
+                            // Update progress label
+                            final int completed2 = successCount + failedCount;
+                            Platform.runLater(() -> {
+                                if (subtitleProgressLabel != null) {
+                                    subtitleProgressLabel.setText(completed2 + " / " + totalFiles + " files");
+                                }
+                            });
+                        }
+                    } else {
+                        // Fallback to legacy bridge (no streaming support)
+                        JsonObject request = new JsonObject();
+                        request.addProperty("action", "generate_subtitles");
+                        request.addProperty("video_path", filePath);
+                        if (language != null && !language.trim().isEmpty() && !"auto".equalsIgnoreCase(language)) {
+                            String[] langs = language.split(",");
+                            request.addProperty("language", langs[0].trim());
+                        }
+                        JsonObject response = pythonBridge.sendCommand(request);
+                        
+                        if (response.has("status") && "success".equals(response.get("status").getAsString())) {
+                            String subtitlePath = response.has("subtitle_path") ? 
+                                response.get("subtitle_path").getAsString() : "unknown";
+                            String message = response.has("message") ? 
+                                response.get("message").getAsString() : "Subtitles generated successfully";
+                            
+                            Platform.runLater(() -> {
+                                log("✅ Generated: " + new File(subtitlePath).getName() + " - " + message);
+                            });
+                            successCount++;
+                        } else {
+                            String errorMsg = response.has("message") ? 
+                                response.get("message").getAsString() : "Unknown error";
+                            Platform.runLater(() -> {
+                                log("❌ Failed: " + fileName + " - " + errorMsg);
+                            });
+                            failedCount++;
+                        }
                     }
                     
                 } catch (TimeoutException e) {
@@ -5722,9 +6002,38 @@ public class MainController {
             final int finalFailed = failedCount;
             Platform.runLater(() -> {
                 log("AI subtitle generation complete: " + finalSuccess + " success, " + finalFailed + " failed");
+                
+                // Reset progress UI
+                if (subtitleTotalProgressBar != null) {
+                    subtitleTotalProgressBar.setProgress(1.0); // Show 100%
+                }
+                if (subtitleProgressLabel != null) {
+                    subtitleProgressLabel.setText(totalFiles + " / " + totalFiles + " files");
+                }
+                if (subtitleProgressStatusLabel != null) {
+                    subtitleProgressStatusLabel.setText("Complete: " + finalSuccess + " succeeded, " + finalFailed + " failed");
+                }
+                
                 showInfo("AI Generation Complete", 
                     String.format("Generated subtitles for %d file(s).\n%d succeeded, %d failed.", 
                         finalSuccess + finalFailed, finalSuccess, finalFailed));
+                
+                // Reset progress bar after a short delay to let user see 100%
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(2000);
+                        Platform.runLater(() -> {
+                            if (subtitleTotalProgressBar != null) {
+                                subtitleTotalProgressBar.setProgress(0.0);
+                            }
+                            if (subtitleProgressStatusLabel != null) {
+                                subtitleProgressStatusLabel.setText("");
+                            }
+                        });
+                    } catch (InterruptedException e) {
+                        // Ignore
+                    }
+                }).start();
             });
             
         }, "SubtitleGeneration").start();

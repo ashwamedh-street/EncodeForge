@@ -506,30 +506,17 @@ public class DependencyManager {
     private void installPythonPackage(Path pythonExe, String packageSpec) throws IOException, InterruptedException {
         logger.info("Installing Python package: {}", packageSpec);
         
-        // Check if we're running in a venv (development mode)
-        boolean isVenv = isVenvEnvironment(pythonExe);
-        
-        List<String> command;
-        if (isVenv) {
-            // Development mode: install directly to venv (no --target)
-            logger.info("Detected venv environment, installing to venv site-packages");
-            command = Arrays.asList(
-                pythonExe.toString(),
-                "-m", "pip", "install",
-                "--upgrade",
-                packageSpec
-            );
-        } else {
-            // Production mode: install to our custom directory
-            logger.info("Production mode, installing to custom directory: {}", pythonLibsDir);
-            command = Arrays.asList(
-                pythonExe.toString(),
-                "-m", "pip", "install",
-                "--target", pythonLibsDir.toString(),
-                "--upgrade",
-                packageSpec
-            );
-        }
+        // ALWAYS install to custom directory for production usage
+        // Even in dev/venv environments, optional packages like Whisper should go to python-libs
+        // so workers can find them via PYTHONPATH
+        logger.info("Installing to custom directory: {}", pythonLibsDir);
+        List<String> command = Arrays.asList(
+            pythonExe.toString(),
+            "-m", "pip", "install",
+            "--target", pythonLibsDir.toString(),
+            "--upgrade",
+            packageSpec
+        );
         
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.redirectErrorStream(true);

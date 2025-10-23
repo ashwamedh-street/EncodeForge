@@ -2,6 +2,7 @@ package com.encodeforge.controller;
 
 import com.encodeforge.model.ProgressUpdate;
 import com.encodeforge.service.DependencyManager;
+import com.google.gson.JsonObject;
 import javafx.application.Platform;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
@@ -19,6 +20,8 @@ import java.io.InputStreamReader;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Wizard dialog for setting up Whisper AI subtitle generation
@@ -58,7 +61,7 @@ public class WhisperSetupDialog {
     
     private Stage dialogStage;
     private DependencyManager dependencyManager;
-    private com.encodeforge.service.PythonBridge pythonBridge;
+    private com.encodeforge.service.PythonProcessPool processPool;
     private com.encodeforge.model.ConversionSettings settings;
     private int currentPage = 1;
     private String selectedModel = "small";
@@ -69,8 +72,8 @@ public class WhisperSetupDialog {
         this.settings = com.encodeforge.model.ConversionSettings.load();
     }
     
-    public void setPythonBridge(com.encodeforge.service.PythonBridge pythonBridge) {
-        this.pythonBridge = pythonBridge;
+    public void setProcessPool(com.encodeforge.service.PythonProcessPool processPool) {
+        this.processPool = processPool;
     }
     
     /**
@@ -263,44 +266,97 @@ public class WhisperSetupDialog {
                 
                 appendLog("✓ Whisper AI packages installed successfully");
                 
-                // Step 2: Download the selected model
+                // Step 2: Download the selected model via process pool (with streaming progress)
                 updateInstallProgress(new ProgressUpdate("downloading", 70, 
                     "Downloading " + selectedModel + " model...", ""));
                 appendLog("\nDownloading " + selectedModel + " model (this may take a while)...");
                 
-                // Actually download the model via Python backend
-                // Note: This will happen in a future implementation via PythonBridge
-                // For now, we'll do it directly via a Python call
-                try {
-                    ProcessBuilder pb = new ProcessBuilder(
-                        dependencyManager.getPythonExecutable().toString(),
-                        "-c", 
-                        "import whisper; whisper.load_model('" + selectedModel + "')"
-                    );
-                    pb.redirectErrorStream(true);
-                    Process process = pb.start();
+                if (processPool != null) {
+                    // Use process pool with streaming progress
+                    CompletableFuture<Void> downloadFuture = new CompletableFuture<>();
                     
-                    // Capture output
-                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            logger.debug("whisper model download: {}", line);
-                            if (line.contains("downloading") || line.contains("Downloading")) {
-                                appendLog(line);
+                    com.google.gson.JsonObject params = new com.google.gson.JsonObject();
+                    params.addProperty("model", selectedModel);
+                    
+                    processPool.submitStreamingTask("download_whisper_model", params, response -> {
+                        Platform.runLater(() -> {
+                            if (response == null) {
+                                logger.warn("Received null response during model download");
+                                return;
+                            }
+                            
+                            if (response.has("type") && "progress".equals(response.get("type").getAsString())) {
+                                // Progress update
+                                int progress = response.has("progress") ? response.get("progress").getAsInt() : 0;
+                                String message = response.has("message") ? response.get("message").getAsString() : "Downloading...";
+                                
+                                // Update UI with progress (70-100 range since we're at 70% already)
+                                int totalProgress = 70 + (progress * 30 / 100);
+                                updateInstallProgress(new ProgressUpdate("downloading", totalProgress, message, ""));
+                                appendLog("Progress: " + progress + "% - " + message);
+                            } else {
+                                // Final response
+                                String status = response.has("status") ? response.get("status").getAsString() : "unknown";
+                                String message = response.has("message") ? response.get("message").getAsString() : "";
+                                
+                                if ("success".equals(status) || "complete".equals(status)) {
+                                    appendLog("✓ Model downloaded successfully");
+                                    logger.info("Download completed successfully, completing future");
+                                    downloadFuture.complete(null);
+                                } else if ("error".equals(status)) {
+                                    appendLog("❌ Download failed: " + message);
+                                    logger.error("Download failed with error: {}", message);
+                                    downloadFuture.completeExceptionally(new Exception(message));
+                                } else {
+                                    logger.debug("Received status: {} - {}", status, message);
+                                }
+                            }
+                        });
+                    });
+                    
+                    // Wait for download to complete
+                    try {
+                        logger.info("Waiting for model download to complete...");
+                        downloadFuture.get(600, TimeUnit.SECONDS); // 10 minute timeout
+                        logger.info("Model download future completed successfully");
+                    } catch (TimeoutException e) {
+                        throw new Exception("Model download timed out after 10 minutes", e);
+                    } catch (Exception e) {
+                        throw new Exception("Model download failed: " + e.getMessage(), e);
+                    }
+                } else {
+                    // Fallback: Direct Python call (legacy mode)
+                    try {
+                        ProcessBuilder pb = new ProcessBuilder(
+                            dependencyManager.getPythonExecutable().toString(),
+                            "-c", 
+                            "import whisper; whisper.load_model('" + selectedModel + "')"
+                        );
+                        pb.redirectErrorStream(true);
+                        Process process = pb.start();
+                        
+                        // Capture output
+                        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                            String line;
+                            while ((line = reader.readLine()) != null) {
+                                logger.debug("whisper model download: {}", line);
+                                if (line.contains("downloading") || line.contains("Downloading")) {
+                                    appendLog(line);
+                                }
                             }
                         }
+                        
+                        int exitCode = process.waitFor();
+                        if (exitCode == 0) {
+                            appendLog("✓ Model downloaded successfully");
+                        } else {
+                            appendLog("⚠ Model download completed with warnings (exit code: " + exitCode + ")");
+                        }
+                    } catch (Exception e) {
+                        logger.error("Failed to download model", e);
+                        appendLog("⚠ Warning: Could not verify model download: " + e.getMessage());
+                        appendLog("You can download models manually later from Settings > Subtitles");
                     }
-                    
-                    int exitCode = process.waitFor();
-                    if (exitCode == 0) {
-                        appendLog("✓ Model downloaded successfully");
-                    } else {
-                        appendLog("⚠ Model download completed with warnings (exit code: " + exitCode + ")");
-                    }
-                } catch (Exception e) {
-                    logger.error("Failed to download model", e);
-                    appendLog("⚠ Warning: Could not verify model download: " + e.getMessage());
-                    appendLog("You can download models manually later from Settings > Subtitles");
                 }
                 
                 // Save the selected model to settings

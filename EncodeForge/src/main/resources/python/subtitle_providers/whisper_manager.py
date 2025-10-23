@@ -5,9 +5,13 @@ Whisper Manager - Handles Whisper AI model management and subtitle generation
 """
 
 import logging
+import os
 import subprocess
+import sys
+import threading
+import time
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +31,71 @@ class WhisperManager:
         "large-v3": "2.9 GB",
     }
     
+    # Map 3-letter ISO 639-2 codes to 2-letter ISO 639-1 codes (Whisper format)
+    LANGUAGE_CODE_MAP = {
+        "eng": "en",
+        "spa": "es",
+        "fre": "fr",
+        "fra": "fr",
+        "ger": "de",
+        "deu": "de",
+        "ita": "it",
+        "por": "pt",
+        "rus": "ru",
+        "jpn": "ja",
+        "kor": "ko",
+        "chi": "zh",
+        "zho": "zh",
+        "ara": "ar",
+        "hin": "hi",
+        "tur": "tr",
+        "pol": "pl",
+        "ukr": "uk",
+        "vie": "vi",
+        "tha": "th",
+        "nld": "nl",
+        "dut": "nl",
+        "swe": "sv",
+        "dan": "da",
+        "nor": "no",
+        "fin": "fi",
+        "cze": "cs",
+        "ces": "cs",
+        "hun": "hu",
+        "rum": "ro",
+        "ron": "ro",
+        "gre": "el",
+        "ell": "el",
+        "heb": "he",
+        "ind": "id",
+        "msa": "ms",
+        "may": "ms",
+    }
+    
     def __init__(self):
         self.whisper_available = False
         self.installed_models = []
         self._check_installation()
+    
+    def _convert_language_code(self, lang_code: Optional[str]) -> Optional[str]:
+        """Convert 3-letter ISO 639-2 code to 2-letter ISO 639-1 code for Whisper"""
+        if not lang_code:
+            return None
+        
+        # If already 2 letters, return as-is
+        if len(lang_code) == 2:
+            return lang_code.lower()
+        
+        # Convert 3-letter to 2-letter
+        lang_lower = lang_code.lower()
+        converted = self.LANGUAGE_CODE_MAP.get(lang_lower, lang_lower)
+        
+        # If we couldn't convert and it's 3 letters, just take first 2
+        if len(converted) == 3:
+            converted = converted[:2]
+        
+        logger.debug(f"Language code conversion: {lang_code} -> {converted}")
+        return converted
     
     def _check_installation(self) -> bool:
         """Check if Whisper is installed"""
@@ -112,6 +177,37 @@ class WhisperManager:
             logger.error(f"Error installing Whisper: {e}")
             return False, f"Installation error: {str(e)}"
     
+    def _verify_and_cleanup_model(self, model_name: str) -> bool:
+        """
+        Check if model file exists and is accessible.
+        Whisper library handles its own checksum verification internally.
+        
+        Returns:
+            True if model exists and is accessible, False if there's an issue
+        """
+        try:
+            from pathlib import Path
+            
+            # Get the model cache directory (where Whisper stores models)
+            cache_dir = Path.home() / ".cache" / "whisper"
+            model_file = cache_dir / f"{model_name}.pt"
+            
+            if not model_file.exists():
+                logger.debug(f"Model {model_name} not found at {model_file}")
+                return False  # Model not downloaded yet
+            
+            # Check if file is readable and has reasonable size (> 1MB)
+            if model_file.stat().st_size < 1_000_000:
+                logger.warning(f"Model file {model_name} is suspiciously small ({model_file.stat().st_size} bytes)")
+                return False
+            
+            logger.debug(f"Model {model_name} exists and appears valid ({model_file.stat().st_size / 1_000_000:.1f} MB)")
+            return True
+                
+        except Exception as e:
+            logger.warning(f"Could not check model file: {e}")
+            return False
+    
     def download_model(self, model_name: str, progress_callback=None) -> tuple[bool, str]:
         """
         Download a Whisper model
@@ -138,6 +234,7 @@ class WhisperManager:
                 })
             
             import os
+            import sys
 
             import whisper
             
@@ -148,19 +245,37 @@ class WhisperManager:
             model_dir = get_models_dir() / "whisper"
             model_dir.mkdir(parents=True, exist_ok=True)
             
-            # Whisper saves models to ~/.cache/whisper by default
-            # We need to point it to our app directory
+            # Whisper saves models to ~/.cache/whisper by default on Linux/Mac
+            # On Windows it uses different paths
+            # We override both XDG_CACHE_HOME (Linux/Mac) and set download_root explicitly
             whisper_cache_dir = model_dir
             os.environ["XDG_CACHE_HOME"] = str(whisper_cache_dir.parent)
+            
+            # Also set for Windows (though Whisper uses download_root parameter primarily)
+            if sys.platform == 'win32':
+                # On Windows, Whisper checks LOCALAPPDATA but we override with download_root
+                pass
+            
             logger.info(f"Set XDG_CACHE_HOME to: {whisper_cache_dir.parent}")
             logger.info(f"Whisper models will be saved to: {whisper_cache_dir}")
+            logger.info(f"Download root parameter: {model_dir}")
             
-            # This will download the model if not already present
-            # Note: whisper.load_model() downloads the model automatically if it doesn't exist
-            # The download can take several minutes for large models
-            logger.info(f"Calling whisper.load_model('{model_name}')...")
-            model = whisper.load_model(model_name, download_root=str(model_dir))
-            logger.info(f"Model {model_name} loaded successfully")
+            # Suppress tqdm progress bars that corrupt our JSON output
+            # Whisper's download uses tqdm which prints to stderr
+            old_stderr = sys.stderr
+            try:
+                sys.stderr = open(os.devnull, 'w')
+                
+                # This will download the model if not already present
+                # Whisper handles checksum verification internally - trust it!
+                # The download can take several minutes for large models
+                logger.info(f"Calling whisper.load_model('{model_name}')...")
+                model = whisper.load_model(model_name, download_root=str(model_dir))
+                logger.info(f"Model {model_name} loaded and verified by Whisper library")
+            finally:
+                # Restore stderr
+                sys.stderr.close()
+                sys.stderr = old_stderr
             
             # Update installed models list
             if model_name not in self.installed_models:
@@ -179,10 +294,10 @@ class WhisperManager:
                 progress_callback({
                     "status": "complete",
                     "progress": 100,
-                    "message": f"Model {model_name} downloaded successfully"
+                    "message": f"Model {model_name} downloaded and verified ✓"
                 })
             
-            return True, f"Model {model_name} is ready"
+            return True, f"Model {model_name} downloaded and verified successfully"
             
         except Exception as e:
             logger.error(f"Error downloading model: {e}")
@@ -191,31 +306,49 @@ class WhisperManager:
     def generate_subtitles(
         self,
         video_path: str,
-        output_path: str,
         model_name: str = "base",
         language: Optional[str] = None,
         progress_callback=None
-    ) -> tuple[bool, str]:
+    ) -> tuple[bool, str, Optional[Dict]]:
         """
         Generate subtitles for a video file
         
         Args:
             video_path: Path to video file
-            output_path: Path for output SRT file
             model_name: Whisper model to use
             language: Target language (None for auto-detect)
             progress_callback: Function to call with progress updates
             
         Returns:
-            (success, message)
+            (success, message, subtitle_info_dict)
+            subtitle_info_dict format matches downloaded subtitles:
+            {
+                "file_path": "path/to/subtitle.srt",
+                "language": "eng",
+                "provider": "Whisper AI",
+                "format": "srt",
+                "score": 95,
+                "download_count": 0,
+                "filename": "filename.srt"
+            }
         """
         if not self.whisper_available:
-            return False, "Whisper is not installed"
+            return False, "Whisper is not installed", None
         
         if not Path(video_path).exists():
-            return False, f"Video file not found: {video_path}"
+            return False, f"Video file not found: {video_path}", None
         
         try:
+            # Generate output path in temp directory
+            from path_manager import get_temp_dir
+            
+            temp_subtitles_dir = get_temp_dir() / "subtitles"
+            temp_subtitles_dir.mkdir(parents=True, exist_ok=True)
+            
+            video_file = Path(video_path)
+            lang_suffix = language if language else "auto"
+            output_filename = f"{video_file.stem}.{lang_suffix}.srt"
+            output_path = str(temp_subtitles_dir / output_filename)
             if progress_callback:
                 progress_callback({
                     "status": "transcribing",
@@ -223,44 +356,88 @@ class WhisperManager:
                     "message": f"Transcribing audio with Whisper {model_name}..."
                 })
             
+            import os
+            import sys
+
             import whisper
             
             logger.info(f"Loading Whisper model: {model_name}")
-            model = whisper.load_model(model_name)
             
-            logger.info(f"Transcribing: {video_path}")
-            
-            # Transcribe
-            options = {}
-            if language:
-                options["language"] = language
-            
-            result = model.transcribe(video_path, **options)
+            # Suppress tqdm progress bars during model loading and transcription
+            old_stderr = sys.stderr
+            try:
+                sys.stderr = open(os.devnull, 'w')
+                
+                # Load model - Whisper handles its own checksum verification
+                model = whisper.load_model(model_name)
+                
+                logger.info(f"Transcribing: {video_path}")
+                
+                # Send initial progress if callback provided
+                if progress_callback:
+                    progress_callback({
+                        "status": "processing",
+                        "progress": 0,
+                        "message": "Transcribing audio with Whisper AI..."
+                    })
+                
+                # Transcribe
+                options = {}
+                if language:
+                    # Convert language code from 3-letter to 2-letter format
+                    converted_lang = self._convert_language_code(language)
+                    if converted_lang:
+                        options["language"] = converted_lang
+                        logger.info(f"Using language: {language} -> {converted_lang}")
+                
+                # Whisper transcription is blocking and doesn't provide progress
+                # We show indeterminate progress instead of fake incremental progress
+                result = model.transcribe(video_path, **options)
+            finally:
+                # Restore stderr
+                sys.stderr.close()
+                sys.stderr = old_stderr
             
             # Convert to SRT format
             segments = result.get("segments", [])
             if isinstance(segments, list):
                 srt_content = self._segments_to_srt(segments)
             else:
-                return False, "Invalid segments data from Whisper"
+                return False, "Invalid segments data from Whisper", None
             
             # Write to file
             with open(output_path, "w", encoding="utf-8") as f:
                 f.write(srt_content)
             
+            detected_lang = result.get("language", "unknown")
+            logger.info(f"✅ Successfully generated subtitles: {output_path}")
+            logger.info(f"Detected language: {detected_lang}")
+            
+            # Create subtitle info dict matching downloaded subtitle format
+            subtitle_info = {
+                "file_path": output_path,
+                "language": language if language else detected_lang,
+                "provider": "Whisper AI",
+                "format": "srt",
+                "score": 95,  # High score for AI-generated
+                "download_count": 0,
+                "filename": output_filename,
+                "model": model_name,
+                "detected_language": detected_lang
+            }
+            
             if progress_callback:
                 progress_callback({
                     "status": "complete",
                     "progress": 100,
-                    "message": f"Subtitles generated: {output_path}"
+                    "message": f"Subtitles generated successfully"
                 })
             
-            detected_lang = result.get("language", "unknown")
-            return True, f"Subtitles generated successfully (detected language: {detected_lang})"
+            return True, f"Subtitles generated successfully (detected language: {detected_lang})", subtitle_info
             
         except Exception as e:
             logger.error(f"Error generating subtitles: {e}")
-            return False, f"Transcription failed: {str(e)}"
+            return False, f"Transcription failed: {str(e)}", None
     
     def _segments_to_srt(self, segments: List[Dict]) -> str:
         """Convert Whisper segments to SRT format"""

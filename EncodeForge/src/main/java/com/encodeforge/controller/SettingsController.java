@@ -34,6 +34,7 @@ public class SettingsController {
     private Stage dialogStage;
     private ConversionSettings settings;
     private PythonBridge pythonBridge;
+    private com.encodeforge.service.PythonProcessPool processPool;
     private DependencyManager dependencyManager;
     private StatusManager statusManager;
     private boolean applied = false;
@@ -296,6 +297,12 @@ public class SettingsController {
         checkFFmpegStatus();
         
         // Encoder detection is now handled instantly by Java HardwareDetector
+    }
+    
+    public void setProcessPool(com.encodeforge.service.PythonProcessPool processPool) {
+        this.processPool = processPool;
+        // Update Whisper status using process pool
+        updateWhisperStatus();
         // No need for delayed backend checks
         logger.info("Settings dialog initialized with hardware-detected encoders");
     }
@@ -1066,6 +1073,7 @@ public class SettingsController {
         
         try {
             WhisperSetupDialog setupDialog = new WhisperSetupDialog(dependencyManager);
+            setupDialog.setProcessPool(processPool);
             setupDialog.showAndWait();
             
             // Refresh status after installation
@@ -1184,69 +1192,68 @@ public class SettingsController {
                 
                 // Update UI to show progress
                 if (whisperStatusLabel != null) {
-                    whisperStatusLabel.setText("⏳ Downloading " + selectedModel + " model...");
+                    whisperStatusLabel.setText("⏳ Preparing to download " + selectedModel + " model...");
                 }
                 
-                // Run download in background
-                new Thread(() -> {
-                    try {
-                        if (pythonBridge == null) {
-                            throw new RuntimeException("PythonBridge not initialized");
-                        }
-                        
-                        // Call Python backend to download model
-                        JsonObject command = new JsonObject();
-                        command.addProperty("action", "download_whisper_model");
-                        command.addProperty("model", selectedModel);
-                        
-                        JsonObject response = pythonBridge.sendCommand(command);
-                        
+                // Use processPool with streaming if available
+                if (processPool != null) {
+                    JsonObject params = new JsonObject();
+                    params.addProperty("model", selectedModel);
+                    
+                    // Submit streaming task with progress updates
+                    processPool.submitStreamingTask("download_whisper_model", params, progressResponse -> {
                         Platform.runLater(() -> {
-                            if (response == null) {
-                                Alert alert = new Alert(Alert.AlertType.ERROR);
-                                alert.setTitle("Download Failed");
-                                alert.setHeaderText("No response from Python backend");
-                                alert.setContentText("The Python backend did not respond. Check logs for more details.");
-                                alert.showAndWait();
-                                updateWhisperStatus();
+                            // Null check
+                            if (progressResponse == null) {
+                                logger.warn("Received null progress response during model download");
                                 return;
                             }
                             
-                            String status = response.has("status") ? response.get("status").getAsString() : "error";
-                            String message = response.has("message") ? response.get("message").getAsString() : "Unknown error";
-                            
-                            if ("success".equals(status)) {
-                                Alert info = new Alert(Alert.AlertType.INFORMATION);
-                                info.setTitle("Model Downloaded");
-                                info.setHeaderText(selectedModel + " model downloaded successfully");
-                                info.setContentText(message);
-                                info.showAndWait();
+                            // Check response type
+                            if (progressResponse.has("type") && "progress".equals(progressResponse.get("type").getAsString())) {
+                                // This is a progress update
+                                int progress = progressResponse.has("progress") ? progressResponse.get("progress").getAsInt() : 0;
+                                String message = progressResponse.has("message") ? progressResponse.get("message").getAsString() : "Downloading...";
                                 
-                                updateWhisperStatus();
+                                if (whisperStatusLabel != null) {
+                                    whisperStatusLabel.setText(String.format("⏳ %s (%d%%)", message, progress));
+                                }
+                                logger.debug("Download progress: {}% - {}", progress, message);
                             } else {
-                                Alert alert = new Alert(Alert.AlertType.ERROR);
-                                alert.setTitle("Download Failed");
-                                alert.setHeaderText("Failed to download " + selectedModel + " model");
-                                alert.setContentText(message);
-                                alert.showAndWait();
-                                
-                                updateWhisperStatus();
+                                // This is the final response
+                                handleDownloadResponse(selectedModel, progressResponse);
                             }
                         });
-                    } catch (Exception e) {
-                        logger.error("Failed to download Whisper model", e);
-                        Platform.runLater(() -> {
-                            Alert alert = new Alert(Alert.AlertType.ERROR);
-                            alert.setTitle("Error");
-                            alert.setHeaderText("Failed to download model");
-                            alert.setContentText(e.getMessage());
-                            alert.showAndWait();
+                    });
+                } else if (pythonBridge != null) {
+                    // Fallback to legacy pythonBridge (blocking)
+                    new Thread(() -> {
+                        try {
+                            JsonObject command = new JsonObject();
+                            command.addProperty("action", "download_whisper_model");
+                            command.addProperty("model", selectedModel);
                             
-                            updateWhisperStatus();
-                        });
-                    }
-                }).start();
-                
+                            JsonObject response = pythonBridge.sendCommand(command);
+                            handleDownloadResponse(selectedModel, response);
+                        } catch (Exception e) {
+                            logger.error("Failed to download Whisper model via pythonBridge", e);
+                            Platform.runLater(() -> {
+                                Alert alert = new Alert(Alert.AlertType.ERROR);
+                                alert.setTitle("Error");
+                                alert.setHeaderText("Failed to download model");
+                                alert.setContentText(e.getMessage());
+                                alert.showAndWait();
+                                updateWhisperStatus();
+                            });
+                        }
+                    }).start();
+                } else {
+                    Alert alert = new Alert(Alert.AlertType.ERROR);
+                    alert.setTitle("Error");
+                    alert.setHeaderText("Python backend not available");
+                    alert.setContentText("Neither ProcessPool nor PythonBridge is available");
+                    alert.showAndWait();
+                }
             } catch (Exception e) {
                 logger.error("Failed to start Whisper model download", e);
                 Alert alert = new Alert(Alert.AlertType.ERROR);
@@ -1259,9 +1266,74 @@ public class SettingsController {
     }
     
     /**
+     * Handle download response (helper method for both processPool and pythonBridge paths)
+     */
+    private void handleDownloadResponse(String selectedModel, JsonObject response) {
+        Platform.runLater(() -> {
+            if (response == null) {
+                Alert alert = new Alert(Alert.AlertType.ERROR);
+                alert.setTitle("Download Failed");
+                alert.setHeaderText("No response from Python backend");
+                alert.setContentText("The Python backend did not respond. Check logs for more details.");
+                alert.showAndWait();
+                updateWhisperStatus();
+                return;
+            }
+            
+            String status = response.has("status") ? response.get("status").getAsString() : "error";
+            String message = response.has("message") ? response.get("message").getAsString() : "Unknown error";
+            
+            if ("success".equals(status)) {
+                Alert info = new Alert(Alert.AlertType.INFORMATION);
+                info.setTitle("Model Downloaded");
+                info.setHeaderText(selectedModel + " model downloaded successfully");
+                info.setContentText(message);
+                info.showAndWait();
+                
+                updateWhisperStatus();
+            } else {
+                Alert alert = new Alert(Alert.AlertType.ERROR);
+                alert.setTitle("Download Failed");
+                alert.setHeaderText("Failed to download " + selectedModel + " model");
+                alert.setContentText(message);
+                alert.showAndWait();
+                
+                updateWhisperStatus();
+            }
+        });
+    }
+    
+    /**
      * Update Whisper status display
      */
     private void updateWhisperStatus() {
+        // Use processPool if available, fallback to statusManager
+        if (processPool != null) {
+            // Use process pool for non-blocking status check
+            try {
+                JsonObject command = new JsonObject();
+                command.addProperty("action", "check_whisper");
+                
+                processPool.submitQuickTask("check_whisper", command)
+                    .thenAccept(response -> {
+                        Platform.runLater(() -> handleWhisperStatusResponse(response));
+                    })
+                    .exceptionally(e -> {
+                        logger.warn("Could not check Whisper status via processPool", e);
+                        Platform.runLater(() -> {
+                            whisperStatusLabel.setText("⚠️ Whisper status check failed");
+                            whisperInstalledModelsLabel.setText("Unable to check status");
+                        });
+                        return null;
+                    });
+                return;
+            } catch (Exception e) {
+                logger.warn("Error submitting Whisper status check", e);
+                // Fall through to statusManager fallback
+            }
+        }
+        
+        // Fallback to statusManager (legacy)
         if (statusManager == null) {
             whisperStatusLabel.setText("Whisper status unavailable");
             return;
@@ -1323,6 +1395,61 @@ public class SettingsController {
             }
             
             whisperInstalledModelsLabel.setText("Click 'Setup Whisper AI' to install");
+        }
+    }
+    
+    /**
+     * Handle Whisper status response from process pool
+     */
+    private void handleWhisperStatusResponse(JsonObject response) {
+        if (response == null) {
+            whisperStatusLabel.setText("⚠️ Status check failed");
+            whisperInstalledModelsLabel.setText("No response from Python");
+            return;
+        }
+        
+        // Check whisper_available field (the actual response format from check_whisper)
+        boolean available = response.has("whisper_available") && response.get("whisper_available").getAsBoolean();
+        
+        if (available) {
+            // Parse installed models first to check if any exist
+            List<String> modelList = new ArrayList<>();
+            if (response.has("installed_models")) {
+                JsonArray models = response.getAsJsonArray("installed_models");
+                for (int i = 0; i < models.size(); i++) {
+                    modelList.add(models.get(i).getAsString());
+                }
+            }
+            
+            // Update status label based on whether models are installed
+            if (modelList.isEmpty()) {
+                whisperStatusLabel.setText("⚠️ Whisper installed but no models available");
+                whisperStatusLabel.setStyle("-fx-text-fill: #dcdcaa;");  // Yellow/warning color
+                whisperInstalledModelsLabel.setText("No models installed. Click 'Download Model' to install one.");
+            } else {
+                whisperStatusLabel.setText("✅ Whisper AI is installed and ready");
+                whisperStatusLabel.setStyle("-fx-text-fill: #4ec9b0;");
+                whisperInstalledModelsLabel.setText("Installed models: " + String.join(", ", modelList));
+            }
+            
+            // Enable buttons since Whisper itself is installed
+            if (uninstallWhisperButton != null) {
+                uninstallWhisperButton.setDisable(false);
+            }
+            if (downloadModelButton != null) {
+                downloadModelButton.setDisable(false);
+            }
+        } else {
+            whisperStatusLabel.setText("❌ Whisper AI is not installed");
+            whisperStatusLabel.setStyle("-fx-text-fill: #d13438;");
+            whisperInstalledModelsLabel.setText("Click 'Setup Whisper AI' to install");
+            
+            if (uninstallWhisperButton != null) {
+                uninstallWhisperButton.setDisable(true);
+            }
+            if (downloadModelButton != null) {
+                downloadModelButton.setDisable(true);
+            }
         }
     }
     

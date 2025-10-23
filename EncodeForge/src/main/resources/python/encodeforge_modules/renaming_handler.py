@@ -325,6 +325,8 @@ class RenamingHandler:
         """
         Preview how files would be renamed
         
+        Now uses parallel processing for faster metadata lookups across multiple files.
+        
         TODO: FUTURE ENHANCEMENT - Use file hashes and embedded metadata
         Currently uses filename parsing only. Future improvements:
         1. Extract embedded metadata (title, show, season, episode) from video file using FFprobe
@@ -372,12 +374,23 @@ class RenamingHandler:
             has_trakt = bool(getattr(self.settings, 'trakt_api_key', None) and self.settings.trakt_api_key.strip())
             logger.info(f"Providers: TMDB={'✓' if has_tmdb else '✗'}, TVDB={'✓' if has_tvdb else '✗'}, OMDB={'✓' if has_omdb else '✗'}, Trakt={'✓' if has_trakt else '✗'}, AniDB=✓, Kitsu=✓, Jikan=✓, TVmaze=✓")
             
+            # Use parallel processing for metadata lookups
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            from resource_manager import get_resource_manager
+            
+            # Get optimal worker count for metadata operations
+            rm = get_resource_manager()
+            max_workers = rm.get_optimal_worker_count("metadata")
+            logger.info(f"Using {max_workers} parallel workers for metadata lookups")
+            
             suggested_metadata = []  # Store raw metadata for each file
             providers = []
             errors = []
             provider_metadata = {}  # Store metadata per provider for comparison (not formatted strings)
             
-            for file_path in file_paths:
+            # Process files in parallel
+            def process_single_file(file_path):
+                """Process a single file and return its metadata"""
                 try:
                     path = Path(file_path)
                     logger.info(f"Processing: {path.name}")

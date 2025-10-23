@@ -19,21 +19,6 @@ from metadata_grabber import MetadataGrabber
 from profile_manager import ProfileManager
 from subtitle_manager import SubtitleProviders
 
-# Try importing optional AI libraries
-try:
-    from subtitle_providers.whisper_manager import WhisperManager
-    WHISPER_AVAILABLE = True
-    WhisperManagerClass = WhisperManager
-except ImportError:
-    WHISPER_AVAILABLE = False
-    if TYPE_CHECKING:
-        from subtitle_providers.whisper_manager import (
-            WhisperManager as WhisperManagerClass,
-        )
-    else:
-        WhisperManagerClass = None  # type: ignore
-    # Don't log here, will log in __init__ when creating the instance
-
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -58,13 +43,9 @@ class EncodeForgeCore:
         # Initialize managers
         self.ffmpeg_mgr = FFmpegManager(self.settings.ffmpeg_path)
         
-        # Initialize Whisper manager if available (optional AI feature)
-        if WHISPER_AVAILABLE and WhisperManagerClass is not None:
-            self.whisper_mgr = WhisperManagerClass()
-            logger.info("Whisper AI available for subtitle generation")
-        else:
-            self.whisper_mgr = None
-            logger.info("Whisper not available (optional AI subtitle feature)")
+        # Whisper manager initialized lazily (allows detection after installation)
+        self._whisper_mgr = None
+        self._whisper_checked = False
         
         self.renamer = MetadataGrabber(
             tmdb_key=self.settings.tmdb_api_key,
@@ -79,13 +60,35 @@ class EncodeForgeCore:
         
         # Skip expensive FFmpeg detection during initialization for faster startup
         # FFmpeg will be detected on first use (lazy detection)
-        logger.info("EncodeForgeCore initialized (FFmpeg detection deferred)")
-        
-        # Initialize handlers
-        self.file_handler = FileHandler(self.settings, self.ffmpeg_mgr)
-        self.subtitle_handler = SubtitleHandler(self.settings, self.whisper_mgr, self.subtitle_providers)
-        self.renaming_handler = RenamingHandler(self.settings, self.renamer)
-        self.conversion_handler = ConversionHandler(self.settings, self.ffmpeg_mgr)
+    
+    @property
+    def whisper_mgr(self):
+        """Lazy initialization of Whisper manager - checks at runtime"""
+        if not self._whisper_checked:
+            try:
+                from subtitle_providers.whisper_manager import WhisperManager
+                self._whisper_mgr = WhisperManager()
+                logger.info("Whisper AI available for subtitle generation")
+            except ImportError:
+                self._whisper_mgr = None
+                logger.info("Whisper not available (optional AI subtitle feature)")
+            self._whisper_checked = True
+        return self._whisper_mgr
+    
+    def reset_whisper_check(self):
+        """Force re-check of Whisper availability (useful after installation)"""
+        self._whisper_checked = False
+        self._whisper_mgr = None
+        logger.info("Whisper check reset - will re-detect on next access")
+    
+    def _ensure_handlers_initialized(self):
+        """Lazy initialize handlers (called before first use)"""
+        if not hasattr(self, 'file_handler'):
+            logger.info("Initializing EncodeForge handlers")
+            self.file_handler = FileHandler(self.settings, self.ffmpeg_mgr)
+            self.subtitle_handler = SubtitleHandler(self.settings, self.whisper_mgr, self.subtitle_providers)
+            self.renaming_handler = RenamingHandler(self.settings, self.renamer)
+            self.conversion_handler = ConversionHandler(self.settings, self.ffmpeg_mgr)
     
     # ======================
     # FFmpeg & Whisper Setup
@@ -180,15 +183,18 @@ class EncodeForgeCore:
     
     def get_file_info(self, file_path: str) -> Dict:
         """Get basic file information"""
+        self._ensure_handlers_initialized()
         return self.file_handler.get_file_info(file_path)
     
     def get_media_info(self, file_path: str) -> Dict:
         """Get detailed media information"""
+        self._ensure_handlers_initialized()
         return self.file_handler.get_media_info(file_path)
     
     def scan_directory(self, directory: str, recursive: bool = True,
                       progress_callback: Optional[Callable] = None) -> Dict:
         """Scan directory for media files"""
+        self._ensure_handlers_initialized()
         return self.file_handler.scan_directory(directory, recursive, progress_callback)
     
     # ====================
@@ -198,33 +204,49 @@ class EncodeForgeCore:
     def generate_subtitles(self, video_path: str, language: Optional[str] = None,
                           progress_callback: Optional[Callable] = None) -> Dict:
         """Generate subtitles using Whisper AI"""
+        self._ensure_handlers_initialized()
         return self.subtitle_handler.generate_subtitles(video_path, language, progress_callback)
     
     def search_subtitles(self, video_path: str, languages: Optional[List[str]] = None,
                         progress_callback: Optional[Callable] = None) -> Dict:
         """Search for available subtitles"""
+        self._ensure_handlers_initialized()
         return self.subtitle_handler.search_subtitles(video_path, languages, progress_callback)
     
     def advanced_search_subtitles(self, video_path: str, languages: Optional[List[str]] = None, 
                                   anilist_url: str = "") -> Dict:
         """Advanced subtitle search with multiple query variations"""
+        self._ensure_handlers_initialized()
         return self.subtitle_handler.advanced_search_subtitles(video_path, languages, anilist_url)
     
     def download_subtitle(self, file_id: str, provider: str, video_path: str,
                          language: str = "eng", download_url: str = "") -> Dict:
         """Download a specific subtitle"""
+        self._ensure_handlers_initialized()
         return self.subtitle_handler.download_subtitle(file_id, provider, video_path, language, download_url)
     
     def download_subtitles(self, video_path: str, languages: Optional[List[str]] = None) -> Dict:
         """Download best matching subtitles automatically"""
+        self._ensure_handlers_initialized()
         return self.subtitle_handler.download_subtitles(video_path, languages)
     
     def apply_subtitles(self, video_path: str, subtitle_paths: List[str],
-                       output_path: Optional[str] = None, burn_in: bool = False,
-                       progress_callback: Optional[Callable] = None) -> Dict:
-        """Apply/burn subtitles into video"""
+                       output_path: Optional[str] = None, mode: str = "external",
+                       language: str = "eng", progress_callback: Optional[Callable] = None) -> Dict:
+        """
+        Apply subtitles to video
+        
+        Args:
+            video_path: Path to video file
+            subtitle_paths: List of subtitle file paths
+            output_path: Output path (None for auto-generate)
+            mode: "external" (copy to same dir), "embed" (soft subs), or "burn-in" (hard subs)
+            language: Language code for subtitle track
+            progress_callback: Progress callback function
+        """
+        self._ensure_handlers_initialized()
         return self.subtitle_handler.apply_subtitles(video_path, subtitle_paths, output_path, 
-                                                     burn_in, progress_callback)
+                                                     mode, language, progress_callback)
     
     # ===================
     # Renaming Operations
@@ -232,10 +254,12 @@ class EncodeForgeCore:
     
     def preview_rename(self, file_paths: List[str], settings_dict: Optional[Dict] = None) -> Dict:
         """Preview how files would be renamed"""
+        self._ensure_handlers_initialized()
         return self.renaming_handler.preview_rename(file_paths, settings_dict)
     
     def rename_files(self, file_paths: List[str], dry_run: bool = False, create_backup: bool = False) -> Dict:
         """Rename media files using metadata"""
+        self._ensure_handlers_initialized()
         return self.renaming_handler.rename_files(file_paths, dry_run, create_backup)
     
     # =======================
@@ -245,14 +269,17 @@ class EncodeForgeCore:
     def convert_file(self, input_path: str, output_path: Optional[str] = None,
                     progress_callback: Optional[Callable] = None) -> Dict:
         """Convert a single video file"""
+        self._ensure_handlers_initialized()
         return self.conversion_handler.convert_file(input_path, output_path, progress_callback)
     
     def convert_files(self, file_paths: List[str], progress_callback: Optional[Callable] = None) -> Dict:
         """Convert multiple files"""
+        self._ensure_handlers_initialized()
         return self.conversion_handler.convert_files(file_paths, progress_callback)
     
     def cancel_current(self) -> Dict:
         """Cancel current conversion"""
+        self._ensure_handlers_initialized()
         return self.conversion_handler.cancel_current()
     
     # ==================

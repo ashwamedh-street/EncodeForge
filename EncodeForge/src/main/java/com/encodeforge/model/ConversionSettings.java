@@ -74,6 +74,7 @@ public class ConversionSettings {
     private String whisperModel = "base";
     private String whisperLanguages = "eng";
     private boolean downloadSubtitles = false;
+    private boolean embedGeneratedSubtitles = false;  // Embed AI-generated subtitles into video
     
     // Output settings
     private String namingPattern = "{title} - S{season}E{episode} - {episodeTitle}";
@@ -194,6 +195,9 @@ public class ConversionSettings {
     
     public boolean isDownloadSubtitles() { return downloadSubtitles; }
     public void setDownloadSubtitles(boolean downloadSubtitles) { this.downloadSubtitles = downloadSubtitles; }
+    
+    public boolean isEmbedGeneratedSubtitles() { return embedGeneratedSubtitles; }
+    public void setEmbedGeneratedSubtitles(boolean embedGeneratedSubtitles) { this.embedGeneratedSubtitles = embedGeneratedSubtitles; }
     
     public String getNamingPattern() { return namingPattern; }
     public void setNamingPattern(String namingPattern) { this.namingPattern = namingPattern; }
@@ -443,6 +447,7 @@ public class ConversionSettings {
         json.addProperty("whisper_model", whisperModel);
         json.addProperty("whisper_languages", whisperLanguages);
         json.addProperty("download_subtitles", downloadSubtitles);
+        json.addProperty("embed_generated_subtitles", embedGeneratedSubtitles);
         
         // Output
         json.addProperty("naming_pattern", namingPattern);

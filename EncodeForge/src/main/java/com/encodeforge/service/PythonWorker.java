@@ -153,6 +153,12 @@ public class PythonWorker {
                     }
                     updateActivity();
                     logger.debug("Worker {} received response: {} chars", workerId, responseLine.length());
+                    
+                    // Debug: Log actual response content if it seems problematic
+                    if (responseLine.length() < 500) {
+                        logger.debug("Worker {} response content: {}", workerId, responseLine);
+                    }
+                    
                     return gson.fromJson(responseLine, JsonObject.class);
                 } catch (InterruptedException | ExecutionException e) {
                     logger.error("Worker {} error reading response", workerId, e);
@@ -194,7 +200,25 @@ public class PythonWorker {
                 boolean receivedFinalResponse = false;
                 while ((line = reader.readLine()) != null && !receivedFinalResponse) {
                     logger.trace("Worker {} streaming line: {}", workerId, line);
-                    JsonObject response = gson.fromJson(line, JsonObject.class);
+                    
+                    // Skip empty lines
+                    if (line.trim().isEmpty()) {
+                        continue;
+                    }
+                    
+                    JsonObject response = null;
+                    try {
+                        response = gson.fromJson(line, JsonObject.class);
+                    } catch (Exception e) {
+                        logger.warn("Worker {} failed to parse streaming line: {}", workerId, line, e);
+                        continue;
+                    }
+                    
+                    if (response == null) {
+                        logger.warn("Worker {} received null response from line: {}", workerId, line);
+                        continue;
+                    }
+                    
                     updateActivity();
                     
                     // Pass every response to callback
@@ -206,7 +230,7 @@ public class PythonWorker {
                         receivedFinalResponse = true;
                     } else if (response.has("status")) {
                         String status = response.get("status").getAsString();
-                        if ("complete".equals(status) || "error".equals(status)) {
+                        if ("complete".equals(status) || "error".equals(status) || "success".equals(status)) {
                             logger.debug("Worker {} received final response (status: {})", workerId, status);
                             receivedFinalResponse = true;
                         }

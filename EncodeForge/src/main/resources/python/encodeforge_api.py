@@ -11,7 +11,24 @@ import logging.handlers
 import os
 import sys
 import threading
+import warnings
 from typing import Dict
+
+# Add custom Python libs directory to sys.path FIRST (before any other imports)
+# This ensures we can import packages installed to our custom directory
+if 'PYTHONPATH' in os.environ:
+    custom_lib_path = os.environ['PYTHONPATH']
+    if custom_lib_path not in sys.path:
+        sys.path.insert(0, custom_lib_path)
+        # Also check for site-packages subdirectory (in case pip created it)
+        import pathlib
+        site_packages = pathlib.Path(custom_lib_path) / 'site-packages'
+        if site_packages.exists() and str(site_packages) not in sys.path:
+            sys.path.insert(0, str(site_packages))
+
+# Suppress all warnings to prevent them from corrupting JSON stdout
+# (Whisper library prints warnings to stdout which breaks JSON parsing)
+warnings.filterwarnings('ignore')
 
 # Force unbuffered output for real-time streaming
 try:
@@ -397,7 +414,22 @@ class FFmpegAPI:
             elif action == "download_whisper_model":
                 model = request.get("model", "base")
                 try:
-                    result = self.core.download_whisper_model(model)
+                    # Define progress callback that sends streaming updates
+                    def progress_callback(progress_info):
+                        # Send progress update as a streaming response
+                        self._send_response({
+                            "type": "progress",
+                            "progress": progress_info.get("progress", 0),
+                            "status": progress_info.get("status", "downloading"),
+                            "message": progress_info.get("message", "Downloading...")
+                        })
+                    
+                    # Start download with progress callback
+                    result = self.core.download_whisper_model(model, progress_callback=progress_callback)
+                    
+                    # Force re-check of Whisper on next access (detects newly installed packages)
+                    self.core.reset_whisper_check()
+                    
                     # Clear cache after model download so UI refreshes
                     if "check_whisper" in self._cache:
                         del self._cache["check_whisper"]
@@ -419,9 +451,20 @@ class FFmpegAPI:
                 language = request.get("language")
                 
                 if not video_path:
-                    return {"status": "error", "message": "video_path required"}
+                    return {"status": "error", "message": "video_path required", "complete": True}
                 
-                return self.core.generate_subtitles(video_path, language)
+                # Define progress callback to stream updates back to Java
+                # Each update is sent as a separate JSON line
+                def progress_callback(progress_data):
+                    # Send progress update (without "complete" flag so streaming continues)
+                    self._send_response(progress_data)
+                
+                # Get the final result (now includes subtitle metadata)
+                result = self.core.generate_subtitles(video_path, language, progress_callback)
+                
+                # Add "complete" flag to final response so Java knows we're done
+                result["complete"] = True
+                return result
             
             elif action == "search_subtitles":
                 video_path = request.get("video_path")
@@ -482,17 +525,17 @@ class FFmpegAPI:
             
             elif action == "apply_subtitles":
                 video_path = request.get("video_path")
-                subtitle_path = request.get("subtitle_path")
+                subtitle_paths = request.get("subtitle_paths", [])  # Now expects a list
                 output_path = request.get("output_path")
                 mode = request.get("mode", "external")  # 'burn-in', 'embed', or 'external'
                 language = request.get("language", "eng")
                 
                 if not video_path:
                     return {"status": "error", "message": "video_path required"}
-                if not subtitle_path:
-                    return {"status": "error", "message": "subtitle_path required"}
+                if not subtitle_paths:
+                    return {"status": "error", "message": "subtitle_paths required"}
                 
-                return self.core.apply_subtitles(video_path, subtitle_path, output_path, mode, language)
+                return self.core.apply_subtitles(video_path, subtitle_paths, output_path, mode, language)
             
             elif action == "preview_rename":
                 file_paths = request.get("file_paths", [])
@@ -546,6 +589,24 @@ class FFmpegAPI:
                 return {
                     "status": "success",
                     "settings": self.settings_to_dict()
+                }
+            
+            elif action == "get_system_resources":
+                # Get system resource information for intelligent worker allocation
+                from resource_manager import get_resource_manager
+                rm = get_resource_manager()
+                
+                return {
+                    "status": "success",
+                    "system_info": rm.get_system_info(),
+                    "optimal_workers": {
+                        "whisper": rm.get_optimal_worker_count("whisper"),
+                        "encoding": rm.get_optimal_worker_count("encoding"),
+                        "subtitle_search": rm.get_optimal_worker_count("subtitle_search"),
+                        "download": rm.get_optimal_worker_count("download"),
+                        "metadata": rm.get_optimal_worker_count("metadata")
+                    },
+                    "gpu_available": rm.should_use_gpu()
                 }
             
             elif action == "convert_files":
@@ -668,14 +729,20 @@ class FFmpegAPI:
         Handle batch subtitle search for multiple files in parallel.
         Each file dict should contain: file_id, file_name, video_path, languages
         
-        Searches files in parallel (up to 3 concurrent) and sends progress updates
+        Searches files in parallel with intelligent worker allocation and sends progress updates
         for each file with file_id attached so Java knows which file it's for.
         """
         import os
         from concurrent.futures import ThreadPoolExecutor, as_completed
+        from resource_manager import get_resource_manager
         
         try:
             logger.info(f"Starting batch subtitle search for {len(files)} files")
+            
+            # Use resource manager to determine optimal parallel workers for subtitle search
+            rm = get_resource_manager()
+            max_workers = rm.get_optimal_worker_count("subtitle_search")
+            logger.info(f"Using {max_workers} parallel workers for subtitle search")
             
             # Ensure core is initialized
             if self.core is None:
@@ -695,8 +762,8 @@ class FFmpegAPI:
                     self._send_response(progress_data)
                 return progress_callback
             
-            # Search files in parallel using ThreadPoolExecutor
-            with ThreadPoolExecutor(max_workers=3) as executor:
+            # Search files in parallel using ThreadPoolExecutor with intelligent worker allocation
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 # Submit all search tasks
                 future_to_file = {}
                 for file_info in files:
@@ -863,6 +930,56 @@ class FFmpegAPI:
                 "configured": False
             }
     
+    def _lightweight_whisper_check(self) -> Dict:
+        """
+        Lightweight Whisper check without triggering expensive core initialization.
+        Checks if whisper package is importable and scans for model files.
+        """
+        try:
+            # Check if whisper package exists (importlib check is fast)
+            from importlib.util import find_spec
+            whisper_spec = find_spec("whisper")
+            whisper_available = whisper_spec is not None
+            
+            # Quick check for installed models by scanning filesystem
+            installed_models = []
+            if whisper_available:
+                try:
+                    from pathlib import Path
+                    from path_manager import get_models_dir
+                    
+                    model_dir = get_models_dir() / "whisper"
+                    if model_dir.exists():
+                        # Standard Whisper model names
+                        standard_models = ["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"]
+                        for model_file in model_dir.glob("*.pt"):
+                            model_name = model_file.stem
+                            if model_name in standard_models:
+                                installed_models.append(model_name)
+                        logger.info(f"Lightweight Whisper check: found {len(installed_models)} models in {model_dir}")
+                except Exception as e:
+                    logger.warning(f"Error scanning for Whisper models: {e}")
+            
+            return {
+                "available": whisper_available,
+                "version": "Installed" if whisper_available else "Not installed",
+                "installed_models": installed_models,
+                "available_models": ["tiny", "base", "small", "medium", "large", "large-v2", "large-v3"],
+                "model_sizes": {
+                    "tiny": "75 MB", "base": "142 MB", "small": "466 MB", 
+                    "medium": "1.5 GB", "large": "2.9 GB", "large-v2": "2.9 GB", "large-v3": "2.9 GB"
+                }
+            }
+        except Exception as e:
+            logger.error(f"Error in lightweight Whisper check: {e}")
+            return {
+                "available": False,
+                "version": "Check failed",
+                "installed_models": [],
+                "available_models": [],
+                "model_sizes": {}
+            }
+    
     def handle_get_all_status(self) -> Dict:
         """
         Consolidated endpoint that checks all provider/service statuses at once.
@@ -886,7 +1003,7 @@ class FFmpegAPI:
                     "version": "Not checked yet"
                 }
             
-            # Check Whisper status - use cache if available
+            # Check Whisper status - use cache if available, otherwise do lightweight check
             cached_whisper = self._get_cached("check_whisper")
             if cached_whisper:
                 installed_models = cached_whisper.get("installed_models", [])
@@ -899,14 +1016,8 @@ class FFmpegAPI:
                     "model_sizes": cached_whisper.get("model_sizes", {})
                 }
             else:
-                # Default lightweight response
-                whisper_info = {
-                    "available": False,
-                    "version": "Not checked yet",
-                    "installed_models": [],
-                    "available_models": [],
-                    "model_sizes": {}
-                }
+                # Lightweight check: see if whisper is importable and check for model files
+                whisper_info = self._lightweight_whisper_check()
             
             # Check OpenSubtitles configuration
             has_opensubtitles_creds = bool(
