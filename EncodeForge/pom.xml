@@ -18,21 +18,16 @@
         <maven.compiler.target>17</maven.compiler.target>
         <javafx.version>17.0.2</javafx.version>
         <javafx.home>C:\Program Files\Java\javafx-sdk-17.0.2</javafx.home>
+            <!-- Platform-specific JavaFX classifiers (can be overridden per-build) -->
+            <javafx.classifier.win>win</javafx.classifier.win>
+            <javafx.classifier.linux>linux</javafx.classifier.linux>
+            <javafx.classifier.mac>mac</javafx.classifier.mac>
+            <javafx.classifier.mac.aarch>mac-aarch64</javafx.classifier.mac.aarch>
         <mainClass>com.encodeforge.MainApp</mainClass>
     </properties>
 
     <dependencies>
-        <!-- JavaFX -->
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-controls</artifactId>
-            <version>${javafx.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.openjfx</groupId>
-            <artifactId>javafx-fxml</artifactId>
-            <version>${javafx.version}</version>
-        </dependency>
+        <!-- JavaFX - resolved per-platform in profiles so native libs/classifiers are correct -->
 
         <!-- JSON processing -->
         <dependency>
@@ -415,6 +410,22 @@
                     <value>linux-deb,linux-rpm,mac-dmg</value>
                 </property>
             </activation>
+            <!-- Pull in platform-specific JavaFX native artifacts for Windows -->
+            <dependencies>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-controls</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.win}</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-fxml</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.win}</classifier>
+                </dependency>
+            </dependencies>
+
             <build>
                 <plugins>
                     <plugin>
@@ -434,6 +445,22 @@
         <!-- Windows MSI Profile -->
         <profile>
             <id>windows-msi</id>
+            <!-- Windows MSI needs JavaFX native artifacts as well -->
+            <dependencies>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-controls</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.win}</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-fxml</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.win}</classifier>
+                </dependency>
+            </dependencies>
+
             <build>
                 <plugins>
                     <plugin>
@@ -453,6 +480,22 @@
         <!-- Linux DEB Profile -->
         <profile>
             <id>linux-deb</id>
+            <!-- Linux DEB profile: include Linux JavaFX artifacts -->
+            <dependencies>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-controls</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.linux}</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-fxml</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.linux}</classifier>
+                </dependency>
+            </dependencies>
+
             <build>
                 <plugins>
                     <plugin>
@@ -472,6 +515,22 @@
         <!-- Linux RPM Profile -->
         <profile>
             <id>linux-rpm</id>
+            <!-- Linux RPM profile: include Linux JavaFX artifacts -->
+            <dependencies>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-controls</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.linux}</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-fxml</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.linux}</classifier>
+                </dependency>
+            </dependencies>
+
             <build>
                 <plugins>
                     <plugin>
@@ -500,6 +559,22 @@
                     <value>linux-deb,linux-rpm,windows-exe,windows-msi,mac-dmg-arm64</value>
                 </property>
             </activation>
+            <!-- macOS (Intel) profile: include macOS JavaFX artifacts -->
+            <dependencies>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-controls</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.mac}</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-fxml</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.mac}</classifier>
+                </dependency>
+            </dependencies>
+
             <build>
                 <plugins>
                     <plugin>
@@ -519,6 +594,22 @@
         <!-- macOS DMG Profile (ARM64) -->
         <profile>
             <id>mac-dmg-arm64</id>
+            <!-- macOS (ARM64) profile: include macOS ARM JavaFX artifacts -->
+            <dependencies>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-controls</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.mac.aarch}</classifier>
+                </dependency>
+                <dependency>
+                    <groupId>org.openjfx</groupId>
+                    <artifactId>javafx-fxml</artifactId>
+                    <version>${javafx.version}</version>
+                    <classifier>${javafx.classifier.mac.aarch}</classifier>
+                </dependency>
+            </dependencies>
+
             <build>
                 <plugins>
                     <plugin>
