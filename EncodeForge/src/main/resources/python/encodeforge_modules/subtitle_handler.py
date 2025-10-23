@@ -216,7 +216,7 @@ class SubtitleHandler:
                         "provider": provider_name,
                         "provider_complete": is_complete,  # This provider is done (stream continues)
                         "subtitles": formatted,  # Always send the results!
-                        "status": "success" if is_complete else "searching"
+                        "status": "searching"  # ALWAYS "searching" during batch - only final result uses "file_complete"
                     })
             
             # Search all providers with progress callback

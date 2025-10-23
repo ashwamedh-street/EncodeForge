@@ -5,6 +5,7 @@ Lightweight orchestrator that delegates to specialized handlers
 """
 
 import logging
+import threading
 from typing import TYPE_CHECKING, Callable, Dict, List, Optional
 
 from encodeforge_modules import (
@@ -39,6 +40,10 @@ class EncodeForgeCore:
     
     def __init__(self, settings: Optional[ConversionSettings] = None):
         self.settings = settings or ConversionSettings()
+        
+        # Thread lock for handler initialization (prevents race conditions in parallel batch operations)
+        self._init_lock = threading.Lock()
+        self._handlers_initialized = False
         
         # Initialize managers
         self.ffmpeg_mgr = FFmpegManager(self.settings.ffmpeg_path)
@@ -82,8 +87,17 @@ class EncodeForgeCore:
         logger.info("Whisper check reset - will re-detect on next access")
     
     def _ensure_handlers_initialized(self):
-        """Lazy initialize handlers (called before first use)"""
-        if not hasattr(self, 'file_handler'):
+        """Lazy initialize handlers (called before first use) - Thread-safe for parallel operations"""
+        # Quick check without lock (performance optimization)
+        if self._handlers_initialized:
+            return
+        
+        # Acquire lock for initialization
+        with self._init_lock:
+            # Double-check after acquiring lock (another thread may have initialized)
+            if self._handlers_initialized:
+                return
+            
             logger.info("Initializing EncodeForge handlers")
             try:
                 logger.info("Creating FileHandler...")
@@ -106,6 +120,8 @@ class EncodeForgeCore:
                 self.conversion_handler = ConversionHandler(self.settings, self.ffmpeg_mgr)
                 logger.info("ConversionHandler created successfully")
                 
+                # Mark as initialized (must be last step)
+                self._handlers_initialized = True
                 logger.info("All handlers initialized successfully")
             except Exception as e:
                 logger.error(f"Error initializing handlers: {e}", exc_info=True)

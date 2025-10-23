@@ -13,6 +13,14 @@ import urllib.parse
 import urllib.request
 from typing import Dict, List
 
+try:
+    from bs4 import BeautifulSoup
+    BS4_AVAILABLE = True
+except ImportError:
+    BS4_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.warning("BeautifulSoup4 not available, Addic7ed provider will use regex fallback")
+
 from .base_provider import BaseSubtitleProvider
 
 logger = logging.getLogger(__name__)
@@ -26,7 +34,7 @@ class Addic7edProvider(BaseSubtitleProvider):
         self.provider_name = "Addic7ed"
     
     def search(self, video_path: str, languages: List[str]) -> List[Dict]:
-        """Search Addic7ed (addic7ed.com)"""
+        """Search Addic7ed (addic7ed.com) - improved web scraping"""
         results = []
         
         try:
@@ -40,18 +48,27 @@ class Addic7edProvider(BaseSubtitleProvider):
             else:
                 logger.info(f"Addic7ed search: '{search_name}'")
             
+            # Try multiple search strategies
             search_queries = [search_name]
             if search_name.lower().startswith('the '):
                 search_queries.append(search_name[4:])
             
             headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/119.0',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.5',
+                'Accept-Encoding': 'gzip, deflate',
+                'DNT': '1',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
                 'Referer': 'https://www.addic7ed.com/'
             }
             
             show_found = False
+            show_id = None
+            found_show_name = None
+            
+            # Step 1: Search for the show
             for search_query in search_queries:
                 if show_found:
                     break
@@ -60,7 +77,7 @@ class Addic7edProvider(BaseSubtitleProvider):
                     logger.debug(f"Addic7ed trying: '{search_query}'")
                     search_url = f"https://www.addic7ed.com/search.php?search={urllib.parse.quote(search_query)}&Submit=Search"
                     
-                    time.sleep(0.5)
+                    time.sleep(1)  # Respectful delay
                     req = urllib.request.Request(search_url, headers=headers)
                     
                     with urllib.request.urlopen(req, timeout=15) as response:
@@ -69,47 +86,71 @@ class Addic7edProvider(BaseSubtitleProvider):
                             html = gzip.decompress(html)
                         html = html.decode('utf-8', errors='ignore')
                     
-                    show_pattern = r'<a href="(/show/\d+)"[^>]*>([^<]+)</a>'
-                    show_matches = re.findall(show_pattern, html, re.IGNORECASE)
-                    
-                    if not show_matches:
-                        logger.debug(f"Addic7ed: '{search_query}' not found, trying next...")
-                        continue
-                    
-                    # Try to find best match - prefer exact or close matches
-                    best_match = None
-                    search_lower = search_query.lower()
-                    
-                    for show_url, found_show_name in show_matches:
-                        found_lower = found_show_name.lower()
+                    # Parse with BeautifulSoup if available, otherwise regex
+                    if BS4_AVAILABLE:
+                        soup = BeautifulSoup(html, 'html.parser')
+                        # Look for show links - updated pattern for current site
+                        show_links = soup.find_all('a', href=re.compile(r'/show/\d+'))
                         
-                        # Exact match (best)
-                        if search_lower == found_lower:
-                            best_match = (show_url, found_show_name)
-                            logger.debug(f"Addic7ed: Exact match found - {found_show_name}")
-                            break
+                        if show_links:
+                            for link in show_links:
+                                link_text = link.get_text(strip=True)
+                                href = link.get('href', '')
+                                
+                                # Extract show ID
+                                show_id_match = re.search(r'/show/(\d+)', href)
+                                if show_id_match:
+                                    search_lower = search_query.lower()
+                                    link_lower = link_text.lower()
+                                    
+                                    # Exact or close match
+                                    if search_lower == link_lower or search_lower in link_lower or link_lower in search_lower:
+                                        show_id = show_id_match.group(1)
+                                        found_show_name = link_text
+                                        show_found = True
+                                        logger.info(f"✅ Addic7ed found show: {found_show_name} (ID: {show_id})")
+                                        break
+                    else:
+                        # Fallback regex parsing
+                        show_pattern = r'<a href="(/show/(\d+))"[^>]*>([^<]+)</a>'
+                        show_matches = re.findall(show_pattern, html, re.IGNORECASE)
                         
-                        # Close match (search query is in show name or vice versa)
-                        if search_lower in found_lower or found_lower in search_lower:
-                            # Check if it's a significant match (>50% overlap)
-                            if len(search_lower) > 3 and len(found_lower) > 3:
-                                best_match = (show_url, found_show_name)
-                                logger.debug(f"Addic7ed: Partial match found - {found_show_name}")
-                                break
-                    
-                    if not best_match:
-                        # No good match found, skip
-                        logger.debug(f"Addic7ed: No good match for '{search_query}' (found: {show_matches[0][1]}), trying next...")
-                        continue
-                    
-                    show_url, found_show_name = best_match
-                    full_show_url = f"https://www.addic7ed.com{show_url}"
-                    
-                    logger.info(f"✅ Addic7ed found show: {found_show_name}")
-                    show_found = True
-                    
-                    time.sleep(0.5)
-                    req2 = urllib.request.Request(full_show_url, headers=headers)
+                        if show_matches:
+                            for show_url, sid, sname in show_matches:
+                                search_lower = search_query.lower()
+                                sname_lower = sname.lower()
+                                
+                                if search_lower == sname_lower or search_lower in sname_lower or sname_lower in search_lower:
+                                    show_id = sid
+                                    found_show_name = sname
+                                    show_found = True
+                                    logger.info(f"✅ Addic7ed found show: {found_show_name} (ID: {show_id})")
+                                    break
+                                    
+                except urllib.error.HTTPError as e:
+                    if e.code == 403:
+                        logger.warning("Addic7ed blocked request (403) - rate limiting")
+                        time.sleep(2)
+                    elif e.code == 503:
+                        logger.warning("Addic7ed temporarily unavailable (503)")
+                    else:
+                        logger.warning(f"Addic7ed HTTP error: {e.code}")
+                    continue
+                except Exception as e:
+                    logger.debug(f"Addic7ed search failed for '{search_query}': {e}")
+                    continue
+            
+            if not show_found:
+                logger.info("Addic7ed: No matching show found")
+                return results
+            
+            # Step 2: Get subtitles for specific episode (if TV show)
+            if season and episode and show_id:
+                try:
+                    # Navigate to season/episode page
+                    episode_url = f"https://www.addic7ed.com/show/{show_id}"
+                    time.sleep(1)
+                    req2 = urllib.request.Request(episode_url, headers=headers)
                     
                     with urllib.request.urlopen(req2, timeout=15) as response2:
                         show_html = response2.read()
@@ -117,23 +158,40 @@ class Addic7edProvider(BaseSubtitleProvider):
                             show_html = gzip.decompress(show_html)
                         show_html = show_html.decode('utf-8', errors='ignore')
                     
-                    lang_pattern = r'class="language">([^<]+)</td>.*?<a href="(/(?:original|updated)/\d+/\d+)"'
-                    lang_matches = re.findall(lang_pattern, show_html, re.DOTALL)
-                    
-                    for language_name, download_path in lang_matches[:20]:
-                        lang_code = self.lang_name_to_code(language_name.strip())
+                    # Parse subtitles table
+                    if BS4_AVAILABLE:
+                        soup = BeautifulSoup(show_html, 'html.parser')
                         
-                        if lang_code in languages:
+                        # Find subtitle entries - Addic7ed uses table rows with class 'epeven' or 'epodd'
+                        subtitle_rows = soup.find_all('tr', class_=re.compile(r'ep(even|odd)'))
+                        
+                        for row in subtitle_rows[:20]:
+                            # Find language cell
+                            lang_cell = row.find('td', class_='language')
+                            if not lang_cell:
+                                continue
+                            
+                            language_name = lang_cell.get_text(strip=True)
+                            lang_code = self.lang_name_to_code(language_name)
+                            
+                            if lang_code not in languages:
+                                continue
+                            
+                            # Find download link
+                            download_link = row.find('a', href=re.compile(r'/(original|updated)/\d+/\d+'))
+                            if not download_link:
+                                continue
+                            
+                            download_path = download_link.get('href', '')
                             download_url = f"https://www.addic7ed.com{download_path}"
                             
-                            if season and episode:
-                                file_name = f"{found_show_name}.S{season:02d}E{episode:02d}.{lang_code}.srt"
-                                movie_name = f"{found_show_name} S{season:02d}E{episode:02d}"
-                                file_id = f"addic7ed_{found_show_name}_S{season:02d}E{episode:02d}_{lang_code}"
-                            else:
-                                file_name = f"{found_show_name}.{lang_code}.srt"
-                                movie_name = found_show_name
-                                file_id = f"addic7ed_{found_show_name}_{lang_code}"
+                            # Extract version/release info
+                            version_cell = row.find('td', class_='NewsTitle')
+                            version = version_cell.get_text(strip=True) if version_cell else "Unknown"
+                            
+                            file_name = f"{found_show_name}.S{season:02d}E{episode:02d}.{version}.{lang_code}.srt"
+                            movie_name = f"{found_show_name} S{season:02d}E{episode:02d}"
+                            file_id = f"addic7ed_{show_id}_S{season:02d}E{episode:02d}_{lang_code}_{hash(download_url)}"
                             
                             results.append({
                                 "provider": "Addic7ed",
@@ -144,26 +202,40 @@ class Addic7edProvider(BaseSubtitleProvider):
                                 "file_id": file_id,
                                 "download_url": download_url,
                                 "movie_name": movie_name,
-                                "format": "srt"
+                                "format": "srt",
+                                "release": version
                             })
+                    else:
+                        # Fallback regex parsing
+                        lang_pattern = r'class="language">([^<]+)</td>.*?<a href="(/(?:original|updated)/\d+/\d+)"'
+                        lang_matches = re.findall(lang_pattern, show_html, re.DOTALL)
+                        
+                        for language_name, download_path in lang_matches[:20]:
+                            lang_code = self.lang_name_to_code(language_name.strip())
+                            
+                            if lang_code in languages:
+                                download_url = f"https://www.addic7ed.com{download_path}"
+                                
+                                file_name = f"{found_show_name}.S{season:02d}E{episode:02d}.{lang_code}.srt"
+                                movie_name = f"{found_show_name} S{season:02d}E{episode:02d}"
+                                file_id = f"addic7ed_{show_id}_S{season:02d}E{episode:02d}_{lang_code}"
+                                
+                                results.append({
+                                    "provider": "Addic7ed",
+                                    "file_name": file_name,
+                                    "language": lang_code,
+                                    "downloads": 0,
+                                    "rating": 0.0,
+                                    "file_id": file_id,
+                                    "download_url": download_url,
+                                    "movie_name": movie_name,
+                                    "format": "srt"
+                                })
                     
                     logger.info(f"Addic7ed found {len(results)} subtitle(s)")
-                    break
                     
-                except urllib.error.HTTPError as e:
-                    if e.code == 403:
-                        logger.warning("Addic7ed blocked request (403)")
-                    elif e.code == 503:
-                        logger.warning("Addic7ed temporarily unavailable (503)")
-                    else:
-                        logger.warning(f"Addic7ed HTTP error: {e.code}")
-                    continue
                 except Exception as e:
-                    logger.debug(f"Addic7ed scraping failed for '{search_query}': {e}")
-                    continue
-            
-            if not show_found:
-                logger.info("Addic7ed: No matching show found with any search strategy")
+                    logger.error(f"Addic7ed episode parsing failed: {e}", exc_info=True)
             
         except Exception as e:
             logger.error(f"Error searching Addic7ed: {e}", exc_info=True)

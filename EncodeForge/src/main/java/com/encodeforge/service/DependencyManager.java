@@ -216,7 +216,9 @@ public class DependencyManager {
         return CompletableFuture.supplyAsync(() -> {
             logger.info("Checking required Python libraries...");
             
-            List<String> required = Arrays.asList("requests", "pandas", "streamlit");
+            // Only subtitle provider dependencies - core libraries like requests/pandas/streamlit
+            // are handled separately as optional/AI dependencies
+            List<String> required = Arrays.asList("bs4", "lxml");
             Map<String, Boolean> status = new HashMap<>();
             
             for (String lib : required) {
@@ -282,6 +284,163 @@ public class DependencyManager {
      */
     public CompletableFuture<Void> installOptionalLibraries(List<String> packageSpecs, Consumer<ProgressUpdate> callback) {
         return installPythonPackages(packageSpecs, callback);
+    }
+    
+    /**
+     * Install PyTorch with GPU support (ROCm for AMD, CUDA for NVIDIA)
+     * Platform-aware: respects official PyTorch support matrix
+     */
+    public CompletableFuture<Void> installTorchWithGPUSupport(Consumer<ProgressUpdate> callback) {
+        return CompletableFuture.runAsync(() -> {
+            try {
+                Path pythonExe = getPythonExecutable();
+                String osName = System.getProperty("os.name").toLowerCase();
+                boolean isWindows = osName.contains("win");
+                boolean isLinux = osName.contains("linux");
+                
+                callback.accept(new ProgressUpdate("installing", 0, 
+                    "Detecting GPU and installing PyTorch...", ""));
+                
+                // Use existing HardwareDetector to check what encoders are available
+                Map<String, Boolean> encoders = com.encodeforge.util.HardwareDetector.detectEncoders();
+                
+                // Determine GPU type and installation strategy based on detected hardware and OS
+                String gpuType = "cpu";
+                String installReason = "";
+                
+                if (encoders.get("h264_amf") || encoders.get("hevc_amf")) {
+                    // AMD GPU detected
+                    if (isLinux) {
+                        gpuType = "rocm";
+                        installReason = "AMD GPU detected on Linux - installing PyTorch with ROCm support";
+                        logger.info(installReason);
+                    } else if (isWindows) {
+                        gpuType = "cpu";
+                        installReason = "AMD GPU detected on Windows - GPU acceleration requires preview drivers. Installing CPU-only PyTorch.";
+                        logger.info("AMD GPU detected on Windows");
+                        logger.info("Note: PyTorch GPU support for AMD on Windows is currently in preview and requires:");
+                        logger.info("  - Specific preview drivers (25.20.01.14+)");
+                        logger.info("  - Supported GPU series only");
+                        logger.info("  - Manual installation from AMD's ROCm repository");
+                        logger.info("Installing CPU-only PyTorch for stability. Whisper will still work, just slower.");
+                        logger.info("For GPU acceleration info: https://www.amd.com/en/resources/support-articles/release-notes/RN-AMDGPU-WINDOWS-PYTORCH-PREVIEW.html");
+                    } else {
+                        gpuType = "cpu";
+                        installReason = "AMD GPU detected but unsupported OS - installing CPU-only PyTorch";
+                        logger.info(installReason);
+                    }
+                } else if (encoders.get("h264_nvenc") || encoders.get("hevc_nvenc")) {
+                    // NVIDIA GPU detected
+                    if (isWindows || isLinux) {
+                        gpuType = "cuda";
+                        installReason = "NVIDIA GPU detected - installing PyTorch with CUDA support";
+                        logger.info(installReason);
+                    } else {
+                        gpuType = "cpu";
+                        installReason = "NVIDIA GPU detected but unsupported OS - installing CPU-only PyTorch";
+                        logger.info(installReason);
+                    }
+                } else {
+                    installReason = "No compatible GPU encoders detected - installing CPU-only PyTorch";
+                    logger.info(installReason);
+                }
+                
+                callback.accept(new ProgressUpdate("installing", 20, 
+                    installReason, ""));
+                
+                // Build pip install command based on GPU type
+                List<String> command = new ArrayList<>();
+                command.add(pythonExe.toString());
+                command.add("-m");
+                command.add("pip");
+                command.add("install");
+                command.add("--target");
+                command.add(pythonLibsDir.toString());
+                command.add("--upgrade");
+                
+                if ("rocm".equalsIgnoreCase(gpuType)) {
+                    // AMD ROCm support (Linux only)
+                    logger.info("Installing PyTorch with ROCm support (Linux)");
+                    callback.accept(new ProgressUpdate("installing", 30, 
+                        "Installing PyTorch with ROCm support for AMD GPU...", ""));
+                    
+                    command.add("torch");
+                    command.add("torchvision");
+                    command.add("torchaudio");
+                    command.add("--index-url");
+                    command.add("https://download.pytorch.org/whl/rocm6.2");
+                    
+                } else if ("cuda".equalsIgnoreCase(gpuType)) {
+                    // NVIDIA CUDA support (Windows/Linux)
+                    logger.info("Installing PyTorch with CUDA support");
+                    callback.accept(new ProgressUpdate("installing", 30, 
+                        "Installing PyTorch with CUDA support for NVIDIA GPU...", ""));
+                    
+                    command.add("torch");
+                    command.add("torchvision");
+                    command.add("torchaudio");
+                    command.add("--index-url");
+                    command.add("https://download.pytorch.org/whl/cu126");  // CUDA 12.6
+                    
+                } else {
+                    // CPU-only (all platforms)
+                    logger.info("Installing PyTorch CPU-only version");
+                    callback.accept(new ProgressUpdate("installing", 30, 
+                        "Installing CPU-only PyTorch (stable, cross-platform)...", ""));
+                    
+                    command.add("torch");
+                    command.add("torchvision");
+                    command.add("torchaudio");
+                    // No --index-url means use default PyPI (CPU version)
+                }
+                
+                // Run pip install
+                logger.debug("Running pip command: {}", String.join(" ", command));
+                
+                ProcessBuilder pb = new ProcessBuilder(command);
+                pb.redirectErrorStream(true);
+                
+                Process process = pb.start();
+                
+                // Capture output
+                StringBuilder output = new StringBuilder();
+                try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        logger.debug("pip: {}", line);
+                        output.append(line).append("\n");
+                        
+                        // Update progress based on pip output
+                        if (line.contains("Downloading") || line.contains("downloading")) {
+                            callback.accept(new ProgressUpdate("installing", 50, 
+                                "Downloading PyTorch packages...", line));
+                        } else if (line.contains("Installing") || line.contains("installing")) {
+                            callback.accept(new ProgressUpdate("installing", 80, 
+                                "Installing PyTorch...", line));
+                        }
+                    }
+                }
+                
+                int exitCode = process.waitFor();
+                if (exitCode != 0) {
+                    throw new IOException("PyTorch installation failed with exit code: " + exitCode + "\n" + output.toString());
+                }
+                
+                String successMsg = gpuType.equalsIgnoreCase("cpu") 
+                    ? "PyTorch installed successfully (CPU mode - stable and reliable)"
+                    : "PyTorch installed successfully with " + gpuType.toUpperCase() + " GPU support";
+                    
+                callback.accept(new ProgressUpdate("complete", 100, successMsg, ""));
+                
+                logger.info("PyTorch installed successfully (mode: {})", gpuType.toUpperCase());
+                
+            } catch (Exception e) {
+                logger.error("Failed to install PyTorch", e);
+                callback.accept(new ProgressUpdate("error", 0, 
+                    "Failed to install PyTorch: " + e.getMessage(), ""));
+                throw new RuntimeException("PyTorch installation failed", e);
+            }
+        });
     }
     
     /**
@@ -423,42 +582,15 @@ public class DependencyManager {
                     line = line.trim();
                     // Skip empty lines and comments
                     if (!line.isEmpty() && !line.startsWith("#")) {
-                        // Strip version constraints to let pip resolve compatible versions
-                        String packageName = stripVersionConstraints(line);
-                        packages.add(packageName);
+                        // Keep version constraints for proper dependency resolution
+                        packages.add(line);
                     }
                 }
             }
         }
         
-        logger.info("Read {} packages from {} (version constraints stripped)", packages.size(), filename);
+        logger.info("Read {} packages from {}", packages.size(), filename);
         return packages;
-    }
-    
-    /**
-     * Strip version constraints from package specification
-     * Converts "package>=1.0.0,<2.0.0" to "package"
-     * This lets pip resolve the best compatible version for the current Python environment
-     */
-    private String stripVersionConstraints(String packageSpec) {
-        // Remove everything after first comparison operator
-        String[] operators = {">=", "<=", ">", "<", "==", "!=", "~="};
-        String stripped = packageSpec;
-        
-        for (String op : operators) {
-            int index = stripped.indexOf(op);
-            if (index != -1) {
-                stripped = stripped.substring(0, index).trim();
-            }
-        }
-        
-        // Handle commas (for multiple constraints like ">=1.0,<2.0")
-        int commaIndex = stripped.indexOf(',');
-        if (commaIndex != -1) {
-            stripped = stripped.substring(0, commaIndex).trim();
-        }
-        
-        return stripped;
     }
     
     /**

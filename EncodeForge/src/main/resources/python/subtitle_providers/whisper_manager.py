@@ -495,9 +495,10 @@ class WhisperManager:
                 model_files = list(model_dir.glob("*.pt"))
                 logger.info(f"Found {len(model_files)} model files in directory")
             
+            # Send final progress update (without "status" to avoid premature completion)
             if progress_callback:
                 progress_callback({
-                    "status": "complete",
+                    "type": "progress",
                     "progress": 100,
                     "message": f"Model {model_name} downloaded and verified ✓"
                 })

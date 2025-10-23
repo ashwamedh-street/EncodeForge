@@ -23,9 +23,8 @@ def check_package(package_name: str) -> bool:
 def check_required_packages() -> Dict[str, bool]:
     """Check all required packages"""
     return {
-        "requests": check_package("requests"),
-        "pandas": check_package("pandas"),
-        "streamlit": check_package("streamlit")
+        "beautifulsoup4": check_package("bs4"),  # bs4 is the import name
+        "lxml": check_package("lxml")
     }
 
 

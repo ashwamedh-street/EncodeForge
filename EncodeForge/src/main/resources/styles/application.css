@@ -1,51 +1,51 @@
 /* ========================================
-   MODERN REFINED DARK THEME
-   FFmpeg Batch Transcoder - Compact & Clean
+   APPLE-INSPIRED DARK THEME WITH DEPTH
+   EncodeForge - Modern, Spacious, Elevated UI
    ======================================== */
 
 /* ========================================
    ROOT & BASE COLORS - HARMONIZED
    ======================================== */
 .root {
-    /* Refined dark color palette with better harmony */
-    -fx-base: #1e1e1e;
-    -fx-background: #121212;
-    -fx-control-inner-background: #1e1e1e;
-    -fx-control-inner-background-alt: #252525;
+    /* Premium dark color palette with depth */
+    -fx-base: #1c1c1e;
+    -fx-background: #000000;
+    -fx-control-inner-background: #1c1c1e;
+    -fx-control-inner-background-alt: #2c2c2e;
     
-    /* Subtle accent colors */
-    -fx-accent: #0078d4;
-    -fx-focus-color: #0078d4;
-    -fx-faint-focus-color: #0078d433;
-    -fx-default-button: #0078d4;
+    /* Vibrant accent colors */
+    -fx-accent: #0a84ff;
+    -fx-focus-color: #0a84ff;
+    -fx-faint-focus-color: #0a84ff44;
+    -fx-default-button: #0a84ff;
     
-    /* Refined text colors */
+    /* Refined text colors with better contrast */
     -fx-text-fill: #ffffff;
     -fx-text-base-color: #ffffff;
     -fx-text-inner-color: #ffffff;
     
-    /* Selection colors */
-    -fx-selection-bar: #0078d4;
-    -fx-selection-bar-non-focused: #0078d466;
+    /* Selection colors with glow */
+    -fx-selection-bar: #0a84ff;
+    -fx-selection-bar-non-focused: #0a84ff66;
     
-    /* Harmonized border colors */
-    -fx-outer-border: #2d2d2d;
-    -fx-inner-border: #3a3a3a;
-    -fx-body-color: #1e1e1e;
+    /* Elevated border colors */
+    -fx-outer-border: #3a3a3c;
+    -fx-inner-border: #48484a;
+    -fx-body-color: #1c1c1e;
     
-    /* Subtle shadows */
-    -fx-shadow-highlight-color: #ffffff08;
-    -fx-drop-shadow-color: #00000040;
+    /* Enhanced shadows for depth */
+    -fx-shadow-highlight-color: #ffffff12;
+    -fx-drop-shadow-color: #00000080;
 }
 
-/* Main application background with window border and shadow */
+/* Main application background with elevated window style and deep shadow */
 .root-pane {
-    -fx-background-color: linear-gradient(to bottom, #121212 0%, #1e1e1e 100%);
-    -fx-border-color: #2d2d2d;
-    -fx-border-width: 2;
-    -fx-border-radius: 0;
-    -fx-background-radius: 0;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.8), 25, 0, 0, 0);
+    -fx-background-color: linear-gradient(to bottom, #0a0a0a 0%, #1c1c1e 100%);
+    -fx-border-color: rgba(58, 58, 60, 0.6);
+    -fx-border-width: 1;
+    -fx-border-radius: 12;
+    -fx-background-radius: 12;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.9), 40, 0.15, 0, 8);
 }
 
 /* ========================================
@@ -111,29 +111,32 @@
    CUSTOM TITLE BAR & WINDOW CONTROLS
    ======================================== */
 .custom-title-bar {
-    -fx-background-color: linear-gradient(to bottom, #252525 0%, #1e1e1e 100%);
-    -fx-border-color: transparent transparent #2d2d2d transparent;
-    -fx-border-width: 0 0 1 0;
+    -fx-background-color: linear-gradient(to bottom, rgba(28, 28, 30, 0.98) 0%, rgba(28, 28, 30, 0.95) 100%);
+    -fx-border-color: transparent transparent rgba(58, 58, 60, 0.3) transparent;
+    -fx-border-width: 0 0 0.5 0;
     -fx-padding: 0;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.2), 4, 0, 0, 1);
-    -fx-min-height: 32;
-    -fx-pref-height: 32;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.3), 8, 0, 0, 2);
+    -fx-background-radius: 12 12 0 0;
+    -fx-min-height: 44;
+    -fx-pref-height: 44;
 }
 
 .title-section {
-    -fx-padding: 0 12;
+    -fx-padding: 0 20;
 }
 
 .app-icon {
-    -fx-font-size: 16px;
-    -fx-text-fill: #0078d4;
+    -fx-font-size: 18px;
+    -fx-text-fill: #0a84ff;
+    -fx-effect: dropshadow(gaussian, rgba(10, 132, 255, 0.4), 4, 0, 0, 0);
 }
 
 .app-title {
-    -fx-font-family: "Segoe UI", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
-    -fx-font-size: 13px;
+    -fx-font-family: "SF Pro Display", "Segoe UI Semibold", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-size: 14px;
     -fx-font-weight: 600;
     -fx-text-fill: #ffffff;
+    -fx-letter-spacing: 0.3px;
 }
 
 .draggable-spacer {
@@ -148,21 +151,21 @@
 }
 
 .window-control-button {
-    /* Override ALL button styling */
+    /* Override ALL button styling for clean macOS-like buttons */
     -fx-background-color: transparent !important;
-    -fx-text-fill: #d0d0d0 !important;
+    -fx-text-fill: #e5e5e7 !important;
     -fx-border-color: transparent !important;
     -fx-border-width: 0 !important;
-    -fx-border-radius: 0 !important;
-    -fx-background-radius: 0 !important;
+    -fx-border-radius: 8 !important;
+    -fx-background-radius: 8 !important;
     -fx-padding: 0 !important;
     -fx-cursor: hand;
-    -fx-min-width: 46;
-    -fx-pref-width: 46;
-    -fx-min-height: 32;
-    -fx-pref-height: 32;
-    -fx-max-width: 46;
-    -fx-max-height: 32;
+    -fx-min-width: 44;
+    -fx-pref-width: 44;
+    -fx-min-height: 44;
+    -fx-pref-height: 44;
+    -fx-max-width: 44;
+    -fx-max-height: 44;
     -fx-alignment: center;
     -fx-effect: none !important;
     -fx-background-insets: 0 !important;
@@ -173,17 +176,17 @@
 }
 
 .window-control-button:hover {
-    -fx-background-color: rgba(255, 255, 255, 0.1) !important;
+    -fx-background-color: rgba(255, 255, 255, 0.08) !important;
     -fx-text-fill: #ffffff !important;
     -fx-border-color: transparent !important;
-    -fx-effect: none !important;
+    -fx-effect: dropshadow(gaussian, rgba(255, 255, 255, 0.1), 8, 0, 0, 0) !important;
 }
 
 .window-control-button:pressed {
-    -fx-background-color: rgba(255, 255, 255, 0.2) !important;
+    -fx-background-color: rgba(255, 255, 255, 0.15) !important;
     -fx-text-fill: #ffffff !important;
     -fx-border-color: transparent !important;
-    -fx-effect: none !important;
+    -fx-effect: innershadow(gaussian, rgba(0, 0, 0, 0.3), 4, 0, 0, 1) !important;
 }
 
 .window-control-button:focused {
@@ -193,31 +196,29 @@
 }
 
 .minimize-button:hover {
-    -fx-background-color: rgba(255, 255, 255, 0.1) !important;
+    -fx-background-color: rgba(255, 255, 255, 0.08) !important;
     -fx-text-fill: #ffffff !important;
     -fx-border-color: transparent !important;
-    -fx-effect: none !important;
 }
 
 .maximize-button:hover {
-    -fx-background-color: rgba(255, 255, 255, 0.1) !important;
+    -fx-background-color: rgba(255, 255, 255, 0.08) !important;
     -fx-text-fill: #ffffff !important;
     -fx-border-color: transparent !important;
-    -fx-effect: none !important;
 }
 
 .close-button:hover {
-    -fx-background-color: #e81123 !important;
+    -fx-background-color: #ff453a !important;
     -fx-text-fill: #ffffff !important;
     -fx-border-color: transparent !important;
-    -fx-effect: none !important;
+    -fx-effect: dropshadow(gaussian, rgba(255, 69, 58, 0.5), 12, 0, 0, 0) !important;
 }
 
 .close-button:pressed {
-    -fx-background-color: #c50e1f !important;
+    -fx-background-color: #e0372a !important;
     -fx-text-fill: #ffffff !important;
     -fx-border-color: transparent !important;
-    -fx-effect: none !important;
+    -fx-effect: innershadow(gaussian, rgba(0, 0, 0, 0.4), 4, 0, 0, 1) !important;
 }
 
 /* ========================================
@@ -295,80 +296,86 @@
 }
 
 .toolbar-button {
-    -fx-background-color: #2d2d2d;
+    -fx-background-color: linear-gradient(to bottom, #3a3a3c 0%, #2c2c2e 100%);
     -fx-text-fill: #ffffff;
-    -fx-border-color: #3a3a3a;
-    -fx-border-width: 1;
-    -fx-border-radius: 4;
-    -fx-background-radius: 4;
-    -fx-padding: 4 8;
+    -fx-border-color: rgba(72, 72, 74, 0.6);
+    -fx-border-width: 0.5;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 5 10;
     -fx-cursor: hand;
-    -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-family: "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     -fx-font-size: 11px;
-    -fx-font-weight: 400;
-    -fx-min-height: 24;
-    -fx-pref-height: 24;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.1), 2, 0, 0, 1);
+    -fx-font-weight: 500;
+    -fx-min-height: 26;
+    -fx-pref-height: 26;
+    -fx-min-width: 70;
+    -fx-pref-width: -1;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.2), 3, 0, 0, 1);
 }
 
 .toolbar-button:hover {
-    -fx-background-color: #3a3a3a;
-    -fx-border-color: #0078d4;
-    -fx-effect: dropshadow(gaussian, rgba(0, 120, 212, 0.2), 4, 0, 0, 1);
+    -fx-background-color: linear-gradient(to bottom, #48484a 0%, #3a3a3c 100%);
+    -fx-border-color: rgba(10, 132, 255, 0.5);
+    -fx-effect: dropshadow(gaussian, rgba(10, 132, 255, 0.25), 6, 0, 0, 1);
 }
 
 .toolbar-button:pressed {
-    -fx-background-color: #252525;
-    -fx-border-color: #0078d4;
+    -fx-background-color: linear-gradient(to bottom, #2c2c2e 0%, #1c1c1e 100%);
+    -fx-border-color: #0a84ff;
 }
 
 .toolbar-button:disabled {
-    -fx-opacity: 0.5;
+    -fx-opacity: 0.4;
     -fx-cursor: default;
 }
 
 .primary-button {
-    -fx-background-color: #0078d4;
+    -fx-background-color: linear-gradient(to bottom, #0a84ff 0%, #0066cc 100%);
     -fx-text-fill: #ffffff;
-    -fx-border-color: #106ebe;
-    -fx-font-weight: 500;
-    -fx-effect: dropshadow(gaussian, rgba(0, 120, 212, 0.3), 4, 0, 0, 1);
+    -fx-border-color: rgba(0, 102, 204, 0.8);
+    -fx-border-width: 0.5;
+    -fx-font-weight: 600;
+    -fx-effect: dropshadow(gaussian, rgba(10, 132, 255, 0.4), 8, 0, 0, 3);
 }
 
 .primary-button:hover {
-    -fx-background-color: #106ebe;
-    -fx-border-color: #005a9e;
-    -fx-effect: dropshadow(gaussian, rgba(0, 120, 212, 0.4), 6, 0, 0, 1);
+    -fx-background-color: linear-gradient(to bottom, #3399ff 0%, #0a84ff 100%);
+    -fx-border-color: #0a84ff;
+    -fx-effect: dropshadow(gaussian, rgba(10, 132, 255, 0.6), 12, 0, 0, 4);
+    -fx-scale-x: 1.03;
+    -fx-scale-y: 1.03;
 }
 
 .primary-button:pressed {
-    -fx-background-color: #005a9e;
-    -fx-border-color: #004578;
+    -fx-background-color: linear-gradient(to bottom, #0066cc 0%, #004d99 100%);
+    -fx-border-color: #004d99;
+    -fx-effect: innershadow(gaussian, rgba(0, 0, 0, 0.4), 4, 0, 0, 1);
 }
 
 .secondary-button {
-    -fx-background-color: #3a3a3a;
+    -fx-background-color: linear-gradient(to bottom, #48484a 0%, #3a3a3c 100%);
     -fx-text-fill: #ffffff;
-    -fx-border-color: #4a4a4a;
+    -fx-border-color: rgba(72, 72, 74, 0.8);
 }
 
 .secondary-button:hover {
-    -fx-background-color: #4a4a4a;
-    -fx-border-color: #5a5a5a;
+    -fx-background-color: linear-gradient(to bottom, #5a5a5c 0%, #48484a 100%);
+    -fx-border-color: rgba(90, 90, 92, 0.8);
 }
 
 .danger-button {
-    -fx-background-color: #d13438;
+    -fx-background-color: linear-gradient(to bottom, #ff453a 0%, #d82315 100%);
     -fx-text-fill: #ffffff;
-    -fx-border-color: #b71c1c;
-    -fx-font-weight: 500;
-    -fx-effect: dropshadow(gaussian, rgba(209, 52, 56, 0.3), 4, 0, 0, 1);
+    -fx-border-color: rgba(216, 35, 21, 0.8);
+    -fx-font-weight: 600;
+    -fx-effect: dropshadow(gaussian, rgba(255, 69, 58, 0.4), 8, 0, 0, 3);
 }
 
 .danger-button:hover {
-    -fx-background-color: #b71c1c;
-    -fx-border-color: #a00000;
-    -fx-effect: dropshadow(gaussian, rgba(209, 52, 56, 0.4), 6, 0, 0, 1);
+    -fx-background-color: linear-gradient(to bottom, #ff6259 0%, #ff453a 100%);
+    -fx-border-color: #ff453a;
+    -fx-effect: dropshadow(gaussian, rgba(255, 69, 58, 0.6), 12, 0, 0, 4);
 }
 
 .small-button {
@@ -376,9 +383,10 @@
     -fx-padding: 6 12;
     -fx-min-height: 28;
     -fx-pref-height: 28;
-    -fx-background-radius: 4;
-    -fx-border-radius: 4;
-    -fx-min-width: 80;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+    -fx-min-width: 75;
+    -fx-pref-width: -1;
 }
 
 .status-label, .toolbar-label {
@@ -389,84 +397,104 @@
 }
 
 /* ========================================
-   COMPACT BUTTONS
+   ELEVATED BUTTONS WITH DEPTH
    ======================================== */
 .button {
-    -fx-background-color: #2d2d2d;
+    -fx-background-color: linear-gradient(to bottom, #3a3a3c 0%, #2c2c2e 100%);
     -fx-text-fill: #ffffff;
-    -fx-border-color: #3a3a3a;
-    -fx-border-width: 1;
-    -fx-border-radius: 4;
-    -fx-background-radius: 4;
-    -fx-padding: 6 12;
+    -fx-border-color: rgba(72, 72, 74, 0.6);
+    -fx-border-width: 0.5;
+    -fx-border-radius: 7;
+    -fx-background-radius: 7;
+    -fx-padding: 7 14;
     -fx-cursor: hand;
-    -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-family: "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     -fx-font-size: 12px;
-    -fx-font-weight: 400;
-    -fx-min-height: 28;
-    -fx-pref-height: 28;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.1), 2, 0, 0, 1);
+    -fx-font-weight: 500;
+    -fx-min-height: 30;
+    -fx-pref-height: 30;
+    -fx-min-width: 80;
+    -fx-pref-width: -1;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.25), 4, 0, 0, 2);
 }
 
 .button:hover {
-    -fx-background-color: #3a3a3a;
-    -fx-border-color: #0078d4;
-    -fx-effect: dropshadow(gaussian, rgba(0, 120, 212, 0.2), 4, 0, 0, 1);
+    -fx-background-color: linear-gradient(to bottom, #48484a 0%, #3a3a3c 100%);
+    -fx-border-color: rgba(10, 132, 255, 0.5);
+    -fx-effect: dropshadow(gaussian, rgba(10, 132, 255, 0.3), 8, 0, 0, 2);
+    -fx-scale-x: 1.01;
+    -fx-scale-y: 1.01;
 }
 
 .button:pressed {
-    -fx-background-color: #252525;
-    -fx-border-color: #0078d4;
+    -fx-background-color: linear-gradient(to bottom, #2c2c2e 0%, #1c1c1e 100%);
+    -fx-border-color: #0a84ff;
+    -fx-effect: innershadow(gaussian, rgba(0, 0, 0, 0.4), 4, 0, 0, 1);
+    -fx-scale-x: 0.99;
+    -fx-scale-y: 0.99;
 }
 
 .button:disabled {
-    -fx-opacity: 0.5;
+    -fx-opacity: 0.4;
     -fx-cursor: default;
+    -fx-effect: none;
 }
 
 /* ========================================
-   COMPACT TEXT INPUTS
+   ELEVATED TEXT INPUTS WITH DEPTH
    ======================================== */
 .text-field, .text-area {
-    -fx-background-color: #1e1e1e;
+    -fx-background-color: rgba(28, 28, 30, 0.8);
     -fx-text-fill: #ffffff;
-    -fx-border-color: #3a3a3a;
-    -fx-border-width: 1;
-    -fx-border-radius: 4;
-    -fx-background-radius: 4;
-    -fx-padding: 6 8;
-    -fx-prompt-text-fill: #a0a0a0;
-    -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-    -fx-font-size: 12px;
-    -fx-min-height: 28;
-    -fx-pref-height: 28;
+    -fx-border-color: rgba(72, 72, 74, 0.4);
+    -fx-border-width: 0.5;
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+    -fx-padding: 10 14;
+    -fx-prompt-text-fill: rgba(160, 160, 160, 0.7);
+    -fx-font-family: "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-size: 13px;
+    -fx-min-height: 36;
+    -fx-pref-height: 36;
+    -fx-effect: innershadow(gaussian, rgba(0, 0, 0, 0.3), 2, 0, 0, 1);
 }
 
 .text-field:focused, .text-area:focused {
-    -fx-border-color: #0078d4;
-    -fx-border-width: 2;
-    -fx-effect: dropshadow(gaussian, rgba(0, 120, 212, 0.2), 4, 0, 0, 0);
+    -fx-background-color: rgba(28, 28, 30, 1.0);
+    -fx-border-color: #0a84ff;
+    -fx-border-width: 1.5;
+    -fx-effect: dropshadow(gaussian, rgba(10, 132, 255, 0.4), 8, 0, 0, 0);
+}
+
+.text-field:hover, .text-area:hover {
+    -fx-background-color: rgba(44, 44, 46, 0.9);
+    -fx-border-color: rgba(72, 72, 74, 0.6);
+    /* Remove bulky scale effects */
+    -fx-scale-x: 1.0;
+    -fx-scale-y: 1.0;
 }
 
 .password-field {
-    -fx-background-color: #1e1e1e;
+    -fx-background-color: rgba(28, 28, 30, 0.8);
     -fx-text-fill: #ffffff;
-    -fx-border-color: #3a3a3a;
-    -fx-border-width: 1;
-    -fx-border-radius: 4;
-    -fx-background-radius: 4;
-    -fx-padding: 6 8;
-    -fx-prompt-text-fill: #a0a0a0;
-    -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-    -fx-font-size: 12px;
-    -fx-min-height: 28;
-    -fx-pref-height: 28;
+    -fx-border-color: rgba(72, 72, 74, 0.4);
+    -fx-border-width: 0.5;
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+    -fx-padding: 10 14;
+    -fx-prompt-text-fill: rgba(160, 160, 160, 0.7);
+    -fx-font-family: "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-size: 13px;
+    -fx-min-height: 36;
+    -fx-pref-height: 36;
+    -fx-effect: innershadow(gaussian, rgba(0, 0, 0, 0.3), 2, 0, 0, 1);
 }
 
 .password-field:focused {
-    -fx-border-color: #0078d4;
-    -fx-border-width: 2;
-    -fx-effect: dropshadow(gaussian, rgba(0, 120, 212, 0.2), 4, 0, 0, 0);
+    -fx-background-color: rgba(28, 28, 30, 1.0);
+    -fx-border-color: #0a84ff;
+    -fx-border-width: 1.5;
+    -fx-effect: dropshadow(gaussian, rgba(10, 132, 255, 0.4), 8, 0, 0, 0);
 }
 
 /* ========================================
@@ -604,6 +632,8 @@
     -fx-background-radius: 4;
     -fx-min-height: 28;
     -fx-pref-height: 28;
+    -fx-min-width: 100;
+    -fx-pref-width: -1;
 }
 
 .spinner .text-field {
@@ -611,6 +641,7 @@
     -fx-border-width: 0;
     -fx-text-fill: #ffffff;
     -fx-font-size: 12px;
+    -fx-min-width: 60;
 }
 
 .spinner .increment-arrow-button,
@@ -661,55 +692,61 @@
 }
 
 /* ========================================
-   COMPACT MODE PANELS
+   ELEVATED MODE PANELS WITH GLASSMORPHISM
    ======================================== */
 .mode-panel {
-    -fx-background-color: linear-gradient(to bottom, rgba(37, 37, 37, 0.9) 0%, rgba(30, 30, 30, 0.95) 100%);
-    -fx-border-color: transparent transparent rgba(45, 45, 45, 0.8) transparent;
-    -fx-border-width: 0 0 1 0;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.1), 4, 0, 0, 1);
+    -fx-background-color: linear-gradient(to bottom, rgba(28, 28, 30, 0.95) 0%, rgba(28, 28, 30, 0.98) 100%);
+    -fx-border-color: transparent transparent rgba(58, 58, 60, 0.5) transparent;
+    -fx-border-width: 0 0 0.5 0;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.3), 8, 0, 0, 3);
+    -fx-padding: 0;
 }
 
 .quick-settings {
     -fx-background-color: transparent;
-    -fx-padding: 8 12;
-    -fx-spacing: 8;
+    -fx-padding: 15 18;
+    -fx-spacing: 15;
 }
 
 .settings-group {
-    -fx-spacing: 4;
+    -fx-spacing: 10;
 }
 
 .group-label {
-    -fx-text-fill: #a0a0a0;
-    -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    -fx-text-fill: rgba(160, 160, 160, 0.9);
+    -fx-font-family: "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     -fx-font-size: 11px;
     -fx-font-weight: 600;
-    -fx-padding: 0 0 3 0;
+    -fx-padding: 0 0 4 0;
+    -fx-letter-spacing: 0.5px;
+    -fx-text-transform: uppercase;
 }
 
 .setting-label {
     -fx-text-fill: #ffffff;
-    -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-    -fx-font-size: 12px;
-    -fx-font-weight: 400;
+    -fx-font-family: "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-size: 13px;
+    -fx-font-weight: 500;
 }
 
 .quick-combo {
-    -fx-background-color: #252525;
-    -fx-border-color: #3a3a3a;
-    -fx-border-width: 1;
-    -fx-border-radius: 3;
-    -fx-background-radius: 3;
-    -fx-min-height: 24;
-    -fx-pref-height: 24;
-    -fx-font-size: 11px;
+    -fx-background-color: rgba(44, 44, 46, 0.8);
+    -fx-border-color: rgba(72, 72, 74, 0.4);
+    -fx-border-width: 0.5;
+    -fx-border-radius: 7;
+    -fx-background-radius: 7;
+    -fx-min-height: 32;
+    -fx-pref-height: 32;
+    -fx-min-width: 150;
+    -fx-pref-width: -1;
+    -fx-font-size: 12px;
+    -fx-effect: innershadow(gaussian, rgba(0, 0, 0, 0.2), 2, 0, 0, 1);
 }
 
 .quick-check {
     -fx-text-fill: #ffffff;
-    -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-    -fx-font-size: 11px;
+    -fx-font-family: "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-size: 13px;
 }
 
 /* ========================================
@@ -970,11 +1007,11 @@
 .list-view .list-cell {
     -fx-background-color: transparent;
     -fx-text-fill: #ffffff;
-    -fx-padding: 4 8;
+    -fx-padding: 2 8;
     -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
     -fx-font-size: 11px;
     -fx-border-color: transparent;
-    -fx-cell-size: 20;
+    -fx-cell-size: 24;
 }
 
 .list-view .list-cell:odd {
@@ -993,8 +1030,8 @@
 .track-list .list-cell {
     -fx-font-family: "Consolas", "SF Mono", "Monaco", "Courier New", monospace;
     -fx-font-size: 10px;
-    -fx-padding: 3 6;
-    -fx-cell-size: 18;
+    -fx-padding: 2 6;
+    -fx-cell-size: 20;
 }
 
 /* ========================================
@@ -1078,43 +1115,46 @@
 }
 
 /* ========================================
-   COMPACT SETTINGS DIALOG
+   ELEVATED DIALOG WITH DEPTH & GLASSMORPHISM
    ======================================== */
 .dialog-pane {
-    -fx-background-color: linear-gradient(to bottom, #121212 0%, #1e1e1e 100%);
-    -fx-border-color: #2d2d2d;
-    -fx-border-width: 2;
-    -fx-border-radius: 0;
-    -fx-background-radius: 0;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.9), 35, 0, 0, 0);
+    -fx-background-color: linear-gradient(to bottom, rgba(10, 10, 10, 0.98) 0%, rgba(28, 28, 30, 0.98) 100%);
+    -fx-border-color: rgba(58, 58, 60, 0.6);
+    -fx-border-width: 1;
+    -fx-border-radius: 14;
+    -fx-background-radius: 14;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.95), 50, 0.2, 0, 10);
 }
 
 /* ========================================
-   DIALOG STYLING ENHANCEMENTS
+   DIALOG STYLING ENHANCEMENTS WITH DEPTH
    ======================================== */
 .dialog-pane .header-panel {
-    -fx-background-color: #252525;
-    -fx-border-color: transparent transparent #2d2d2d transparent;
-    -fx-border-width: 0 0 1 0;
+    -fx-background-color: rgba(28, 28, 30, 0.95);
+    -fx-border-color: transparent transparent rgba(58, 58, 60, 0.4) transparent;
+    -fx-border-width: 0 0 0.5 0;
+    -fx-background-radius: 14 14 0 0;
 }
 
 .dialog-pane .header-panel .label {
     -fx-text-fill: #ffffff;
-    -fx-font-family: "Segoe UI", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
-    -fx-font-size: 16px;
+    -fx-font-family: "SF Pro Display", "Segoe UI Semibold", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-size: 18px;
     -fx-font-weight: 600;
 }
 
 .dialog-pane .content {
-    -fx-background-color: #1e1e1e;
-    -fx-padding: 20;
+    -fx-background-color: rgba(28, 28, 30, 0.8);
+    -fx-padding: 30;
 }
 
 .dialog-pane .button-bar {
-    -fx-background-color: #252525;
-    -fx-border-color: #2d2d2d transparent transparent transparent;
-    -fx-border-width: 1 0 0 0;
-    -fx-padding: 15;
+    -fx-background-color: rgba(28, 28, 30, 0.95);
+    -fx-border-color: rgba(58, 58, 60, 0.4) transparent transparent transparent;
+    -fx-border-width: 0.5 0 0 0;
+    -fx-padding: 20;
+    -fx-background-radius: 0 0 14 14;
+    -fx-effect: innershadow(gaussian, rgba(0, 0, 0, 0.2), 4, 0, 0, -2);
 }
 
 .dialog-pane .button-bar .button {
@@ -1197,7 +1237,7 @@
 .category-list .list-cell {
     -fx-background-color: transparent;
     -fx-text-fill: #ffffff;
-    -fx-padding: 8 16;
+    -fx-padding: 6 16;
     -fx-border-color: transparent;
     -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
     -fx-font-size: 12px;
@@ -1333,41 +1373,6 @@
     -fx-font-size: 13px;
     -fx-font-weight: 500;
     -fx-text-fill: #ffffff;
-}
-
-.comparison-list {
-    -fx-background-color: #1e1e1e;
-    -fx-border-color: #2d2d2d;
-    -fx-border-width: 1;
-    -fx-border-radius: 4;
-    -fx-background-radius: 4;
-}
-
-.comparison-list .list-cell {
-    -fx-background-color: transparent;
-    -fx-text-fill: #ffffff;
-    -fx-padding: 8 12;
-    -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-    -fx-font-size: 11px;
-    -fx-border-color: transparent;
-    -fx-cell-size: 28;
-    -fx-wrap-text: false;
-    -fx-text-overrun: ellipsis;
-    -fx-alignment: CENTER_LEFT;
-    -fx-graphic-text-gap: 8;
-}
-
-.comparison-list .list-cell:odd {
-    -fx-background-color: rgba(37, 37, 37, 0.3);
-}
-
-.comparison-list .list-cell:selected {
-    -fx-background-color: #0078d4;
-    -fx-text-fill: #ffffff;
-}
-
-.comparison-list .list-cell:hover {
-    -fx-background-color: rgba(0, 120, 212, 0.2);
 }
 
 .comparison-list .list-cell.changed {
@@ -1582,178 +1587,197 @@
 }
 
 /* ========================================
-   SIDEBAR STYLES
+   ELEVATED SIDEBAR WITH DEPTH
    ======================================== */
 .sidebar {
-    -fx-background-color: linear-gradient(to bottom, #252525 0%, #1e1e1e 100%);
-    -fx-border-color: transparent #2d2d2d transparent transparent;
-    -fx-border-width: 0 1 0 0;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.2), 8, 0, 2, 0);
+    -fx-background-color: linear-gradient(to bottom, rgba(28, 28, 30, 0.98) 0%, rgba(20, 20, 22, 1.0) 100%);
+    -fx-border-color: transparent rgba(58, 58, 60, 0.5) transparent transparent;
+    -fx-border-width: 0 0.5 0 0;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.4), 12, 0, 4, 0);
+    -fx-min-width: 110;
+    -fx-pref-width: 110;
+    -fx-max-width: 150;
 }
 
 .sidebar-section-title {
-    -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-    -fx-font-size: 14px;
-    -fx-font-weight: 600;
-    -fx-text-fill: #a0a0a0;
-    -fx-padding: 0 0 4 0;
+    -fx-font-family: "SF Pro Text", "Segoe UI Semibold", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-size: 10px;
+    -fx-font-weight: 700;
+    -fx-text-fill: rgba(160, 160, 160, 0.8);
+    -fx-padding: 0 0 8 0;
+    -fx-letter-spacing: 0.8px;
+    -fx-text-transform: uppercase;
 }
 
 .sidebar-separator {
     -fx-background-color: transparent;
-    -fx-padding: 6 0;
+    -fx-padding: 12 0;
 }
 
 .sidebar-separator .line {
-    -fx-border-color: rgba(45, 45, 45, 0.8);
+    -fx-border-color: rgba(58, 58, 60, 0.6);
     -fx-border-width: 0.5 0 0 0;
 }
 
-/* FFmpeg Status Section */
+/* FFmpeg Status Section with Elevated Card Style */
 .ffmpeg-status-section {
-    -fx-spacing: 6;
+    -fx-spacing: 10;
 }
 
 .ffmpeg-status-button {
-    -fx-background-color: rgba(37, 37, 37, 0.6);
-    -fx-border-color: rgba(45, 45, 45, 0.8);
-    -fx-border-width: 1;
-    -fx-border-radius: 6;
-    -fx-background-radius: 6;
-    -fx-padding: 6 4;
+    -fx-background-color: rgba(44, 44, 46, 0.5);
+    -fx-border-color: rgba(58, 58, 60, 0.6);
+    -fx-border-width: 0.5;
+    -fx-border-radius: 9;
+    -fx-background-radius: 9;
+    -fx-padding: 9 6;
     -fx-cursor: hand;
-    -fx-min-height: 45;
-    -fx-pref-height: 45;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.1), 2, 0, 0, 1);
+    -fx-min-height: 50;
+    -fx-pref-height: 50;
+    -fx-min-width: 90;
+    -fx-pref-width: 90;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.3), 4, 0, 0, 2);
 }
 
 .ffmpeg-status-button:hover {
-    -fx-background-color: rgba(37, 37, 37, 0.8);
-    -fx-border-color: rgba(0, 120, 212, 0.4);
-    -fx-effect: dropshadow(gaussian, rgba(0, 120, 212, 0.2), 4, 0, 0, 1);
+    -fx-background-color: rgba(58, 58, 60, 0.6);
+    -fx-border-color: rgba(10, 132, 255, 0.5);
+    -fx-effect: dropshadow(gaussian, rgba(10, 132, 255, 0.3), 8, 0, 0, 3);
+    -fx-scale-x: 1.01;
+    -fx-scale-y: 1.01;
 }
 
 .ffmpeg-status-button:pressed {
-    -fx-background-color: rgba(37, 37, 37, 0.9);
-    -fx-border-color: #0078d4;
+    -fx-background-color: rgba(44, 44, 46, 0.8);
+    -fx-border-color: #0a84ff;
+    -fx-effect: innershadow(gaussian, rgba(0, 0, 0, 0.3), 4, 0, 0, 1);
 }
 
 .ffmpeg-status-button.ffmpeg-found {
-    -fx-border-color: rgba(22, 198, 12, 0.6);
+    -fx-border-color: rgba(52, 199, 89, 0.5);
 }
 
 .ffmpeg-status-button.ffmpeg-found:hover {
-    -fx-border-color: #16c60c;
+    -fx-border-color: #34c759;
+    -fx-effect: dropshadow(gaussian, rgba(52, 199, 89, 0.4), 8, 0, 0, 3);
 }
 
 .ffmpeg-status-button.ffmpeg-not-found {
-    -fx-border-color: rgba(209, 52, 56, 0.6);
+    -fx-border-color: rgba(255, 69, 58, 0.5);
 }
 
 .ffmpeg-status-button.ffmpeg-not-found:hover {
-    -fx-border-color: #d13438;
+    -fx-border-color: #ff453a;
+    -fx-effect: dropshadow(gaussian, rgba(255, 69, 58, 0.4), 8, 0, 0, 3);
 }
 
 .ffmpeg-status-icon {
-    -fx-font-size: 16px;
-    -fx-text-fill: #a0a0a0;
+    -fx-font-size: 18px;
+    -fx-text-fill: rgba(160, 160, 160, 0.8);
     -fx-font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.3), 2, 0, 0, 1);
 }
 
 .ffmpeg-status-button.ffmpeg-found .ffmpeg-status-icon {
-    -fx-text-fill: #16c60c;
+    -fx-text-fill: #34c759;
 }
 
 .ffmpeg-status-button.ffmpeg-not-found .ffmpeg-status-icon {
-    -fx-text-fill: #d13438;
+    -fx-text-fill: #ff453a;
 }
 
 .ffmpeg-status-button.ffmpeg-checking .ffmpeg-status-icon {
-    -fx-text-fill: #ffb900;
+    -fx-text-fill: #ffd60a;
 }
 
 .ffmpeg-status-label {
-    -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-    -fx-font-size: 9px;
-    -fx-font-weight: 500;
-    -fx-text-fill: #a0a0a0;
+    -fx-font-family: "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-size: 10px;
+    -fx-font-weight: 600;
+    -fx-text-fill: rgba(160, 160, 160, 0.9);
 }
 
 .ffmpeg-status-button.ffmpeg-found .ffmpeg-status-label {
-    -fx-text-fill: #16c60c;
+    -fx-text-fill: #34c759;
 }
 
 .ffmpeg-status-button.ffmpeg-not-found .ffmpeg-status-label {
-    -fx-text-fill: #d13438;
+    -fx-text-fill: #ff453a;
 }
 
 .ffmpeg-status-button.ffmpeg-checking .ffmpeg-status-label {
-    -fx-text-fill: #ffb900;
+    -fx-text-fill: #ffd60a;
 }
 
-/* Mode Selection Buttons */
+/* Mode Selection Buttons with Elevated Design */
 .mode-selection {
-    -fx-spacing: 6;
+    -fx-spacing: 10;
 }
 
 .button.mode-button {
-    -fx-background-color: rgba(37, 37, 37, 0.4);
-    -fx-border-color: rgba(45, 45, 45, 0.6);
-    -fx-border-width: 1;
-    -fx-border-radius: 6;
-    -fx-background-radius: 6;
-    -fx-padding: 8 6;
+    -fx-background-color: rgba(44, 44, 46, 0.4);
+    -fx-border-color: rgba(58, 58, 60, 0.5);
+    -fx-border-width: 0.5;
+    -fx-border-radius: 9;
+    -fx-background-radius: 9;
+    -fx-padding: 10 6;
     -fx-cursor: hand;
     -fx-font-size: 12px;
-    -fx-min-height: 50;
-    -fx-pref-height: 50;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.1), 2, 0, 0, 1);
+    -fx-min-height: 60;
+    -fx-pref-height: 60;
+    -fx-min-width: 90;
+    -fx-pref-width: 90;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.2), 4, 0, 0, 2);
 }
 
 .button.mode-button:hover {
-    -fx-background-color: rgba(0, 120, 212, 0.1);
-    -fx-border-color: rgba(0, 120, 212, 0.3);
-    -fx-border-width: 1;
-    -fx-effect: dropshadow(gaussian, rgba(0, 120, 212, 0.2), 4, 0, 0, 1);
+    -fx-background-color: rgba(10, 132, 255, 0.15);
+    -fx-border-color: rgba(10, 132, 255, 0.4);
+    -fx-border-width: 0.5;
+    -fx-effect: dropshadow(gaussian, rgba(10, 132, 255, 0.3), 8, 0, 0, 3);
+    -fx-scale-x: 1.01;
+    -fx-scale-y: 1.01;
 }
 
 .button.mode-button.selected {
-    -fx-background-color: rgba(0, 120, 212, 0.25);
-    -fx-border-color: #0078d4;
-    -fx-border-width: 2;
-    -fx-effect: dropshadow(gaussian, rgba(0, 120, 212, 0.4), 8, 0, 0, 1);
+    -fx-background-color: rgba(10, 132, 255, 0.25);
+    -fx-border-color: #0a84ff;
+    -fx-border-width: 1.5;
+    -fx-effect: dropshadow(gaussian, rgba(10, 132, 255, 0.5), 12, 0, 0, 4);
 }
 
 .mode-icon {
-    -fx-font-size: 18px;
+    -fx-font-size: 22px;
     -fx-text-fill: #ffffff;
     -fx-font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.4), 2, 0, 0, 1);
 }
 
 .button.mode-button.selected .mode-icon {
-    -fx-text-fill: #0078d4;
+    -fx-text-fill: #0a84ff;
+    -fx-effect: dropshadow(gaussian, rgba(10, 132, 255, 0.6), 4, 0, 0, 2);
 }
 
 .mode-label {
-    -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-    -fx-font-size: 9px;
-    -fx-font-weight: 500;
-    -fx-text-fill: #ffffff;
+    -fx-font-family: "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-size: 10px;
+    -fx-font-weight: 600;
+    -fx-text-fill: rgba(255, 255, 255, 0.9);
 }
 
 .button.mode-button.selected .mode-label {
-    -fx-text-fill: #0078d4;
-    -fx-font-weight: 600;
+    -fx-text-fill: #0a84ff;
+    -fx-font-weight: 700;
 }
 
 /* File Operations */
 .file-operations {
-    -fx-spacing: 6;
+    -fx-spacing: 10;
 }
 
 /* Settings Section */
 .settings-section {
-    -fx-spacing: 6;
+    -fx-spacing: 10;
 }
 
 /* ==========================================
@@ -1816,7 +1840,8 @@
     -fx-text-fill: #d4d4d4;
     -fx-font-family: 'Consolas', 'Monaco', monospace;
     -fx-font-size: 11px;
-    -fx-padding: 8 10;
+    -fx-padding: 4 10;
+    -fx-cell-size: 24;
 }
 
 .modern-list .list-cell:hover {
@@ -2317,6 +2342,15 @@ BorderPane .text {
     -fx-text-fill: #ffffff;
     -fx-border-color: #2d2d2d;
     -fx-border-width: 1;
+}
+
+/* Remove bulky hover effects from text areas */
+.log-area:hover,
+.details-text:hover,
+.text-area:hover {
+    -fx-scale-x: 1.0;
+    -fx-scale-y: 1.0;
+    -fx-effect: none;
 }
 
 .button-bar {

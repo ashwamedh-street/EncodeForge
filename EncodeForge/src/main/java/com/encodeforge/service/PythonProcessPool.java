@@ -1,5 +1,6 @@
 package com.encodeforge.service;
 
+import com.encodeforge.util.SystemResourceManager;
 import com.google.gson.JsonObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -103,6 +104,9 @@ public class PythonProcessPool {
         // Configure worker specialization
         configureWorkerRoles();
         
+        // Send system resources to all workers
+        updateSystemResourcesInPython();
+        
         // Start health monitoring
         startHealthMonitoring();
         
@@ -170,6 +174,44 @@ public class PythonProcessPool {
         }
         
         logger.info("Worker role specialization configured for {} workers", workers.size());
+    }
+    
+    /**
+     * Update system resources in all Python workers using Java-detected values
+     */
+    private void updateSystemResourcesInPython() {
+        SystemResourceManager sysRes = SystemResourceManager.getInstance();
+        
+        JsonObject request = new JsonObject();
+        request.addProperty("action", "update_system_resources");
+        request.addProperty("cpu_count", sysRes.getLogicalCpuCount());
+        request.addProperty("physical_cores", sysRes.getPhysicalCpuCount());
+        request.addProperty("total_ram_gb", sysRes.getTotalRamGB());
+        request.addProperty("available_ram_gb", sysRes.getAvailableRamGB());
+        
+        logger.info("Sending system resources to {} Python workers", workers.size());
+        
+        // Send to all workers concurrently
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+        for (PythonWorker worker : workers) {
+            CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                try {
+                    worker.sendCommand(request);
+                    logger.debug("Updated system resources in {}", worker.getWorkerId());
+                } catch (Exception e) {
+                    logger.error("Failed to update system resources in {}", worker.getWorkerId(), e);
+                }
+            }, taskExecutor);
+            futures.add(future);
+        }
+        
+        // Wait for all updates to complete
+        try {
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).get(5, TimeUnit.SECONDS);
+            logger.info("System resources updated in all workers");
+        } catch (Exception e) {
+            logger.warn("Some workers failed to receive system resource update", e);
+        }
     }
     
     /**

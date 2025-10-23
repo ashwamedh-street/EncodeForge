@@ -185,24 +185,6 @@
                     </graphic>
                 </Button>
             </VBox>
-            
-            <!-- Separator -->
-            <Separator styleClass="sidebar-separator"/>
-            
-            <!-- FFmpeg Status -->
-            <VBox spacing="4" styleClass="ffmpeg-status-section">
-                <Label text="System" styleClass="sidebar-section-title"/>
-                
-                <!-- FFmpeg Status Button -->
-                <Button fx:id="ffmpegStatusButton" onAction="#handleFFmpegStatus" styleClass="ffmpeg-status-button" maxWidth="Infinity">
-                    <graphic>
-                        <VBox alignment="CENTER" spacing="2">
-                            <Label fx:id="ffmpegStatusIcon" text="⚡" styleClass="ffmpeg-status-icon"/>
-                            <Label fx:id="ffmpegStatusLabel" text="Checking..." styleClass="ffmpeg-status-label"/>
-                        </VBox>
-                    </graphic>
-                </Button>
-            </VBox>
         </VBox>
         
         <!-- Right: Main Content Area -->

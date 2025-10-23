@@ -224,19 +224,37 @@ public class PythonWorker {
                     // Pass every response to callback
                     progressCallback.accept(response);
                     
+                    // DEBUG: Log what we received
+                    logger.debug("Worker {} received response with keys: {}", workerId, response.keySet());
+                    if (response.has("status")) {
+                        logger.debug("Worker {} response status: {}", workerId, response.get("status").getAsString());
+                    }
+                    if (response.has("file_complete")) {
+                        logger.debug("Worker {} response has file_complete: {}", workerId, response.get("file_complete").getAsBoolean());
+                    }
+                    
                     // Check if this is the final response
                     if (response.has("complete") && response.get("complete").getAsBoolean()) {
                         logger.debug("Worker {} received final response (complete: true)", workerId);
                         receivedFinalResponse = true;
                     } else if (response.has("status")) {
                         String status = response.get("status").getAsString();
-                        if ("complete".equals(status) || "error".equals(status) || "success".equals(status)) {
+                        // Note: "file_complete" is NOT a final response - it indicates one file in a batch is done
+                        // Only "complete", "error", and "success" (for non-batch operations) close the stream
+                        if ("complete".equals(status) || "error".equals(status) || 
+                            ("success".equals(status) && !response.has("file_complete"))) {
                             logger.debug("Worker {} received final response (status: {})", workerId, status);
                             receivedFinalResponse = true;
+                        } else {
+                            logger.debug("Worker {} status '{}' is NOT final (continuing stream)", workerId, status);
                         }
                     } else if (response.has("results") && !response.has("progress")) {
                         logger.debug("Worker {} received final response (has results)", workerId);
                         receivedFinalResponse = true;
+                    }
+                    
+                    if (receivedFinalResponse) {
+                        logger.info("Worker {} STOPPING stream read loop - receivedFinalResponse=true", workerId);
                     }
                 }
                 

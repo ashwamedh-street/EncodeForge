@@ -255,16 +255,21 @@ public class WhisperSetupDialog {
                 updateInstallProgress(new ProgressUpdate("installing", 10, 
                     "Installing Whisper AI (this may take several minutes)...", ""));
                 
-                // Specify only package names without version constraints
-                // Let pip resolve the best compatible versions for the Python environment
-                List<String> packages = Arrays.asList(
-                    "openai-whisper",
-                    "torch"
-                );
-                
-                dependencyManager.installOptionalLibraries(packages, this::updateInstallProgress).get();
+                // Install openai-whisper first (without torch to avoid CPU version)
+                List<String> whisperPackage = Arrays.asList("openai-whisper");
+                dependencyManager.installOptionalLibraries(whisperPackage, this::updateInstallProgress).get();
                 
                 appendLog("✓ Whisper AI packages installed successfully");
+                
+                // Step 1.5: Install PyTorch with ROCm support
+                appendLog("\nDetecting GPU and installing PyTorch...");
+                updateInstallProgress(new ProgressUpdate("installing", 40, 
+                    "Installing PyTorch with GPU support...", ""));
+                
+                // Install torch with ROCm support
+                dependencyManager.installTorchWithGPUSupport(this::updateInstallProgress).get();
+                
+                appendLog("✓ PyTorch installed with GPU support");
                 
                 // Step 2: Download the selected model via process pool (with streaming progress)
                 updateInstallProgress(new ProgressUpdate("downloading", 70, 
@@ -279,39 +284,52 @@ public class WhisperSetupDialog {
                     params.addProperty("model", selectedModel);
                     
                     processPool.submitStreamingTask("download_whisper_model", params, response -> {
-                        Platform.runLater(() -> {
+                        try {
                             if (response == null) {
                                 logger.warn("Received null response during model download");
                                 return;
                             }
                             
-                            if (response.has("type") && "progress".equals(response.get("type").getAsString())) {
-                                // Progress update
-                                int progress = response.has("progress") ? response.get("progress").getAsInt() : 0;
-                                String message = response.has("message") ? response.get("message").getAsString() : "Downloading...";
-                                
-                                // Update UI with progress (70-100 range since we're at 70% already)
-                                int totalProgress = 70 + (progress * 30 / 100);
-                                updateInstallProgress(new ProgressUpdate("downloading", totalProgress, message, ""));
-                                appendLog("Progress: " + progress + "% - " + message);
-                            } else {
-                                // Final response
-                                String status = response.has("status") ? response.get("status").getAsString() : "unknown";
-                                String message = response.has("message") ? response.get("message").getAsString() : "";
-                                
-                                if ("success".equals(status) || "complete".equals(status)) {
-                                    appendLog("✓ Model downloaded successfully");
-                                    logger.info("Download completed successfully, completing future");
-                                    downloadFuture.complete(null);
-                                } else if ("error".equals(status)) {
-                                    appendLog("❌ Download failed: " + message);
-                                    logger.error("Download failed with error: {}", message);
-                                    downloadFuture.completeExceptionally(new Exception(message));
-                                } else {
-                                    logger.debug("Received status: {} - {}", status, message);
+                            // Log raw response for debugging
+                            logger.debug("Model download response: {}", response.toString());
+                            
+                            Platform.runLater(() -> {
+                                try {
+                                    if (response.has("type") && "progress".equals(response.get("type").getAsString())) {
+                                        // Progress update
+                                        int progress = response.has("progress") ? response.get("progress").getAsInt() : 0;
+                                        String message = response.has("message") ? response.get("message").getAsString() : "Downloading...";
+                                        
+                                        // Update UI with progress (70-100 range since we're at 70% already)
+                                        int totalProgress = 70 + (progress * 30 / 100);
+                                        updateInstallProgress(new ProgressUpdate("downloading", totalProgress, message, ""));
+                                        appendLog("Progress: " + progress + "% - " + message);
+                                    } else {
+                                        // Final response or other status
+                                        String status = response.has("status") ? response.get("status").getAsString() : "unknown";
+                                        String message = response.has("message") ? response.get("message").getAsString() : "";
+                                        
+                                        logger.info("Received final response - status: {}, message: {}", status, message);
+                                        
+                                        if ("success".equals(status) || "complete".equals(status)) {
+                                            appendLog("✓ Model downloaded and verified successfully");
+                                            logger.info("Download completed successfully, completing future");
+                                            downloadFuture.complete(null);
+                                        } else if ("error".equals(status)) {
+                                            appendLog("❌ Download failed: " + message);
+                                            logger.error("Download failed with error: {}", message);
+                                            downloadFuture.completeExceptionally(new Exception(message));
+                                        } else {
+                                            logger.debug("Received intermediate status: {} - {}", status, message);
+                                        }
+                                    }
+                                } catch (Exception e) {
+                                    logger.error("Error in Platform.runLater callback", e);
                                 }
-                            }
-                        });
+                            });
+                        } catch (Exception e) {
+                            logger.error("Error in streaming callback", e);
+                        }
                     });
                     
                     // Wait for download to complete

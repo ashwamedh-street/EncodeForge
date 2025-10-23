@@ -1,4 +1,3 @@
 # Core Python dependencies for EncodeForge
-# Required for resource management and parallel processing optimization
-psutil>=5.9.0
-
+beautifulsoup4>=4.12.0
+lxml>=4.9.0

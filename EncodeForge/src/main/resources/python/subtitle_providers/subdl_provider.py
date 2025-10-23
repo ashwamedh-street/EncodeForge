@@ -2,14 +2,18 @@
 """
 SubDL Provider
 Good for movies and TV shows with free API
+Updated to use latest API structure
 """
 
 import gzip
 import json
 import logging
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import zipfile
+from io import BytesIO
 from typing import Dict, List
 
 from .base_provider import BaseSubtitleProvider
@@ -25,7 +29,7 @@ class SubDLProvider(BaseSubtitleProvider):
         self.provider_name = "SubDL"
     
     def search(self, video_path: str, languages: List[str]) -> List[Dict]:
-        """Search SubDL (subdl.com)"""
+        """Search SubDL (subdl.com) - improved API integration"""
         results = []
         
         try:
@@ -33,95 +37,181 @@ class SubDLProvider(BaseSubtitleProvider):
             search_term = metadata['clean_name']
             season = metadata.get('season')
             episode = metadata.get('episode')
+            year = metadata.get('year')
             
             if not search_term:
                 return results
             
+            # Convert language codes to 2-letter format for SubDL
+            subdl_languages = []
+            for lang in languages:
+                if len(lang) == 3:
+                    if lang.lower() == 'eng':
+                        subdl_languages.append('en')
+                    elif lang.lower() == 'spa':
+                        subdl_languages.append('es')
+                    elif lang.lower() == 'fre':
+                        subdl_languages.append('fr')
+                    elif lang.lower() == 'ger':
+                        subdl_languages.append('de')
+                    elif lang.lower() == 'por':
+                        subdl_languages.append('pt')
+                    elif lang.lower() == 'ita':
+                        subdl_languages.append('it')
+                    else:
+                        subdl_languages.append(lang[:2].lower())
+                else:
+                    subdl_languages.append(lang.lower())
+            
+            # Build search queries
             searches = []
+            
+            # Try with season/episode in parameters (best for TV shows)
             if season and episode:
+                url = f"https://api.subdl.com/api/v1/subtitles"
+                params = {
+                    'api_key': 'free',
+                    'film_name': search_term,
+                    'type': 'tv',
+                    'season_number': str(season),
+                    'episode_number': str(episode),
+                    'languages': ','.join(subdl_languages)
+                }
+                query_string = urllib.parse.urlencode(params)
                 searches.append({
-                    'url': f"https://api.subdl.com/api/v1/subtitles?api_key=free&film_name={urllib.parse.quote(search_term)}&season_number={season}&episode_number={episode}",
-                    'desc': f"'{search_term}' S{season:02d}E{episode:02d}"
+                    'url': f"{url}?{query_string}",
+                    'desc': f"'{search_term}' S{season:02d}E{episode:02d} (TV type)"
                 })
+                
+                # Also try with episode in the name
                 search_with_ep = f"{search_term} S{season:02d}E{episode:02d}"
+                params2 = {
+                    'api_key': 'free',
+                    'film_name': search_with_ep,
+                    'languages': ','.join(subdl_languages)
+                }
+                query_string2 = urllib.parse.urlencode(params2)
                 searches.append({
-                    'url': f"https://api.subdl.com/api/v1/subtitles?api_key=free&film_name={urllib.parse.quote(search_with_ep)}",
+                    'url': f"{url}?{query_string2}",
                     'desc': f"'{search_with_ep}' (in name)"
                 })
             else:
+                # Movie search
+                url = f"https://api.subdl.com/api/v1/subtitles"
+                params = {
+                    'api_key': 'free',
+                    'film_name': search_term,
+                    'type': 'movie',
+                    'languages': ','.join(subdl_languages)
+                }
+                if year:
+                    params['year'] = year
+                query_string = urllib.parse.urlencode(params)
                 searches.append({
-                    'url': f"https://api.subdl.com/api/v1/subtitles?api_key=free&film_name={urllib.parse.quote(search_term)}",
-                    'desc': f"'{search_term}'"
+                    'url': f"{url}?{query_string}",
+                    'desc': f"'{search_term}' (movie)"
+                })
+                
+                # Also try without specifying type
+                params_general = {
+                    'api_key': 'free',
+                    'film_name': search_term,
+                    'languages': ','.join(subdl_languages)
+                }
+                query_string_general = urllib.parse.urlencode(params_general)
+                searches.append({
+                    'url': f"{url}?{query_string_general}",
+                    'desc': f"'{search_term}' (general)"
                 })
             
             data = None
+            successful_search = None
+            
             for search in searches:
                 try:
                     logger.info(f"SubDL search attempt: {search['desc']}")
                     logger.debug(f"SubDL URL: {search['url']}")
                     
-                    req = urllib.request.Request(search['url'], headers=self.session_headers)
+                    headers = {
+                        'User-Agent': self.session_headers['User-Agent'],
+                        'Accept': 'application/json'
+                    }
+                    
+                    req = urllib.request.Request(search['url'], headers=headers)
+                    time.sleep(0.5)  # Respectful delay
                     
                     with urllib.request.urlopen(req, timeout=10) as response:
                         response_text = response.read().decode('utf-8')
                         logger.debug(f"SubDL response (first 500 chars): {response_text[:500]}")
                         data = json.loads(response_text)
                         
-                        # Log the data structure for debugging
                         logger.debug(f"SubDL response keys: {data.keys() if isinstance(data, dict) else 'not a dict'}")
-                        if isinstance(data, dict):
-                            logger.debug(f"SubDL success field: {data.get('success')}")
-                            logger.debug(f"SubDL subtitles count: {len(data.get('subtitles', [])) if data.get('subtitles') else 0}")
-                            if data.get('subtitles'):
-                                logger.debug(f"First subtitle: {data['subtitles'][0] if len(data['subtitles']) > 0 else 'none'}")
                         
-                        if data.get('success') and data.get('subtitles') and len(data['subtitles']) > 0:
-                            logger.info(f"✅ SubDL found {len(data['subtitles'])} results with this search")
-                            break
+                        if isinstance(data, dict):
+                            # Check for success and subtitles
+                            if data.get('status') and data.get('subtitles'):
+                                if len(data['subtitles']) > 0:
+                                    logger.info(f"✅ SubDL found {len(data['subtitles'])} results")
+                                    successful_search = search['desc']
+                                    break
+                            elif 'subtitles' in data and len(data.get('subtitles', [])) > 0:
+                                logger.info(f"✅ SubDL found {len(data['subtitles'])} results (no status field)")
+                                successful_search = search['desc']
+                                break
+                            else:
+                                logger.info(f"SubDL: No results for this search")
+                                data = None
                         else:
-                            logger.info(f"SubDL search returned no results for this search (success={data.get('success')}, subtitles={len(data.get('subtitles', []))})")
+                            logger.warning(f"SubDL returned unexpected format: {type(data)}")
                             data = None
+                            
+                except urllib.error.HTTPError as e:
+                    logger.warning(f"SubDL HTTP error {e.code}: {e.reason}")
+                    continue
                 except Exception as e:
-                    logger.warning(f"SubDL search failed: {e}", exc_info=True)
+                    logger.warning(f"SubDL search failed: {e}")
                     continue
             
-            if not data:
-                logger.info("SubDL: No results found for this file after all search strategies")
+            if not data or not data.get('subtitles'):
+                logger.info("SubDL: No results found after all search strategies")
                 return results
             
-            for item in data['subtitles'][:20]:
-                lang_code = item.get('lang', '').lower()
-                
-                requested_2letter = []
-                for lang in languages:
-                    if len(lang) == 3:
-                        if lang.lower() == 'eng':
-                            requested_2letter.append('en')
-                        elif lang.lower() == 'spa':
-                            requested_2letter.append('es')
-                        elif lang.lower() == 'fre':
-                            requested_2letter.append('fr')
-                        elif lang.lower() == 'ger':
-                            requested_2letter.append('de')
-                        else:
-                            requested_2letter.append(lang[:2].lower())
-                    else:
-                        requested_2letter.append(lang.lower())
-                
-                if lang_code in requested_2letter or lang_code in [lang.lower() for lang in languages]:
+            logger.info(f"Processing {len(data['subtitles'])} SubDL results")
+            
+            # Parse results
+            for item in data['subtitles'][:30]:  # Increased limit
+                try:
+                    lang_code = item.get('lang', '').lower()
+                    
+                    # Check if this language was requested
+                    if lang_code not in subdl_languages:
+                        continue
+                    
+                    # Extract subtitle info
+                    file_name = item.get('release_name') or item.get('name', 'Unknown')
+                    sd_id = item.get('sd_id') or item.get('id', '')
+                    download_url = item.get('url', '')
+                    
+                    # Get ratings/downloads
+                    downloads = int(item.get('download_count', 0) or item.get('downloads', 0))
+                    rating = float(item.get('hi_count', 0) or item.get('rating', 0))
+                    
                     results.append({
                         "provider": "SubDL",
-                        "file_name": item.get('release_name', 'Unknown'),
-                        "language": lang_code if lang_code else 'unknown',
-                        "downloads": int(item.get('downloads', 0)),
-                        "rating": float(item.get('rating', 0)),
-                        "file_id": str(item.get('sd_id', '')),
-                        "download_url": item.get('url', ''),
+                        "file_name": file_name,
+                        "language": lang_code,
+                        "downloads": downloads,
+                        "rating": rating,
+                        "file_id": str(sd_id),
+                        "download_url": download_url,
                         "movie_name": item.get('name', search_term),
                         "format": "srt"
                     })
+                except Exception as e:
+                    logger.warning(f"Error parsing SubDL item: {e}")
+                    continue
             
-            logger.info(f"SubDL found {len(results)} subtitle(s)")
+            logger.info(f"SubDL found {len(results)} matching subtitle(s)")
             
         except Exception as e:
             logger.error(f"Error searching SubDL: {e}", exc_info=True)
@@ -129,33 +219,77 @@ class SubDLProvider(BaseSubtitleProvider):
         return results
     
     def download(self, file_id: str, download_url: str, output_path: str) -> tuple:
-        """Download from SubDL"""
+        """Download from SubDL - improved with ZIP handling"""
         try:
-            api_url = f"https://api.subdl.com/api/v1/subtitles/{file_id}"
-            req = urllib.request.Request(api_url, headers=self.session_headers)
+            logger.info(f"SubDL download: file_id={file_id}")
             
-            with urllib.request.urlopen(req, timeout=30) as response:
-                data = json.loads(response.read().decode('utf-8'))
+            # Try to get download URL from API if not provided
+            if not download_url and file_id:
+                api_url = f"https://api.subdl.com/api/v1/subtitles/{file_id}"
+                headers = {
+                    'User-Agent': self.session_headers['User-Agent'],
+                    'Accept': 'application/json'
+                }
+                req = urllib.request.Request(api_url, headers=headers)
                 
-                if data.get('success') and data.get('download_url'):
-                    download_link = data['download_url']
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    data = json.loads(response.read().decode('utf-8'))
                     
-                    req2 = urllib.request.Request(download_link, headers=self.session_headers)
-                    with urllib.request.urlopen(req2, timeout=30) as dl_response:
-                        content = dl_response.read()
-                        
-                        if download_link.endswith('.gz'):
-                            content = gzip.decompress(content)
-                        
-                        with open(output_path, 'wb') as f:
-                            f.write(content)
-                        
-                        logger.info(f"✅ Downloaded from SubDL: {output_path}")
-                        return True, output_path
-                else:
-                    return False, "SubDL download link not available"
+                    if isinstance(data, dict):
+                        download_url = data.get('download_url') or data.get('url', '')
+            
+            if not download_url:
+                return False, "SubDL: No download URL available"
+            
+            logger.info(f"SubDL downloading from: {download_url}")
+            
+            # Download the file
+            headers = {
+                'User-Agent': self.session_headers['User-Agent'],
+                'Accept': '*/*',
+                'Referer': 'https://subdl.com/'
+            }
+            req2 = urllib.request.Request(download_url, headers=headers)
+            time.sleep(0.5)
+            
+            with urllib.request.urlopen(req2, timeout=30) as dl_response:
+                content = dl_response.read()
+                
+                # Handle different compression formats
+                if download_url.endswith('.gz') or content[:2] == b'\x1f\x8b':
+                    try:
+                        content = gzip.decompress(content)
+                        logger.debug("SubDL: Decompressed gzip content")
+                    except Exception as e:
+                        logger.debug(f"SubDL: Not gzipped or decompression failed: {e}")
+                
+                # Handle ZIP files (common for SubDL)
+                elif download_url.endswith('.zip') or content[:4] == b'PK\x03\x04':
+                    try:
+                        with zipfile.ZipFile(BytesIO(content)) as zip_ref:
+                            # Find first .srt or .ass file
+                            for name in zip_ref.namelist():
+                                if name.lower().endswith(('.srt', '.ass', '.sub')):
+                                    content = zip_ref.read(name)
+                                    logger.info(f"SubDL: Extracted {name} from ZIP")
+                                    break
+                    except Exception as e:
+                        logger.warning(f"SubDL: ZIP extraction failed: {e}")
+                        # Continue with raw content
+                
+                # Write to output file
+                with open(output_path, 'wb') as f:
+                    f.write(content)
+                
+                logger.info(f"✅ Downloaded from SubDL: {output_path}")
+                return True, output_path
                     
+        except urllib.error.HTTPError as e:
+            error_msg = f"SubDL HTTP error {e.code}: {e.reason}"
+            logger.error(error_msg)
+            return False, error_msg
         except Exception as e:
-            logger.error(f"SubDL download error: {e}")
-            return False, f"SubDL download failed: {str(e)}"
+            error_msg = f"SubDL download failed: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            return False, error_msg
 

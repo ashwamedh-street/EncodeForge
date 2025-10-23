@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.encodeforge.util.PathManager;
+import com.encodeforge.util.SystemResourceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -113,12 +114,37 @@ public class PythonBridge {
             JsonObject readyMessage = gson.fromJson(readyLine, JsonObject.class);
             if (readyMessage.has("status") && "ready".equals(readyMessage.get("status").getAsString())) {
                 logger.info("Python bridge started successfully and ready");
+                
+                // Send system resources to Python
+                updateSystemResourcesInPython();
             } else {
                 logger.warn("Unexpected startup message from Python: {}", readyLine);
             }
         } catch (Exception e) {
             logger.error("Failed to receive ready message from Python", e);
             throw new IOException("Python bridge initialization failed", e);
+        }
+    }
+    
+    /**
+     * Update system resources in Python using Java-detected values
+     */
+    private void updateSystemResourcesInPython() {
+        try {
+            SystemResourceManager sysRes = SystemResourceManager.getInstance();
+            
+            JsonObject request = new JsonObject();
+            request.addProperty("action", "update_system_resources");
+            request.addProperty("cpu_count", sysRes.getLogicalCpuCount());
+            request.addProperty("physical_cores", sysRes.getPhysicalCpuCount());
+            request.addProperty("total_ram_gb", sysRes.getTotalRamGB());
+            request.addProperty("available_ram_gb", sysRes.getAvailableRamGB());
+            
+            logger.info("Sending system resources to Python backend");
+            sendCommand(request);
+            logger.info("System resources updated in Python");
+        } catch (Exception e) {
+            logger.warn("Failed to update system resources in Python", e);
         }
     }
     

@@ -493,7 +493,12 @@ public class MainController {
         
         switch (status) {
             case SEARCHING:
-                return fileName + " [Searching...]";
+                // Show progressive count while searching
+                if (subtitleCount > 0) {
+                    return fileName + " [🔍 Found " + subtitleCount + "...]";
+                } else {
+                    return fileName + " [🔍 Searching...]";
+                }
             case COMPLETED:
                 if (subtitleCount > 0) {
                     return fileName + " [✓ " + subtitleCount + " subs]";
@@ -4973,19 +4978,6 @@ public class MainController {
         // Use batch search API - Python handles parallel searching internally
         new Thread(() -> {
             try {
-                // Update settings once
-                JsonObject settingsParams = new JsonObject();
-                settingsParams.add("settings", settings.toJson());
-                
-                if (processPool != null) {
-                    processPool.submitQuickTask("update_settings", settingsParams);
-                } else if (pythonBridge != null) {
-                    JsonObject updateSettings = new JsonObject();
-                    updateSettings.addProperty("action", "update_settings");
-                    updateSettings.add("settings", settings.toJson());
-                    pythonBridge.sendCommand(updateSettings);
-                }
-                
                 // Track how many files have completed
                 final int totalFilesToProcess = queuedFiles.size();
                 final java.util.concurrent.atomic.AtomicInteger filesCompleted = new java.util.concurrent.atomic.AtomicInteger(0);
@@ -5141,6 +5133,10 @@ public class MainController {
             
             if (isComplete) {
                 log("[" + fileName + "] ✅ " + provider + " - search complete");
+                // Update status label to show completed provider
+                if (subtitleProgressStatusLabel != null) {
+                    subtitleProgressStatusLabel.setText("Completed " + provider);
+                }
                 // If complete message has subtitles, process them
                 if (!hasSubtitles) {
                     return;
@@ -5149,6 +5145,10 @@ public class MainController {
                            response.getAsJsonArray("subtitles").size(), fileName);
             } else {
                 log("[" + fileName + "] 🔍 Searching " + provider + "...");
+                // Update status label to show current provider being searched
+                if (subtitleProgressStatusLabel != null) {
+                    subtitleProgressStatusLabel.setText("Searching " + provider + "...");
+                }
                 return;  // Return early for non-complete progress updates
             }
         }
@@ -5157,7 +5157,8 @@ public class MainController {
         if (response.has("status")) {
             String status = response.get("status").getAsString();
             
-            if ("success".equals(status) && response.has("subtitles")) {
+            // Handle both "success" (old API) and "file_complete" (new batch API) 
+            if (("success".equals(status) || "file_complete".equals(status)) && response.has("subtitles")) {
                 JsonArray subtitles = response.getAsJsonArray("subtitles");
                 
                 // Add subtitles to this file's list
@@ -5200,6 +5201,9 @@ public class MainController {
                         subtitleStatsLabel.setText(fileSubtitles.size() + " available | " + uniqueLangs + " language(s)");
                     }
                 }
+                
+                // ALWAYS update the dropdown when we receive subtitles (progressive update)
+                updateSubtitleFileList();
                 
                 // Check if this is the final result for this file
                 // Note: "file_complete" means this file is done, but stream continues

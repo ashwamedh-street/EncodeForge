@@ -37,6 +37,7 @@ htmlcov/
 nosetests.xml
 coverage.xml
 *.cover
+chatmodes/
 .hypothesis/
 
 # Java / Maven

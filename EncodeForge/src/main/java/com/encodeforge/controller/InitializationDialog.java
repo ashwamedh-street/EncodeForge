@@ -94,7 +94,7 @@ public class InitializationDialog {
     private void startInitialization() {
         CompletableFuture.runAsync(() -> {
             try {
-                // Step 1: Check required libraries
+                // Step 1: Check required libraries (ALWAYS - even if previously initialized)
                 updateProgress(new ProgressUpdate("detecting", 10, 
                     "Checking Python libraries...", ""));
                 
@@ -112,11 +112,13 @@ public class InitializationDialog {
                 boolean ffmpegInstalled = dependencyManager.checkFFmpeg().get();
                 appendLog("FFmpeg: " + (ffmpegInstalled ? "✓ Found" : "✗ Not found"));
                 
-                // Step 3: Install missing dependencies
+                // Step 3: Install missing libraries (ALWAYS if not all installed)
+                // This ensures new libraries like beautifulsoup4/lxml get installed
+                // even if initialization was previously completed
                 if (!allInstalled) {
                     updateProgress(new ProgressUpdate("installing", 30, 
                         "Installing required Python libraries...", ""));
-                    appendLog("\nInstalling required Python libraries...");
+                    appendLog("\nInstalling missing Python libraries...");
                     
                     try {
                         dependencyManager.installRequiredLibraries(this::updateProgress).get();
@@ -154,8 +156,11 @@ public class InitializationDialog {
                         });
                         return;
                     }
+                } else {
+                    appendLog("\n✓ All required Python libraries are installed");
                 }
                 
+                // Step 4: Install FFmpeg if missing
                 if (!ffmpegInstalled) {
                     updateProgress(new ProgressUpdate("installing", 60, 
                         "Installing FFmpeg...", ""));

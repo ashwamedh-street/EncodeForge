@@ -591,8 +591,24 @@ class FFmpegAPI:
                     "settings": self.settings_to_dict()
                 }
             
+            elif action == "update_system_resources":
+                # Update system resources from Java measurements
+                from resource_manager import update_system_resources
+                
+                cpu_count = request.get("cpu_count")
+                physical_cores = request.get("physical_cores")
+                total_ram_gb = request.get("total_ram_gb")
+                available_ram_gb = request.get("available_ram_gb")
+                
+                if cpu_count and physical_cores and total_ram_gb is not None and available_ram_gb is not None:
+                    update_system_resources(cpu_count, physical_cores, total_ram_gb, available_ram_gb)
+                    return {"status": "success", "message": "System resources updated"}
+                else:
+                    return {"status": "error", "message": "Missing required resource parameters"}
+            
             elif action == "get_system_resources":
                 # Get system resource information for intelligent worker allocation
+                # Note: This now returns info from Java-provided resources if available
                 from resource_manager import get_resource_manager
                 rm = get_resource_manager()
                 
@@ -796,46 +812,74 @@ class FFmpegAPI:
                     )
                     future_to_file[future] = (file_id, file_name)
                 
-                # Wait for all tasks to complete
-                for future in as_completed(future_to_file):
-                    file_id, file_name = future_to_file[future]
-                    try:
-                        result = future.result()
-                        completed_count += 1
-                        subtitle_count = len(result.get('subtitles', []))
-                        logger.info(f"Search completed for file {file_id} ({file_name}): {subtitle_count} subtitles found")
-                        
-                        # Send final result with subtitles for this file
-                        # NOTE: Do NOT set "complete": True here - that closes the stream!
-                        # Only the final batch completion message should have complete: true
-                        final_response = {
-                            "file_id": file_id,
-                            "file_name": file_name,
-                            "status": "success" if result.get("status") == "success" else "complete",
-                            "file_complete": True  # This file is done, but stream continues
-                        }
-                        
-                        # Include subtitle data if present
-                        if "subtitles" in result:
-                            final_response["subtitles"] = result["subtitles"]
-                        if "message" in result:
-                            final_response["message"] = result["message"]
-                        
-                        logger.debug(f"Sending final result for file {file_id}: {subtitle_count} subtitles")
-                        self._send_response(final_response)
-                        
-                    except Exception as e:
-                        completed_count += 1
-                        logger.error(f"Error searching file {file_id} ({file_name}): {e}", exc_info=True)
-                        # Send error for this file
-                        # NOTE: Do NOT set "complete": True here either!
-                        self._send_response({
-                            "file_id": file_id,
-                            "file_name": file_name,
-                            "status": "error",
-                            "message": str(e),
-                            "file_complete": True  # This file is done, but stream continues
-                        })
+                # Wait for all tasks to complete (with 120 second timeout per file)
+                try:
+                    for future in as_completed(future_to_file, timeout=300):  # 5 minute overall timeout
+                        file_id, file_name = future_to_file[future]
+                        try:
+                            # Get result with per-file timeout (120 seconds should be plenty for subtitle search)
+                            result = future.result(timeout=120)
+                            completed_count += 1
+                            subtitle_count = len(result.get('subtitles', []))
+                            logger.info(f"Search completed for file {file_id} ({file_name}): {subtitle_count} subtitles found")
+                            
+                            # Send final result with subtitles for this file
+                            # NOTE: Do NOT set "complete": True or "status": "success" here - both close the stream!
+                            # Only the final batch completion message should have complete: true
+                            # Use "searching" status to keep stream alive while indicating this file is done
+                            final_response = {
+                                "file_id": file_id,
+                                "file_name": file_name,
+                                "status": "file_complete",  # Custom status that won't trigger stream closure
+                                "file_complete": True  # This file is done, but stream continues
+                            }
+                            
+                            # Include subtitle data if present
+                            if "subtitles" in result:
+                                final_response["subtitles"] = result["subtitles"]
+                            if "message" in result:
+                                final_response["message"] = result["message"]
+                            
+                            logger.debug(f"Sending final result for file {file_id}: {subtitle_count} subtitles")
+                            self._send_response(final_response)
+                            
+                        except TimeoutError:
+                            completed_count += 1
+                            logger.error(f"Timeout searching file {file_id} ({file_name}): search exceeded 120 seconds")
+                            # Send timeout error for this file
+                            self._send_response({
+                                "file_id": file_id,
+                                "file_name": file_name,
+                                "status": "error",
+                                "message": "Search timeout (exceeded 120 seconds)",
+                                "file_complete": True  # This file is done, but stream continues
+                            })
+                        except Exception as e:
+                            completed_count += 1
+                            logger.error(f"Error searching file {file_id} ({file_name}): {e}", exc_info=True)
+                            # Send error for this file
+                            # NOTE: Do NOT set "complete": True here either!
+                            self._send_response({
+                                "file_id": file_id,
+                                "file_name": file_name,
+                                "status": "error",
+                                "message": str(e),
+                                "file_complete": True  # This file is done, but stream continues
+                            })
+                except TimeoutError:
+                    # Overall batch timeout - handle any remaining uncompleted files
+                    logger.warning(f"Batch search overall timeout exceeded (300 seconds)")
+                    for future, (file_id, file_name) in future_to_file.items():
+                        if not future.done():
+                            completed_count += 1
+                            logger.error(f"File {file_id} ({file_name}) did not complete within timeout")
+                            self._send_response({
+                                "file_id": file_id,
+                                "file_name": file_name,
+                                "status": "error",
+                                "message": "Search timeout (overall batch timeout exceeded)",
+                                "file_complete": True
+                            })
             
             # Send final completion message
             logger.info(f"Batch search complete: {completed_count}/{total_files} files processed")

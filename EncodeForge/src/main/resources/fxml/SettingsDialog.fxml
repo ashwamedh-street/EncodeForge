@@ -261,16 +261,6 @@
                             <Button fx:id="validateOpenSubsButton" onAction="#handleValidateOpenSubtitles" styleClass="small-button"/>
                             <Label fx:id="openSubsValidationLabel" text="" styleClass="hint-label"/>
                         </HBox>
-                        
-                        <Separator/>
-                        
-                        <Label text="All Other Providers (No Configuration Needed)" styleClass="setting-label" style="-fx-font-weight: bold;"/>
-                        <Label text="✅ The remaining 8 providers work automatically without any setup:" styleClass="hint-label" style="-fx-text-fill: #4ec9b0;"/>
-                        <Label text="  • Addic7ed - Movies, TV, Anime (search &amp; download)" styleClass="hint-label"/>
-                        <Label text="  • SubDL, Subf2m, YIFY - General content (search &amp; download)" styleClass="hint-label"/>
-                        <Label text="  • Podnapisi - Multilingual support (search &amp; download)" styleClass="hint-label"/>
-                        <Label text="  • SubDivX - Spanish content (search &amp; download)" styleClass="hint-label"/>
-                        <Label text="  • Kitsunekko, Jimaku - Anime specialists (search &amp; download)" styleClass="hint-label"/>
                     </VBox>
                 </VBox>
                 
