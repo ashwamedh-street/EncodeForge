@@ -3,7 +3,7 @@
 <div align="center">
   <img src="EncodeForge/src/main/resources/icons/app-icon.png" alt="Encode Forge Logo" width="128" height="128">
   
-  **Version 0.4.0**
+  **Version 0.4.1**
   
   *The all-in-one media processing application*
 </div>

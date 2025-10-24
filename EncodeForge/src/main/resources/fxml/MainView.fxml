@@ -1306,7 +1306,7 @@
                                 <!-- App Info -->
                                 <VBox spacing="8" alignment="CENTER">
                                     <Label text="EncodeForge" style="-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #ffffff;"/>
-                                    <Label fx:id="appVersionLabel" text="Version 0.4.0" styleClass="hint-label"/>
+                                    <Label fx:id="appVersionLabel" text="Version 0.4.1" styleClass="hint-label"/>
                                     <Label text="A powerful video encoding and subtitle management tool" styleClass="hint-label" style="-fx-text-alignment: center;"/>
                                 </VBox>
                                 

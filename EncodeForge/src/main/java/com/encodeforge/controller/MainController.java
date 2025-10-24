@@ -2,6 +2,7 @@ package com.encodeforge.controller;
 
 import com.encodeforge.model.ConversionJob;
 import com.encodeforge.model.ConversionSettings;
+import com.encodeforge.model.ProgressUpdate;
 import com.encodeforge.service.DependencyManager;
 import com.encodeforge.service.PythonBridge;
 import com.encodeforge.service.PythonProcessPool;
@@ -1604,7 +1605,7 @@ public class MainController {
         
         // Load About
         if (appVersionLabel != null) {
-            appVersionLabel.setText("Version 0.4.0");
+            appVersionLabel.setText("Version 0.4.1");
         }
         
         // Load Advanced
@@ -3254,7 +3255,115 @@ public class MainController {
     
     @FXML
     private void handleDownloadFFmpeg() {
-        showInfo("Download FFmpeg", "Automatic FFmpeg download coming soon!");
+        if (dependencyManager == null) {
+            showError("Download FFmpeg", "Dependency manager is not available. Please restart the application.");
+            return;
+        }
+
+        if (downloadFFmpegButton != null) {
+            downloadFFmpegButton.setDisable(true);
+        }
+
+        Platform.runLater(() -> {
+            if (ffmpegStatusButton != null) {
+                ffmpegStatusButton.getStyleClass().removeAll("ffmpeg-found", "ffmpeg-not-found");
+                if (!ffmpegStatusButton.getStyleClass().contains("ffmpeg-checking")) {
+                    ffmpegStatusButton.getStyleClass().add("ffmpeg-checking");
+                }
+            }
+            if (ffmpegStatusIcon != null) {
+                ffmpegStatusIcon.setText("…");
+            }
+            if (ffmpegStatusLabel != null) {
+                ffmpegStatusLabel.setText("Preparing to download FFmpeg...");
+            }
+            if (ffmpegVersionLabel != null) {
+                ffmpegVersionLabel.setText("FFmpeg: Preparing download...");
+            }
+        });
+
+        dependencyManager.installFFmpeg(this::handleFfmpegInstallProgress)
+            .whenComplete((unused, throwable) -> {
+                Throwable error = (throwable instanceof java.util.concurrent.CompletionException && throwable.getCause() != null)
+                    ? throwable.getCause()
+                    : throwable;
+
+                Platform.runLater(() -> {
+                    if (downloadFFmpegButton != null) {
+                        downloadFFmpegButton.setDisable(false);
+                    }
+                });
+
+                if (error != null) {
+                    logger.error("FFmpeg installation failed", error);
+                    Platform.runLater(() -> {
+                        updateFFmpegStatus(false, "Installation failed");
+                        if (ffmpegVersionLabel != null) {
+                            ffmpegVersionLabel.setText("FFmpeg: Installation failed");
+                        }
+                        String message = error.getMessage() != null ? error.getMessage() : error.toString();
+                        showError("Download FFmpeg", "Failed to install FFmpeg:\n" + message);
+                    });
+                    return;
+                }
+
+                Path ffmpegPath = dependencyManager.getInstalledFFmpegPath();
+                Path ffprobePath = dependencyManager.getInstalledFFprobePath();
+
+                Platform.runLater(() -> {
+                    if (ffmpegPath != null && ffmpegPathField != null) {
+                        ffmpegPathField.setText(ffmpegPath.toString());
+                        settings.setFfmpegPath(ffmpegPath.toString());
+                    }
+                    if (ffprobePath != null && ffprobePathField != null) {
+                        ffprobePathField.setText(ffprobePath.toString());
+                        settings.setFfprobePath(ffprobePath.toString());
+                    }
+                    settings.setUseEmbeddedFFmpeg(true);
+                    settings.save();
+
+                    updateFFmpegStatus(true, "Installed");
+                    if (ffmpegVersionLabel != null) {
+                        ffmpegVersionLabel.setText("FFmpeg: Installed");
+                    }
+                    showInfo("Download FFmpeg", "FFmpeg installed successfully.");
+                });
+
+                CompletableFuture.runAsync(this::updateAllStatus);
+            });
+    }
+
+    private void handleFfmpegInstallProgress(ProgressUpdate update) {
+        if (update == null) {
+            return;
+        }
+
+        if (update.getDetail() != null && !update.getDetail().isBlank()) {
+            logger.debug("FFmpeg install detail: {}", update.getDetail());
+        }
+        logger.debug("FFmpeg install progress: {}", update);
+
+        Platform.runLater(() -> {
+            if (ffmpegStatusButton != null) {
+                ffmpegStatusButton.getStyleClass().removeAll("ffmpeg-found", "ffmpeg-not-found");
+                if (!ffmpegStatusButton.getStyleClass().contains("ffmpeg-checking")) {
+                    ffmpegStatusButton.getStyleClass().add("ffmpeg-checking");
+                }
+            }
+            if (ffmpegStatusIcon != null) {
+                ffmpegStatusIcon.setText("…");
+            }
+            if (ffmpegStatusLabel != null && update.getMessage() != null) {
+                ffmpegStatusLabel.setText(update.getMessage());
+            }
+            if (ffmpegVersionLabel != null) {
+                String message = update.getMessage();
+                if (message == null || message.isBlank()) {
+                    message = update.getStage() != null ? update.getStage() : "Processing";
+                }
+                ffmpegVersionLabel.setText(String.format("FFmpeg: %s (%d%%)", message, update.getProgress()));
+            }
+        });
     }
     
     @FXML
@@ -3288,7 +3397,7 @@ public class MainController {
         appName.setStyle("-fx-fill: #16c60c; -fx-font-size: 24px; -fx-font-weight: bold;");
         
         // Version
-        javafx.scene.text.Text versionText = new javafx.scene.text.Text("Version 0.4.0");
+    javafx.scene.text.Text versionText = new javafx.scene.text.Text("Version 0.4.1");
         versionText.setStyle("-fx-fill: #4ec9b0; -fx-font-size: 14px;");
         
         // Description

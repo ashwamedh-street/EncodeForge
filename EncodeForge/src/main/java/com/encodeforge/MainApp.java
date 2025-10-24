@@ -29,7 +29,7 @@ import java.util.Map;
 public class MainApp extends Application {
     private static final Logger logger = LoggerFactory.getLogger(MainApp.class);
     private static final String APP_TITLE = "Encode Forge";
-    private static final String VERSION = "0.4.0";
+    private static final String VERSION = "0.4.1";
     
     private DependencyManager dependencyManager;
     private PythonBridge pythonBridge; // Legacy - will be replaced by processPool

@@ -1,5 +1,6 @@
 package com.encodeforge.service;
 
+import com.encodeforge.model.ConversionSettings;
 import com.encodeforge.model.ProgressUpdate;
 import com.encodeforge.util.DownloadManager;
 import com.encodeforge.util.PathManager;
@@ -16,6 +17,7 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import java.util.stream.Stream;
 
 /**
  * Manages all external dependencies: FFmpeg, Python libraries, etc.
@@ -27,13 +29,31 @@ public class DependencyManager {
     private final Path dependenciesDir;
     private final Path ffmpegDir;
     private final Path pythonLibsDir;
-    
-    // Platform-specific FFmpeg download URLs
-    private static final Map<String, String> FFMPEG_URLS = Map.of(
-        "windows", "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip",
-        "linux", "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz",
-        "mac", "https://evermeet.cx/ffmpeg/getrelease/zip"
-    );
+
+    private static final class FfmpegDistribution {
+        private final String url;
+        private final String description;
+        private final String fileName;
+
+        private FfmpegDistribution(String url, String description) {
+            this.url = url;
+            this.description = description;
+            String extractedName = url.substring(url.lastIndexOf('/') + 1);
+            this.fileName = extractedName.isEmpty() ? "ffmpeg-download" : extractedName;
+        }
+
+        public String url() {
+            return url;
+        }
+
+        public String description() {
+            return description;
+        }
+
+        public String fileName() {
+            return fileName;
+        }
+    }
     
     public DependencyManager() throws IOException {
         this.downloadManager = new DownloadManager();
@@ -66,16 +86,17 @@ public class DependencyManager {
             // First check if we've installed it
             Path installedFfmpeg = getInstalledFFmpegPath();
             if (installedFfmpeg != null && Files.exists(installedFfmpeg)) {
-                logger.info("FFmpeg found (installed): {}", installedFfmpeg);
+                logger.info("FFmpeg found (embedded): {}", installedFfmpeg);
+                persistFFmpegPaths(installedFfmpeg, getInstalledFFprobePath());
                 return true;
             }
-            
+
             // Check system PATH
             if (isCommandAvailable("ffmpeg")) {
                 logger.info("FFmpeg found in system PATH");
                 return true;
             }
-            
+
             logger.info("FFmpeg not found");
             return false;
         });
@@ -87,51 +108,81 @@ public class DependencyManager {
     public CompletableFuture<Void> installFFmpeg(Consumer<ProgressUpdate> callback) {
         return CompletableFuture.runAsync(() -> {
             try {
-                callback.accept(new ProgressUpdate("detecting", 0, "Detecting platform...", ""));
-                
-                String platform = getPlatform();
-                String downloadUrl = FFMPEG_URLS.get(platform);
-                
-                if (downloadUrl == null) {
-                    throw new IOException("FFmpeg download not supported for platform: " + platform);
+                if (callback != null) {
+                    callback.accept(new ProgressUpdate("detecting", 0, "Detecting platform...", ""));
                 }
-                
-                callback.accept(new ProgressUpdate("downloading", 5, "Downloading FFmpeg...", downloadUrl));
-                
-                // Download FFmpeg
-                Path downloadPath = dependenciesDir.resolve("ffmpeg-download.zip");
-                downloadManager.downloadFile(downloadUrl, downloadPath, 
-                    progress -> callback.accept(new ProgressUpdate("downloading", 
-                        5 + (int)(progress.getProgress() * 0.7), // 5-75%
-                        "Downloading FFmpeg: " + progress.getMessage(), 
-                        "")))
-                    .get();
-                
-                callback.accept(new ProgressUpdate("installing", 75, "Extracting FFmpeg...", ""));
-                
-                // Extract
+
+                FfmpegDistribution distribution = resolveFfmpegDistribution();
+
+                if (callback != null) {
+                    callback.accept(new ProgressUpdate(
+                        "detecting",
+                        5,
+                        "Platform detected: " + distribution.description(),
+                        distribution.url()
+                    ));
+                }
+
+                Path downloadPath = dependenciesDir.resolve(distribution.fileName());
+                if (callback != null) {
+                    callback.accept(new ProgressUpdate("downloading", 10, "Downloading FFmpeg...", distribution.url()));
+                }
+
+                downloadManager.downloadFile(distribution.url(), downloadPath, progress -> {
+                    if (callback != null) {
+                        int scaledProgress = 10 + (int) Math.round(progress.getProgress() * 0.6);
+                        scaledProgress = Math.min(70, scaledProgress);
+                        callback.accept(new ProgressUpdate(
+                            "downloading",
+                            scaledProgress,
+                            progress.getMessage(),
+                            distribution.url()
+                        ));
+                    }
+                }).get();
+
+                if (callback != null) {
+                    callback.accept(new ProgressUpdate("installing", 75, "Extracting FFmpeg...", downloadPath.toString()));
+                }
+
+                clearDirectory(ffmpegDir);
+                Files.createDirectories(ffmpegDir);
                 downloadManager.extractArchive(downloadPath, ffmpegDir);
-                
-                // Make binaries executable on Unix
-                makeExecutable(getInstalledFFmpegPath());
-                makeExecutable(getInstalledFFprobePath());
-                
-                callback.accept(new ProgressUpdate("verifying", 95, "Verifying installation...", ""));
-                
-                // Verify it works
-                if (!testFFmpeg()) {
+
+                Path ffmpegExecutable = getInstalledFFmpegPath();
+                if (ffmpegExecutable == null) {
+                    throw new IOException("FFmpeg binary not found after extraction");
+                }
+                makeExecutable(ffmpegExecutable);
+
+                Path ffprobeExecutable = getInstalledFFprobePath();
+                makeExecutable(ffprobeExecutable);
+
+                if (callback != null) {
+                    callback.accept(new ProgressUpdate("verifying", 90, "Verifying FFmpeg installation...", ffmpegExecutable.toString()));
+                }
+
+                if (!testFFmpeg(ffmpegExecutable)) {
                     throw new IOException("FFmpeg installation verification failed");
                 }
-                
-                // Clean up download
+
                 Files.deleteIfExists(downloadPath);
-                
-                callback.accept(new ProgressUpdate("complete", 100, "FFmpeg installed successfully", ""));
-                logger.info("FFmpeg installation complete");
-                
+
+                persistFFmpegPaths(ffmpegExecutable, ffprobeExecutable);
+
+                if (callback != null) {
+                    callback.accept(new ProgressUpdate("complete", 100, "FFmpeg installed successfully", ffmpegExecutable.toString()));
+                }
+                logger.info("FFmpeg installation complete: {}", ffmpegExecutable);
+
             } catch (Exception e) {
+                if (e instanceof InterruptedException) {
+                    Thread.currentThread().interrupt();
+                }
                 logger.error("Failed to install FFmpeg", e);
-                callback.accept(new ProgressUpdate("error", 0, "Failed to install FFmpeg: " + e.getMessage(), ""));
+                if (callback != null) {
+                    callback.accept(new ProgressUpdate("error", 0, "Failed to install FFmpeg: " + e.getMessage(), e.toString()));
+                }
                 throw new RuntimeException("FFmpeg installation failed", e);
             }
         });
@@ -141,67 +192,188 @@ public class DependencyManager {
      * Get path to installed FFmpeg executable
      */
     public Path getInstalledFFmpegPath() {
-        String os = System.getProperty("os.name").toLowerCase();
-        
-        // Check common locations in our install directory
-        List<Path> possiblePaths = new ArrayList<>();
-        
-        if (os.contains("win")) {
-            possiblePaths.add(ffmpegDir.resolve("bin/ffmpeg.exe"));
-            possiblePaths.add(ffmpegDir.resolve("ffmpeg.exe"));
-        } else {
-            possiblePaths.add(ffmpegDir.resolve("bin/ffmpeg"));
-            possiblePaths.add(ffmpegDir.resolve("ffmpeg"));
+        if (!Files.exists(ffmpegDir)) {
+            return null;
         }
-        
-        // Also check subdirectories (some archives extract to versioned folders)
-        try {
-            Files.list(ffmpegDir)
-                .filter(Files::isDirectory)
-                .forEach(dir -> {
-                    if (os.contains("win")) {
-                        possiblePaths.add(dir.resolve("bin/ffmpeg.exe"));
-                        possiblePaths.add(dir.resolve("ffmpeg.exe"));
-                    } else {
-                        possiblePaths.add(dir.resolve("bin/ffmpeg"));
-                        possiblePaths.add(dir.resolve("ffmpeg"));
-                    }
-                });
-        } catch (IOException e) {
-            logger.debug("Error listing ffmpeg directory", e);
+
+        boolean isWindows = System.getProperty("os.name").toLowerCase().contains("win");
+        String primaryName = isWindows ? "ffmpeg.exe" : "ffmpeg";
+        String secondaryName = isWindows ? "ffmpeg" : "ffmpeg.exe";
+
+        Path located = findExecutable(ffmpegDir, primaryName);
+        if (located == null) {
+            located = findExecutable(ffmpegDir, secondaryName);
         }
-        
-        return possiblePaths.stream()
-            .filter(Files::exists)
-            .findFirst()
-            .orElse(null);
+        return located;
     }
     
     /**
      * Get path to installed FFprobe executable
      */
     public Path getInstalledFFprobePath() {
-        Path ffmpegPath = getInstalledFFmpegPath();
-        if (ffmpegPath == null) return null;
-        
-        String fileName = ffmpegPath.getFileName().toString();
-        String ffprobeName = fileName.replace("ffmpeg", "ffprobe");
-        
-        return ffmpegPath.getParent().resolve(ffprobeName);
+        if (!Files.exists(ffmpegDir)) {
+            return null;
+        }
+
+        boolean isWindows = System.getProperty("os.name").toLowerCase().contains("win");
+        String primaryName = isWindows ? "ffprobe.exe" : "ffprobe";
+        String secondaryName = isWindows ? "ffprobe" : "ffprobe.exe";
+
+        Path located = findExecutable(ffmpegDir, primaryName);
+        if (located == null) {
+            located = findExecutable(ffmpegDir, secondaryName);
+        }
+        return located;
     }
     
-    private boolean testFFmpeg() {
+    private boolean testFFmpeg(Path ffmpegExecutable) {
+        if (ffmpegExecutable == null || !Files.exists(ffmpegExecutable)) {
+            return false;
+        }
+
         try {
-            Path ffmpegPath = getInstalledFFmpegPath();
-            if (ffmpegPath == null) return false;
-            
-            ProcessBuilder pb = new ProcessBuilder(ffmpegPath.toString(), "-version");
+            ProcessBuilder pb = new ProcessBuilder(ffmpegExecutable.toString(), "-version");
+            pb.redirectErrorStream(true);
             Process process = pb.start();
+
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
+                while (reader.readLine() != null) {
+                    // Drain output
+                }
+            }
+
             int exitCode = process.waitFor();
             return exitCode == 0;
         } catch (Exception e) {
             logger.debug("FFmpeg test failed", e);
             return false;
+        }
+    }
+
+    private FfmpegDistribution resolveFfmpegDistribution() throws IOException {
+        String osName = System.getProperty("os.name").toLowerCase(Locale.ROOT);
+        String arch = System.getProperty("os.arch").toLowerCase(Locale.ROOT);
+
+        boolean isArm64 = arch.contains("aarch64") || arch.contains("arm64");
+        boolean isArm = arch.startsWith("arm") && !isArm64;
+
+        if (osName.contains("win")) {
+            if (isArm64 && !arch.contains("x86")) {
+                throw new IOException("Automatic FFmpeg install is not available for Windows ARM64 yet. Please install FFmpeg manually and set the path in Settings.");
+            }
+            return new FfmpegDistribution(
+                "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip",
+                "Windows 64-bit"
+            );
+        }
+
+        if (osName.contains("mac") || osName.contains("darwin")) {
+            if (isArm64) {
+                return new FfmpegDistribution(
+                    "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-macos64arm64-gpl.zip",
+                    "macOS (Apple Silicon)"
+                );
+            }
+            return new FfmpegDistribution(
+                "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-macos64-gpl.zip",
+                "macOS (Intel)"
+            );
+        }
+
+        if (osName.contains("linux")) {
+            if (isArm64) {
+                return new FfmpegDistribution(
+                    "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linuxarm64-gpl.tar.xz",
+                    "Linux ARM64"
+                );
+            }
+            if (isArm) {
+                throw new IOException("Automatic FFmpeg install is not available for 32-bit ARM Linux. Please install FFmpeg via your package manager and set the path in Settings.");
+            }
+            return new FfmpegDistribution(
+                "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz",
+                "Linux x86_64"
+            );
+        }
+
+        throw new IOException("Unsupported platform for automatic FFmpeg installation: " + osName + " (" + arch + ")");
+    }
+
+    private void clearDirectory(Path directory) throws IOException {
+        if (!Files.exists(directory)) {
+            return;
+        }
+
+        try (Stream<Path> walk = Files.walk(directory)) {
+            walk.sorted(Comparator.reverseOrder())
+                .filter(path -> !path.equals(directory))
+                .forEach(path -> {
+                    try {
+                        Files.deleteIfExists(path);
+                    } catch (IOException e) {
+                        logger.warn("Could not delete {}", path, e);
+                    }
+                });
+        }
+    }
+
+    private Path findExecutable(Path root, String fileName) {
+        if (root == null || fileName == null || !Files.exists(root)) {
+            return null;
+        }
+
+        try (Stream<Path> stream = Files.walk(root)) {
+            return stream
+                .filter(Files::isRegularFile)
+                .filter(path -> path.getFileName().toString().equalsIgnoreCase(fileName))
+                .findFirst()
+                .orElse(null);
+        } catch (IOException e) {
+            logger.debug("Failed to search for {} under {}", fileName, root, e);
+            return null;
+        }
+    }
+
+    private void persistFFmpegPaths(Path ffmpegPath, Path ffprobePath) {
+        if (ffmpegPath == null) {
+            return;
+        }
+
+        try {
+            ConversionSettings settings = ConversionSettings.load();
+
+            String targetFfmpegPath = ffmpegPath.toString();
+            String currentFfmpegPath = settings.getFfmpegPath();
+            boolean ffmpegPathChanged = currentFfmpegPath == null
+                || currentFfmpegPath.isBlank()
+                || "ffmpeg".equalsIgnoreCase(currentFfmpegPath.trim())
+                || !targetFfmpegPath.equals(currentFfmpegPath);
+
+            boolean ffprobePathChanged = false;
+            if (ffprobePath != null) {
+                String targetFfprobePath = ffprobePath.toString();
+                String currentFfprobePath = settings.getFfprobePath();
+                ffprobePathChanged = currentFfprobePath == null
+                    || currentFfprobePath.isBlank()
+                    || "ffprobe".equalsIgnoreCase(currentFfprobePath.trim())
+                    || !targetFfprobePath.equals(currentFfprobePath);
+                if (ffprobePathChanged) {
+                    settings.setFfprobePath(targetFfprobePath);
+                }
+            }
+
+            boolean useEmbeddedChanged = !settings.isUseEmbeddedFFmpeg();
+
+            if (ffmpegPathChanged) {
+                settings.setFfmpegPath(targetFfmpegPath);
+            }
+            if (ffmpegPathChanged || ffprobePathChanged || useEmbeddedChanged) {
+                settings.setUseEmbeddedFFmpeg(true);
+                settings.save();
+                logger.info("Persisted embedded FFmpeg path to settings: {}", targetFfmpegPath);
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to persist FFmpeg paths to settings", e);
         }
     }
     
@@ -916,17 +1088,6 @@ public class DependencyManager {
     // ===========================
     // Utility Methods
     // ===========================
-    
-    /**
-     * Get platform identifier
-     */
-    private String getPlatform() {
-        String os = System.getProperty("os.name").toLowerCase();
-        if (os.contains("win")) return "windows";
-        if (os.contains("mac") || os.contains("darwin")) return "mac";
-        if (os.contains("linux")) return "linux";
-        return "unknown";
-    }
     
     /**
      * Check if a command is available in PATH

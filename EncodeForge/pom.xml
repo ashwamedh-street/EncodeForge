@@ -6,7 +6,7 @@
 
     <groupId>com.encodeforge</groupId>
     <artifactId>encodeforge</artifactId>
-    <version>0.4.0</version>
+    <version>0.4.1</version>
     <packaging>jar</packaging>
 
     <name>Encode Forge</name>
@@ -16,8 +16,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
-        <javafx.version>17.0.2</javafx.version>
-        <javafx.home>C:\Program Files\Java\javafx-sdk-17.0.2</javafx.home>
+        <javafx.version>17.0.17</javafx.version>
+        <javafx.home>C:\Program Files\Java\javafx-sdk-17.0.17</javafx.home>
             <!-- Platform-specific JavaFX classifiers (can be overridden per-build) -->
             <javafx.classifier.win>win</javafx.classifier.win>
             <javafx.classifier.linux>linux</javafx.classifier.linux>
@@ -74,6 +74,13 @@
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-lang3</artifactId>
             <version>3.14.0</version>
+        </dependency>
+
+        <!-- Archive extraction (tar.gz, tar.xz) -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-compress</artifactId>
+            <version>1.26.1</version>
         </dependency>
 
         <!-- ControlsFX for better UI components -->
@@ -401,6 +408,13 @@
                             <macPackageName>EncodeForge</macPackageName>
                             <macSign>false</macSign>
                             <macTargetArch>x64</macTargetArch>
+                            <!-- macOS-specific JVM options -->
+                            <javaOptions>
+                                <option>-Dfile.encoding=UTF-8</option>
+                                <option>-Xmx2g</option>
+                                <option>-Dapple.awt.application.name=EncodeForge</option>
+                                <option>-Djavafx.platform=mac</option>
+                            </javaOptions>
                         </configuration>
                     </execution>
                     
@@ -420,6 +434,13 @@
                             <macPackageName>EncodeForge</macPackageName>
                             <macSign>false</macSign>
                             <macTargetArch>aarch64</macTargetArch>
+                            <!-- macOS-specific JVM options -->
+                            <javaOptions>
+                                <option>-Dfile.encoding=UTF-8</option>
+                                <option>-Xmx2g</option>
+                                <option>-Dapple.awt.application.name=EncodeForge</option>
+                                <option>-Djavafx.platform=mac</option>
+                            </javaOptions>
                         </configuration>
                     </execution>
                 </executions>

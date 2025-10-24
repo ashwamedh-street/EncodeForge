@@ -14,6 +14,11 @@ import java.util.function.Consumer;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
+import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
+import org.apache.commons.compress.compressors.xz.XZCompressorInputStream;
+
 /**
  * Reusable download utility for dependencies and future app updates
  */
@@ -39,7 +44,7 @@ public class DownloadManager {
                 HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                 connection.setConnectTimeout(CONNECT_TIMEOUT);
                 connection.setReadTimeout(READ_TIMEOUT);
-                connection.setRequestProperty("User-Agent", "EncodeForge/0.4.0");
+                connection.setRequestProperty("User-Agent", "EncodeForge/0.4.1");
 
                 int responseCode = connection.getResponseCode();
                 if (responseCode != HttpURLConnection.HTTP_OK) {
@@ -194,10 +199,14 @@ public class DownloadManager {
      */
     private void extractTarGz(Path tarGzPath, Path destination) throws IOException {
         logger.info("Extracting TAR.GZ: {}", tarGzPath);
-        
-        // Use Apache Commons Compress or external tar command
-        // For now, throw unsupported exception - can implement later if needed
-        throw new UnsupportedOperationException("TAR.GZ extraction not yet implemented. Please use ZIP archives.");
+
+        try (InputStream fileStream = Files.newInputStream(tarGzPath);
+             BufferedInputStream bufferedStream = new BufferedInputStream(fileStream);
+             GzipCompressorInputStream gzipStream = new GzipCompressorInputStream(bufferedStream);
+             TarArchiveInputStream tarStream = new TarArchiveInputStream(gzipStream)) {
+
+            extractTarArchive(tarStream, destination);
+        }
     }
 
     /**
@@ -205,10 +214,54 @@ public class DownloadManager {
      */
     private void extractTarXz(Path tarXzPath, Path destination) throws IOException {
         logger.info("Extracting TAR.XZ: {}", tarXzPath);
-        
-        // Use Apache Commons Compress or external tar command
-        // For now, throw unsupported exception - can implement later if needed
-        throw new UnsupportedOperationException("TAR.XZ extraction not yet implemented. Please use ZIP archives.");
+
+        try (InputStream fileStream = Files.newInputStream(tarXzPath);
+             BufferedInputStream bufferedStream = new BufferedInputStream(fileStream);
+             XZCompressorInputStream xzStream = new XZCompressorInputStream(bufferedStream);
+             TarArchiveInputStream tarStream = new TarArchiveInputStream(xzStream)) {
+
+            extractTarArchive(tarStream, destination);
+        }
+    }
+
+    /**
+     * Extract TAR archive contents from the provided stream
+     */
+    private void extractTarArchive(TarArchiveInputStream tarStream, Path destination) throws IOException {
+        org.apache.commons.compress.archivers.ArchiveEntry nextEntry;
+
+        while ((nextEntry = tarStream.getNextEntry()) != null) {
+            if (!(nextEntry instanceof TarArchiveEntry tarEntry)) {
+                continue;
+            }
+
+            Path targetPath = destination.resolve(tarEntry.getName()).normalize();
+
+            // Prevent writing outside of destination directory
+            if (!targetPath.startsWith(destination.normalize())) {
+                throw new IOException("Bad tar entry: " + tarEntry.getName());
+            }
+
+            if (tarEntry.isDirectory()) {
+                Files.createDirectories(targetPath);
+                continue;
+            }
+
+            Files.createDirectories(targetPath.getParent());
+
+            try (OutputStream outputStream = Files.newOutputStream(targetPath)) {
+                byte[] buffer = new byte[BUFFER_SIZE];
+                int read;
+                while ((read = tarStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, read);
+                }
+            }
+
+            // Preserve executable bit when available (Unix-like systems)
+            if ((tarEntry.getMode() & 0100) != 0) {
+                targetPath.toFile().setExecutable(true);
+            }
+        }
     }
 
     /**

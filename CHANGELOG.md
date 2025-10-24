@@ -5,6 +5,14 @@ All notable changes to EncodeForge will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2025-10-24
+
+### Updated
+
+- Version bump to 0.4.1
+
+---
+
 ## [0.4.0] - 2025-10-23
 
 ### Major Release - Audio Normalization & Performance Improvements
@@ -18,12 +26,14 @@ This release consolidates features developed across branches v0.3.2 and v0.3.3 i
 ### Added
 
 #### Audio Normalization
+
 - **Audio Normalization Support** - New flag for FFmpeg/encoding to normalize audio levels ([`998f7ae`](https://github.com/SirStig/EncodeForge/commit/998f7ae))
   - Ensures consistent audio volume across media files
   - Integrated into encoding workflow
   - Configurable through settings
 
 #### GPU-Accelerated AI Subtitle Generation
+
 - **Intelligent PyTorch Installation** - Smart GPU detection and PyTorch installation for Whisper AI ([`fa8d13a`](https://github.com/SirStig/EncodeForge/commit/fa8d13a))
   - Automatically detects available GPU (NVIDIA CUDA, AMD ROCm, Apple Silicon)
   - Downloads appropriate PyTorch version with GPU support
@@ -73,11 +83,13 @@ This release consolidates features developed across branches v0.3.2 and v0.3.3 i
 ### Development History (Unreleased Versions)
 
 #### v0.3.3 (Development Branch - Not Released)
+
 - Branch: [`v0.3.3`](https://github.com/SirStig/EncodeForge/tree/v0.3.3)
 - Focus: Audio normalization features and UI polish
 - Commits merged into 0.4.0
 
 #### v0.3.2 (Development Branch - Not Released)
+
 - Branch: [`v0.3.2`](https://github.com/SirStig/EncodeForge/tree/v0.3.2)
 - Focus: GPU-accelerated Whisper AI and performance optimizations
 - Commits merged into 0.4.0
@@ -87,6 +99,7 @@ This release consolidates features developed across branches v0.3.2 and v0.3.3 i
 ### What's Next (Roadmap)
 
 Future releases will focus on:
+
 - **Plugin Support** (v1.0) - Extensible architecture for custom processing plugins and themes
 - **Jellyfin Integration** - Direct integration with Jellyfin media servers
 - **Plex Integration** - Direct integration with Plex media servers
