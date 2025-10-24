@@ -7,9 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.4.1] - 2025-10-24
 
-### Updated
+### Highlights
 
-- Version bump to 0.4.1
+- Major JavaFX UI refresh with reorganized logs, settings views, and modernized tables for a smoother workflow ([`eb3c43f`](https://github.com/SirStig/EncodeForge/commit/eb3c43f))
+- Swing-based splash screen that surfaces startup progress and initialization errors before JavaFX loads ([`8ba1fca`](https://github.com/SirStig/EncodeForge/commit/8ba1fca))
+
+### Fixes
+
+- Adjusted Maven configuration to resolve the macOS launch hang affecting JavaFX initialization ([`dc70838`](https://github.com/SirStig/EncodeForge/commit/dc70838))
+
+### CI/CD
+
+- Updated macOS artifact workflow so the packaged JAR carries the 0.4.1 version label ([`82a168e`](https://github.com/SirStig/EncodeForge/commit/82a168e))
+
+### Release Links
+
+- **Full Changelog**: [0.4.0...0.4.1](https://github.com/SirStig/EncodeForge/compare/0.4.0...0.4.1)
 
 ---
 
@@ -168,8 +181,4 @@ First stable public release of EncodeForge (formerly FFmpeg Batch Transcoder).
 
 ---
 
-<div align="center">
-
-[Star us on GitHub](https://github.com/SirStig/EncodeForge) | [Report a Bug](https://github.com/SirStig/EncodeForge/issues) | [Request a Feature](https://github.com/SirStig/EncodeForge/discussions)
-
-</div>
+[Star us on GitHub](https://github.com/SirStig/EncodeForge) • [Report a Bug](https://github.com/SirStig/EncodeForge/issues) • [Request a Feature](https://github.com/SirStig/EncodeForge/discussions)
