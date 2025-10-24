@@ -769,12 +769,12 @@
 
 .quick-settings {
     -fx-background-color: transparent;
-    -fx-padding: 15 18;
-    -fx-spacing: 15;
+    -fx-padding: 10 15;
+    -fx-spacing: 10;
 }
 
 .settings-group {
-    -fx-spacing: 10;
+    -fx-spacing: 8;
 }
 
 .group-label {
@@ -932,6 +932,23 @@
     -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
     -fx-font-size: 13px;
     -fx-font-style: italic;
+}
+
+/* Index column styling */
+.index-column {
+    -fx-alignment: CENTER;
+}
+
+.index-column .table-cell {
+    -fx-alignment: CENTER;
+    -fx-text-fill: rgba(160, 160, 160, 0.7);
+    -fx-font-size: 11px;
+    -fx-font-weight: 500;
+    -fx-padding: 4px 6px;
+}
+
+.queue-table .table-row-cell:selected .index-column .table-cell {
+    -fx-text-fill: rgba(255, 255, 255, 0.9);
 }
 
 /* ========================================
@@ -2776,17 +2793,42 @@ BorderPane .text {
     -fx-font-weight: 600;
     -fx-text-fill: #888888;
     -fx-padding: 0 0 4 0;
+    letter-spacing: 0.5px;
 }
 
 .info-label-header {
     -fx-font-size: 11px;
+    -fx-font-weight: 500;
     -fx-text-fill: #888888;
+    letter-spacing: 0.3px;
 }
 
 .info-label-value {
     -fx-font-size: 13px;
     -fx-text-fill: #d0d0d0;
     -fx-font-weight: 500;
+    -fx-padding: 2 0 0 0;
+}
+
+/* Details TextArea styling */
+.details-text {
+    -fx-background-color: #1a1a1a;
+    -fx-border-color: #333333;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-text-fill: #d0d0d0;
+    -fx-font-size: 12px;
+    -fx-font-family: "Segoe UI", system-ui;
+    -fx-padding: 12;
+}
+
+.details-text .content {
+    -fx-background-color: #1a1a1a;
+}
+
+.details-text:focused {
+    -fx-border-color: #4ec9b0;
+    -fx-background-color: #1a1a1a;
 }
 
 .preview-label {

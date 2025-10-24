@@ -206,13 +206,13 @@
         <top>
             <VBox fx:id="modeSpecificPanel" styleClass="mode-panel">
                 <!-- Encoder Quick Settings -->
-                <VBox fx:id="encoderQuickSettings" spacing="10" styleClass="quick-settings" managed="false" visible="false">
+                <VBox fx:id="encoderQuickSettings" spacing="8" styleClass="quick-settings" managed="false" visible="false">
                     <padding>
-                        <Insets top="15" right="15" bottom="15" left="15"/>
+                        <Insets top="10" right="15" bottom="10" left="15"/>
                     </padding>
                     
                     <!-- Row 1: Video Settings -->
-                    <HBox spacing="15" alignment="CENTER_LEFT">
+                    <HBox spacing="12" alignment="CENTER_LEFT">
                         <VBox spacing="4" styleClass="settings-group">
                             <Label text="Video Settings" styleClass="group-label"/>
                             <HBox spacing="10" alignment="CENTER_LEFT">
@@ -239,7 +239,7 @@
                     </HBox>
                     
                     <!-- Row 2: Processing Options -->
-                    <HBox spacing="15" alignment="CENTER_LEFT">
+                    <HBox spacing="12" alignment="CENTER_LEFT">
                         <VBox spacing="6" styleClass="settings-group">
                             <Label text="Processing Options" styleClass="group-label"/>
                             <HBox spacing="15">
@@ -263,13 +263,13 @@
                 </VBox>
                 
                 <!-- Subtitle Quick Settings -->
-                <VBox fx:id="subtitleQuickSettings" spacing="10" styleClass="quick-settings" managed="false" visible="false">
+                <VBox fx:id="subtitleQuickSettings" spacing="8" styleClass="quick-settings" managed="false" visible="false">
                     <padding>
-                        <Insets top="15" right="15" bottom="15" left="15"/>
+                        <Insets top="10" right="15" bottom="10" left="15"/>
                     </padding>
                     
                     <!-- Row 1: Mode and Language Selection -->
-                    <HBox spacing="15" alignment="CENTER_LEFT">
+                    <HBox spacing="12" alignment="CENTER_LEFT">
                         <VBox spacing="4" styleClass="settings-group">
                             <Label text="Mode" styleClass="group-label"/>
                             <ComboBox fx:id="quickSubProviderCombo" styleClass="quick-combo" prefWidth="250">
@@ -286,34 +286,78 @@
                             <VBox spacing="6">
                                 <!-- Row 1: Major European Languages -->
                                 <HBox spacing="10" alignment="CENTER_LEFT">
-                                    <CheckBox fx:id="langEnglishCheck" text="🇬🇧 English" selected="true"/>
-                                    <CheckBox fx:id="langSpanishCheck" text="🇪🇸 Spanish (EU)"/>
-                                    <CheckBox fx:id="langSpanishLACheck" text="🇲🇽 Spanish (LA)"/>
-                                    <CheckBox fx:id="langFrenchCheck" text="🇫🇷 French"/>
-                                    <CheckBox fx:id="langGermanCheck" text="🇩🇪 German"/>
-                                    <CheckBox fx:id="langItalianCheck" text="🇮🇹 Italian"/>
-                                    <CheckBox fx:id="langPortugueseCheck" text="🇵🇹 Portuguese (EU)"/>
-                                    <CheckBox fx:id="langPortugueseBRCheck" text="🇧🇷 Portuguese (BR)"/>
+                                    <CheckBox fx:id="langEnglishCheck" text="English" selected="true">
+                                        <tooltip><Tooltip text="🇬🇧 English • Code: en • British &amp; American English"/></tooltip>
+                                    </CheckBox>
+                                    <CheckBox fx:id="langSpanishCheck" text="Spanish (EU)">
+                                        <tooltip><Tooltip text="🇪🇸 Spanish (European) • Code: es • Castilian Spanish"/></tooltip>
+                                    </CheckBox>
+                                    <CheckBox fx:id="langSpanishLACheck" text="Spanish (LA)">
+                                        <tooltip><Tooltip text="🇲🇽 Spanish (Latin American) • Code: es-MX • Mexican &amp; Latin American Spanish"/></tooltip>
+                                    </CheckBox>
+                                    <CheckBox fx:id="langFrenchCheck" text="French">
+                                        <tooltip><Tooltip text="🇫🇷 French • Code: fr • Standard French"/></tooltip>
+                                    </CheckBox>
+                                    <CheckBox fx:id="langGermanCheck" text="German">
+                                        <tooltip><Tooltip text="🇩🇪 German • Code: de • Standard German"/></tooltip>
+                                    </CheckBox>
+                                    <CheckBox fx:id="langItalianCheck" text="Italian">
+                                        <tooltip><Tooltip text="🇮🇹 Italian • Code: it • Standard Italian"/></tooltip>
+                                    </CheckBox>
+                                    <CheckBox fx:id="langPortugueseCheck" text="Portuguese (EU)">
+                                        <tooltip><Tooltip text="🇵🇹 Portuguese (European) • Code: pt • European Portuguese"/></tooltip>
+                                    </CheckBox>
+                                    <CheckBox fx:id="langPortugueseBRCheck" text="Portuguese (BR)">
+                                        <tooltip><Tooltip text="🇧🇷 Portuguese (Brazilian) • Code: pt-BR • Brazilian Portuguese"/></tooltip>
+                                    </CheckBox>
                                 </HBox>
                                 <!-- Row 2: Asian Languages -->
                                 <HBox spacing="10" alignment="CENTER_LEFT">
-                                    <CheckBox fx:id="langJapaneseCheck" text="🇯🇵 Japanese"/>
-                                    <CheckBox fx:id="langChineseCheck" text="🇨🇳 Chinese (Simp)"/>
-                                    <CheckBox fx:id="langChineseTWCheck" text="🇹🇼 Chinese (Trad)"/>
-                                    <CheckBox fx:id="langKoreanCheck" text="🇰🇷 Korean"/>
-                                    <CheckBox fx:id="langHindiCheck" text="🇮🇳 Hindi"/>
-                                    <CheckBox fx:id="langThaiCheck" text="🇹🇭 Thai"/>
-                                    <CheckBox fx:id="langVietnameseCheck" text="🇻🇳 Vietnamese"/>
+                                    <CheckBox fx:id="langJapaneseCheck" text="Japanese">
+                                        <tooltip><Tooltip text="🇯🇵 Japanese • Code: ja • 日本語"/></tooltip>
+                                    </CheckBox>
+                                    <CheckBox fx:id="langChineseCheck" text="Chinese (Simp)">
+                                        <tooltip><Tooltip text="🇨🇳 Chinese (Simplified) • Code: zh • 简体中文 • Mainland China"/></tooltip>
+                                    </CheckBox>
+                                    <CheckBox fx:id="langChineseTWCheck" text="Chinese (Trad)">
+                                        <tooltip><Tooltip text="🇹🇼 Chinese (Traditional) • Code: zh-TW • 繁體中文 • Taiwan &amp; Hong Kong"/></tooltip>
+                                    </CheckBox>
+                                    <CheckBox fx:id="langKoreanCheck" text="Korean">
+                                        <tooltip><Tooltip text="🇰🇷 Korean • Code: ko • 한국어"/></tooltip>
+                                    </CheckBox>
+                                    <CheckBox fx:id="langHindiCheck" text="Hindi">
+                                        <tooltip><Tooltip text="🇮🇳 Hindi • Code: hi • हिन्दी"/></tooltip>
+                                    </CheckBox>
+                                    <CheckBox fx:id="langThaiCheck" text="Thai">
+                                        <tooltip><Tooltip text="🇹🇭 Thai • Code: th • ไทย"/></tooltip>
+                                    </CheckBox>
+                                    <CheckBox fx:id="langVietnameseCheck" text="Vietnamese">
+                                        <tooltip><Tooltip text="🇻🇳 Vietnamese • Code: vi • Tiếng Việt"/></tooltip>
+                                    </CheckBox>
                                 </HBox>
                                 <!-- Row 3: Other Major Languages -->
                                 <HBox spacing="10" alignment="CENTER_LEFT">
-                                    <CheckBox fx:id="langRussianCheck" text="🇷🇺 Russian"/>
-                                    <CheckBox fx:id="langArabicCheck" text="🇸🇦 Arabic"/>
-                                    <CheckBox fx:id="langTurkishCheck" text="🇹🇷 Turkish"/>
-                                    <CheckBox fx:id="langPolishCheck" text="🇵🇱 Polish"/>
-                                    <CheckBox fx:id="langDutchCheck" text="🇳🇱 Dutch"/>
-                                    <CheckBox fx:id="langSwedishCheck" text="🇸🇪 Swedish"/>
-                                    <CheckBox fx:id="langNorwegianCheck" text="🇳🇴 Norwegian"/>
+                                    <CheckBox fx:id="langRussianCheck" text="Russian">
+                                        <tooltip><Tooltip text="🇷🇺 Russian • Code: ru • Русский"/></tooltip>
+                                    </CheckBox>
+                                    <CheckBox fx:id="langArabicCheck" text="Arabic">
+                                        <tooltip><Tooltip text="🇸🇦 Arabic • Code: ar • العربية • Modern Standard Arabic"/></tooltip>
+                                    </CheckBox>
+                                    <CheckBox fx:id="langTurkishCheck" text="Turkish">
+                                        <tooltip><Tooltip text="🇹🇷 Turkish • Code: tr • Türkçe"/></tooltip>
+                                    </CheckBox>
+                                    <CheckBox fx:id="langPolishCheck" text="Polish">
+                                        <tooltip><Tooltip text="🇵🇱 Polish • Code: pl • Polski"/></tooltip>
+                                    </CheckBox>
+                                    <CheckBox fx:id="langDutchCheck" text="Dutch">
+                                        <tooltip><Tooltip text="🇳🇱 Dutch • Code: nl • Nederlands"/></tooltip>
+                                    </CheckBox>
+                                    <CheckBox fx:id="langSwedishCheck" text="Swedish">
+                                        <tooltip><Tooltip text="🇸🇪 Swedish • Code: sv • Svenska"/></tooltip>
+                                    </CheckBox>
+                                    <CheckBox fx:id="langNorwegianCheck" text="Norwegian">
+                                        <tooltip><Tooltip text="🇳🇴 Norwegian • Code: no • Norsk"/></tooltip>
+                                    </CheckBox>
                                 </HBox>
                             </VBox>
                         </VBox>
@@ -346,13 +390,13 @@
                 </VBox>
                 
                 <!-- Metadata Quick Settings -->
-                <VBox fx:id="renamerQuickSettings" spacing="10" styleClass="quick-settings" managed="false" visible="false">
+                <VBox fx:id="renamerQuickSettings" spacing="8" styleClass="quick-settings" managed="false" visible="false">
                     <padding>
-                        <Insets top="15" right="15" bottom="15" left="15"/>
+                        <Insets top="10" right="15" bottom="10" left="15"/>
                     </padding>
                     
                     <!-- Row 1: Settings and Control Buttons -->
-                    <HBox spacing="15" alignment="CENTER_LEFT">
+                    <HBox spacing="12" alignment="CENTER_LEFT">
                         <VBox spacing="4" styleClass="settings-group">
                             <Label text="Settings" styleClass="group-label"/>
                             <HBox spacing="10" alignment="CENTER_LEFT">
@@ -380,8 +424,8 @@
                     </HBox>
                     
                     <!-- Row 2: Provider Status -->
-                    <VBox spacing="8">
-                        <HBox spacing="15" alignment="CENTER_LEFT">
+                    <VBox spacing="6">
+                        <HBox spacing="12" alignment="CENTER_LEFT">
                             <VBox spacing="4" styleClass="settings-group">
                                 <Label text="API Key Providers (Free Keys)" styleClass="group-label"/>
                                 <HBox spacing="10">
@@ -421,7 +465,7 @@
                             </VBox>
                         </HBox>
                         
-                        <HBox spacing="15" alignment="CENTER_LEFT">
+                        <HBox spacing="12" alignment="CENTER_LEFT">
                             <VBox spacing="4" styleClass="settings-group">
                                 <Label text="Free Providers (No API Key)" styleClass="group-label"/>
                                 <HBox spacing="10">
@@ -475,13 +519,14 @@
                             <Button fx:id="removeQueuedButton" onAction="#handleRemoveQueued" styleClass="toolbar-button" style="-fx-padding: 4 12;"/>
                             <Button fx:id="clearQueuedButton" onAction="#handleClearQueued" styleClass="toolbar-button" style="-fx-padding: 4 12;"/>
                             <padding>
-                                <Insets top="8" right="12" bottom="8" left="12"/>
+                                <Insets top="6" right="12" bottom="6" left="12"/>
                             </padding>
                         </HBox>
                         
                         <TableView fx:id="queuedTable" VBox.vgrow="ALWAYS" styleClass="queue-table, draggable-table">
                             <columns>
-                                <TableColumn fx:id="queuedStatusColumn" text="" prefWidth="35" minWidth="35" maxWidth="35"/>
+                                <TableColumn fx:id="queuedIndexColumn" text="#" prefWidth="40" minWidth="40" maxWidth="40" styleClass="index-column" resizable="false"/>
+                                <TableColumn fx:id="queuedStatusColumn" text="" prefWidth="35" minWidth="35" maxWidth="35" resizable="false"/>
                                 <TableColumn fx:id="queuedFileColumn" text="File Name" prefWidth="300"/>
                                 <TableColumn fx:id="queuedOutputColumn" text="Output" prefWidth="70"/>
                                 <TableColumn fx:id="queuedSizeColumn" text="Size" prefWidth="80"/>
@@ -510,13 +555,14 @@
                             <Region HBox.hgrow="ALWAYS"/>
                             <Label fx:id="processingCountLabel" text="0 files" styleClass="queue-count"/>
                             <padding>
-                                <Insets top="8" right="12" bottom="8" left="12"/>
+                                <Insets top="6" right="12" bottom="6" left="12"/>
                             </padding>
                         </HBox>
                         
                         <TableView fx:id="processingTable" VBox.vgrow="ALWAYS" styleClass="queue-table, processing-table">
                             <columns>
-                                <TableColumn fx:id="procStatusColumn" text="" prefWidth="35" minWidth="35" maxWidth="35"/>
+                                <TableColumn fx:id="procIndexColumn" text="#" prefWidth="40" minWidth="40" maxWidth="40" styleClass="index-column" resizable="false"/>
+                                <TableColumn fx:id="procStatusColumn" text="" prefWidth="35" minWidth="35" maxWidth="35" resizable="false"/>
                                 <TableColumn fx:id="procFileColumn" text="File Name" prefWidth="200"/>
                                 <TableColumn fx:id="procOperationColumn" text="Status" prefWidth="150"/>
                                 <TableColumn fx:id="procProgressColumn" text="Progress" prefWidth="80"/>
@@ -539,13 +585,14 @@
                             <Separator orientation="VERTICAL" style="-fx-padding: 0 10;"/>
                             <Button fx:id="clearCompletedButton" onAction="#handleClearCompleted" styleClass="toolbar-button" style="-fx-padding: 4 12;"/>
                             <padding>
-                                <Insets top="8" right="12" bottom="8" left="12"/>
+                                <Insets top="6" right="12" bottom="6" left="12"/>
                             </padding>
                         </HBox>
                         
                         <TableView fx:id="completedTable" VBox.vgrow="ALWAYS" styleClass="queue-table, completed-table">
                             <columns>
-                                <TableColumn fx:id="compStatusColumn" text="" prefWidth="35" minWidth="35" maxWidth="35"/>
+                                <TableColumn fx:id="compIndexColumn" text="#" prefWidth="40" minWidth="40" maxWidth="40" styleClass="index-column" resizable="false"/>
+                                <TableColumn fx:id="compStatusColumn" text="" prefWidth="35" minWidth="35" maxWidth="35" resizable="false"/>
                                 <TableColumn fx:id="compFileColumn" text="File Name" prefWidth="250"/>
                                 <TableColumn fx:id="compOutputColumn" text="Output" prefWidth="70"/>
                                 <TableColumn fx:id="compSizeColumn" text="Original" prefWidth="80"/>
@@ -699,112 +746,129 @@
             </HBox>
             <!-- End Encoder Mode Layout -->
             
-            <!-- Subtitle Mode Layout - Full Width without right panel -->
-            <VBox fx:id="subtitleModeLayout" styleClass="mode-content-container" managed="false" visible="false">
+            <!-- Subtitle Mode Layout - With file list and subtitle info panel -->
+            <!-- Subtitle Mode Layout - Split panels with side-by-side lists -->
+            <HBox fx:id="subtitleModeLayout" styleClass="mode-content-container" managed="false" visible="false" HBox.hgrow="ALWAYS">
                 
-                <!-- Main Content: Subtitle Preview -->
-                <BorderPane styleClass="subtitle-main-content">
-                    <!-- Top: Header Section -->
-                    <top>
-                        <VBox spacing="10">
+                <!-- Left: File List and Available Subtitles side-by-side -->
+                <SplitPane dividerPositions="0.35" HBox.hgrow="ALWAYS" styleClass="queue-split-pane">
+                    
+                    <!-- Left Panel: Files for Subtitle Search -->
+                    <VBox spacing="0" styleClass="queue-section" minWidth="280">
+                        <HBox alignment="CENTER_LEFT" styleClass="section-header, queued-header">
+                            <Label text="Files for Subtitle Search" styleClass="section-title"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <Label fx:id="subtitleFilesCountLabel" text="0 files" styleClass="queue-count"/>
                             <padding>
-                                <Insets top="15" right="15" bottom="10" left="15"/>
+                                <Insets top="6" right="12" bottom="6" left="12"/>
+                            </padding>
+                        </HBox>
+                        
+                        <ListView fx:id="subtitleFilesList" VBox.vgrow="ALWAYS" styleClass="file-list">
+                            <placeholder>
+                                <Label text="No files added. Add files from the Encoder tab to search for subtitles." styleClass="placeholder-label"/>
+                            </placeholder>
+                        </ListView>
+                    </VBox>
+                    
+                    <!-- Right Panel: Available Subtitles -->
+                    <VBox spacing="0" styleClass="queue-section">
+                        <HBox alignment="CENTER_LEFT" styleClass="section-header, processing-header">
+                            <Label text="Available Subtitles" styleClass="section-title"/>
+                            <Region HBox.hgrow="ALWAYS"/>
+                            <Label fx:id="subtitleResultCountLabel" text="No file selected" styleClass="queue-count"/>
+                            <padding>
+                                <Insets top="6" right="12" bottom="6" left="12"/>
+                            </padding>
+                        </HBox>
+                        
+                        <TableView fx:id="availableSubtitlesTable" VBox.vgrow="ALWAYS" styleClass="queue-table">
+                            <columns>
+                                <TableColumn fx:id="subtitleSelectColumn" text="" prefWidth="40" minWidth="40" maxWidth="40"/>
+                                <TableColumn fx:id="subtitleLanguageColumn" text="Language" prefWidth="100"/>
+                                <TableColumn fx:id="subtitleProviderColumn" text="Provider" prefWidth="110"/>
+                                <TableColumn fx:id="subtitleScoreColumn" text="Score" prefWidth="70"/>
+                                <TableColumn fx:id="subtitleFormatColumn" text="Format" prefWidth="70"/>
+                            </columns>
+                            <placeholder>
+                                <Label text="Select a file to see available subtitles" styleClass="placeholder-label"/>
+                            </placeholder>
+                        </TableView>
+                    </VBox>
+                </SplitPane>
+                
+                <Separator orientation="VERTICAL"/>
+                
+                <!-- Right: Subtitle Details Panel (styled like File Info panel) -->
+                <VBox styleClass="file-info-panel" minWidth="320" maxWidth="350" prefWidth="320">
+                    <Label text="SUBTITLE DETAILS" styleClass="info-section-title"/>
+                    
+                    <Separator style="-fx-background-color: #3a3a3a;"/>
+                    
+                    <ScrollPane fitToWidth="true" VBox.vgrow="ALWAYS" styleClass="info-scroll">
+                        <VBox spacing="12" styleClass="info-content">
+                            <padding>
+                                <Insets top="12" right="15" bottom="12" left="15"/>
                             </padding>
                             
-                            <Label text="Subtitle Preview" styleClass="preview-title"/>
-                            
-                            <!-- File Selector -->
-                            <HBox spacing="10" alignment="CENTER_LEFT">
-                                <Label text="Current File:" styleClass="setting-label"/>
-                                <ComboBox fx:id="subtitleFileCombo" styleClass="preview-combo" prefWidth="400" HBox.hgrow="ALWAYS"/>
-                            </HBox>
-                            
-                            <Separator/>
-                        </VBox>
-                    </top>
-                    
-                    <!-- Center: Subtitle Results (Expands to fill) -->
-                    <center>
-                        <SplitPane dividerPositions="0.4" styleClass="comparison-split">
-                            <!-- Available Subtitles -->
-                            <VBox spacing="10" styleClass="comparison-panel">
-                                <padding>
-                                    <Insets top="0" right="10" bottom="0" left="15"/>
-                                </padding>
-                                <Label text="Available Subtitles" styleClass="comparison-title"/>
-                                <TableView fx:id="availableSubtitlesTable" VBox.vgrow="ALWAYS" styleClass="subtitle-table">
-                                    <columns>
-                                        <TableColumn fx:id="subtitleSelectColumn" text="" prefWidth="40"/>
-                                        <TableColumn fx:id="subtitleLanguageColumn" text="Language" prefWidth="100"/>
-                                        <TableColumn fx:id="subtitleProviderColumn" text="Provider" prefWidth="110"/>
-                                        <TableColumn fx:id="subtitleScoreColumn" text="Score" prefWidth="70"/>
-                                        <TableColumn fx:id="subtitleFormatColumn" text="Format" prefWidth="70"/>
-                                    </columns>
-                                    <placeholder>
-                                        <Label text="No subtitles found. Click Process to search." styleClass="placeholder-label"/>
-                                    </placeholder>
-                                </TableView>
+                            <!-- File Status Section -->
+                            <VBox spacing="8">
+                                <Label text="FILE STATUS" styleClass="info-section-header"/>
+                                
+                                <VBox spacing="6">
+                                    <Label text="File Name" styleClass="info-label-header"/>
+                                    <Label fx:id="subtitleInfoFileNameLabel" text="No file selected" wrapText="true" styleClass="info-label-value"/>
+                                </VBox>
+                                
+                                <VBox spacing="6">
+                                    <Label text="Search Status" styleClass="info-label-header"/>
+                                    <Label fx:id="subtitleInfoSearchStatusLabel" text="—" styleClass="info-label-value"/>
+                                </VBox>
+                                
+                                <VBox spacing="6">
+                                    <Label text="Subtitles Found" styleClass="info-label-header"/>
+                                    <Label fx:id="subtitleInfoCountLabel" text="—" styleClass="info-label-value"/>
+                                </VBox>
                             </VBox>
+                            
+                            <Separator style="-fx-background-color: #3a3a3a;"/>
+                            
+                            <!-- Selected Subtitle Section -->
+                            <VBox spacing="8">
+                                <Label text="SELECTED SUBTITLE" styleClass="info-section-header"/>
+                                
+                                <VBox spacing="6">
+                                    <Label text="Language" styleClass="info-label-header"/>
+                                    <Label fx:id="subtitleInfoLanguageLabel" text="—" styleClass="info-label-value"/>
+                                </VBox>
+                                
+                                <VBox spacing="6">
+                                    <Label text="Provider" styleClass="info-label-header"/>
+                                    <Label fx:id="subtitleInfoProviderLabel" text="—" styleClass="info-label-value"/>
+                                </VBox>
+                                
+                                <VBox spacing="6">
+                                    <Label text="Match Score" styleClass="info-label-header"/>
+                                    <Label fx:id="subtitleInfoScoreLabel" text="—" styleClass="info-label-value"/>
+                                </VBox>
+                                
+                                <VBox spacing="6">
+                                    <Label text="Format" styleClass="info-label-header"/>
+                                    <Label fx:id="subtitleInfoFormatLabel" text="—" styleClass="info-label-value"/>
+                                </VBox>
+                            </VBox>
+                            
+                            <Separator style="-fx-background-color: #3a3a3a;"/>
                             
                             <!-- Subtitle Details/Preview -->
-                            <VBox spacing="10" styleClass="comparison-panel">
-                                <padding>
-                                    <Insets top="0" right="15" bottom="0" left="10"/>
-                                </padding>
-                                <Label text="Subtitle Details" styleClass="comparison-title"/>
-                                <TextArea fx:id="subtitleDetailsLabel" text="Select a subtitle to view details" wrapText="true" editable="false" VBox.vgrow="ALWAYS" styleClass="details-text"/>
+                            <VBox spacing="8">
+                                <Label text="DETAILS" styleClass="info-section-header"/>
+                                <TextArea fx:id="subtitleDetailsLabel" text="Select a subtitle from the table to view details" wrapText="true" editable="false" prefHeight="200" styleClass="details-text"/>
                             </VBox>
-                        </SplitPane>
-                    </center>
-                    
-                    <!-- Bottom: Progress Bar + Footer -->
-                    <bottom>
-                        <VBox spacing="10">
-                            <padding>
-                                <Insets top="10" right="15" bottom="15" left="15"/>
-                            </padding>
-                            
-                            <!-- Total Progress Bar -->
-                            <VBox spacing="8" styleClass="progress-section">
-                                <HBox spacing="10" alignment="CENTER_LEFT">
-                                    <Label text="Overall Progress:" styleClass="setting-label"/>
-                                    <Label fx:id="subtitleProgressStatusLabel" text="Ready" styleClass="info-label"/>
-                                    <Region HBox.hgrow="ALWAYS"/>
-                                    <Label fx:id="subtitleProgressLabel" text="0 / 0 files" styleClass="stats-label"/>
-                                </HBox>
-                                <ProgressBar fx:id="subtitleTotalProgressBar" maxWidth="Infinity" prefHeight="8" progress="0" styleClass="total-progress-bar"/>
-                            </VBox>
-                            
-                            <!-- Footer -->
-                            <HBox spacing="15" alignment="CENTER_LEFT" styleClass="preview-footer">
-                                <Label fx:id="subtitleStatsLabel" text="0 available | 0 languages" styleClass="stats-label"/>
-                                <Region HBox.hgrow="ALWAYS"/>
-                                <Button fx:id="autoSelectBestButton" text="⭐ Auto-Select Best" onAction="#handleAutoSelectBest" styleClass="secondary-button">
-                                    <tooltip>
-                                        <Tooltip text="Automatically select the highest-scored subtitle for each language"/>
-                                    </tooltip>
-                                </Button>
-                                <Label text="Output Mode:" styleClass="setting-label"/>
-                                <ComboBox fx:id="subtitleOutputModeCombo" styleClass="quick-combo" prefWidth="180">
-                                    <tooltip>
-                                        <Tooltip text="External: Save .srt file next to video (no processing)&#10;Embed: Add subtitle track inside video (fast, no re-encode)&#10;Burn-in: Permanently overlay subtitles on video (slow, re-encodes)"/>
-                                    </tooltip>
-                                </ComboBox>
-                                <Button text="💾 Apply to File" onAction="#handleApplySubtitles" styleClass="primary-button" prefWidth="140">
-                                    <tooltip>
-                                        <Tooltip text="Apply selected subtitles to the currently selected file"/>
-                                    </tooltip>
-                                </Button>
-                                <Button text="🔄 Batch Apply All" onAction="#handleBatchApplySubtitles" styleClass="primary-button" style="-fx-background-color: #4a9eff;" prefWidth="160">
-                                    <tooltip>
-                                        <Tooltip text="Apply selected subtitles to ALL files in the queue that have results"/>
-                                    </tooltip>
-                                </Button>
-                            </HBox>
                         </VBox>
-                    </bottom>
-                </BorderPane>
-            </VBox>
+                    </ScrollPane>
+                </VBox>
+            </HBox>
             <!-- End Subtitle Mode Layout -->
             
             <!-- Renamer Mode Layout - Full Width without right panel -->
@@ -812,9 +876,9 @@
                 
                 <!-- Main Content: Rename Preview -->
                 <ScrollPane fitToWidth="true" styleClass="preview-scroll">
-                    <VBox fx:id="renamePreviewContent" spacing="15" styleClass="preview-content">
+                    <VBox fx:id="renamePreviewContent" spacing="12" styleClass="preview-content">
                         <padding>
-                            <Insets top="15" right="15" bottom="15" left="15"/>
+                            <Insets top="12" right="15" bottom="12" left="15"/>
                         </padding>
                         
                         <Label text="Rename Preview" styleClass="preview-title"/>
@@ -831,14 +895,14 @@
                         <!-- File Comparison -->
                         <SplitPane dividerPositions="0.5" VBox.vgrow="ALWAYS" styleClass="comparison-split">
                             <!-- Original Names -->
-                            <VBox spacing="10" styleClass="comparison-panel">
+                            <VBox spacing="8" styleClass="comparison-panel">
                                 <Label text="Original Filenames" styleClass="comparison-title"/>
                                 <ListView fx:id="originalNamesListView" VBox.vgrow="ALWAYS" styleClass="comparison-list"/>
                             </VBox>
                             
                             <!-- Suggested Names -->
-                            <VBox spacing="10" styleClass="comparison-panel">
-                                <HBox spacing="10" alignment="CENTER_LEFT">
+                            <VBox spacing="8" styleClass="comparison-panel">
+                                <HBox spacing="8" alignment="CENTER_LEFT">
                                     <Label text="Suggested Filenames" styleClass="comparison-title"/>
                                     <Label fx:id="activeProviderLabel" text="" styleClass="provider-badge"/>
                                 </HBox>
@@ -847,7 +911,7 @@
                         </SplitPane>
                         
                         <!-- Footer -->
-                        <HBox spacing="15" alignment="CENTER_LEFT" styleClass="preview-footer">
+                        <HBox spacing="12" alignment="CENTER_LEFT" styleClass="preview-footer">
                             <Label fx:id="renameStatsLabel" text="0 files | 0 changes" styleClass="stats-label"/>
                             <Region HBox.hgrow="ALWAYS"/>
                             <CheckBox fx:id="createBackupCheck" text="Create backup before renaming" selected="true" styleClass="preview-check"/>

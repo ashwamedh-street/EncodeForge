@@ -40,6 +40,9 @@ public class MainApp extends Application {
 
     @Override
     public void init() throws Exception {
+        com.encodeforge.ui.SplashScreen.updateStatus("Starting EncodeForge...");
+        com.encodeforge.ui.SplashScreen.setProgress(5);
+        
         logger.info("Initializing Encode Forge v{}", VERSION);
         logger.info("Java version: {}", System.getProperty("java.version"));
         logger.info("OS: {} {}", System.getProperty("os.name"), System.getProperty("os.version"));
@@ -48,9 +51,13 @@ public class MainApp extends Application {
         // Check if initialization has already been completed
         if (isInitializationComplete()) {
             logger.info("Initialization already completed, skipping dependency checks");
+            com.encodeforge.ui.SplashScreen.updateStatus("Loading application...");
+            com.encodeforge.ui.SplashScreen.setProgress(15);
             
             // Still need to extract Python scripts and create DependencyManager for runtime
             try {
+                com.encodeforge.ui.SplashScreen.updateStatus("Extracting Python scripts...");
+                com.encodeforge.ui.SplashScreen.setProgress(30);
                 ResourceExtractor.extractPythonScripts();
                 logger.info("Python scripts extracted successfully (cached)");
                 
@@ -65,7 +72,7 @@ public class MainApp extends Application {
                 }
             } catch (IOException e) {
                 logger.error("Failed to extract Python scripts", e);
-                showEarlyError("Python Script Extraction Failed", 
+                com.encodeforge.ui.SplashScreen.showError("Python Script Extraction Failed", 
                     "Could not extract Python scripts from application bundle.\n\n" +
                     "Error: " + e.getMessage() + "\n\n" +
                     "Please check if you have write permissions to:\n" +
@@ -74,20 +81,27 @@ public class MainApp extends Application {
             }
             
             try {
+                com.encodeforge.ui.SplashScreen.updateStatus("Initializing dependency manager...");
+                com.encodeforge.ui.SplashScreen.setProgress(50);
                 dependencyManager = new DependencyManager();
                 logger.info("DependencyManager initialized (cached)");
             } catch (IOException e) {
                 logger.error("Failed to initialize DependencyManager", e);
-                showEarlyError("Initialization Failed", 
+                com.encodeforge.ui.SplashScreen.showError("Initialization Failed", 
                     "Could not initialize dependency manager.\n\n" +
                     "Error: " + e.getMessage());
                 throw new RuntimeException("Could not initialize dependency manager", e);
             }
+            com.encodeforge.ui.SplashScreen.updateStatus("Starting runtime...");
+            com.encodeforge.ui.SplashScreen.setProgress(70);
             initializeRuntime();
+            com.encodeforge.ui.SplashScreen.setProgress(100);
             return;
         }
         
         // Extract Python scripts from JAR to app directory
+        com.encodeforge.ui.SplashScreen.updateStatus("Extracting Python scripts...");
+        com.encodeforge.ui.SplashScreen.setProgress(10);
         try {
             ResourceExtractor.extractPythonScripts();
             logger.info("Python scripts extracted successfully");
@@ -95,7 +109,7 @@ public class MainApp extends Application {
             // Validate extraction
             if (!ResourceExtractor.validateExtractedScripts()) {
                 logger.error("Python scripts validation failed after extraction");
-                showEarlyError("Python Scripts Missing",
+                com.encodeforge.ui.SplashScreen.showError("Python Scripts Missing",
                     "Failed to extract Python scripts from application bundle.\n\n" +
                     "Some required files or directories are missing.\n\n" +
                     "This may indicate:\n" +
@@ -108,7 +122,7 @@ public class MainApp extends Application {
             }
         } catch (IOException e) {
             logger.error("Failed to extract Python scripts", e);
-            showEarlyError("Python Script Extraction Failed",
+            com.encodeforge.ui.SplashScreen.showError("Python Script Extraction Failed",
                 "Could not extract Python scripts from application bundle.\n\n" +
                 "Error: " + e.getMessage() + "\n\n" +
                 "Please check if you have write permissions to:\n" +
@@ -117,6 +131,8 @@ public class MainApp extends Application {
         }
         
         // Create DependencyManager
+        com.encodeforge.ui.SplashScreen.updateStatus("Initializing dependency manager...");
+        com.encodeforge.ui.SplashScreen.setProgress(30);
         try {
             dependencyManager = new DependencyManager();
             logger.info("DependencyManager initialized");
@@ -127,6 +143,8 @@ public class MainApp extends Application {
         
         // Check if dependencies are installed
         // ALWAYS check on every startup to detect newly-added requirements (e.g., bs4, lxml)
+        com.encodeforge.ui.SplashScreen.updateStatus("Checking dependencies...");
+        com.encodeforge.ui.SplashScreen.setProgress(50);
         Map<String, Boolean> libStatus = dependencyManager.checkRequiredLibraries().get();
         boolean allLibsInstalled = libStatus.values().stream().allMatch(v -> v);
         boolean ffmpegInstalled = dependencyManager.checkFFmpeg().get();
@@ -148,7 +166,9 @@ public class MainApp extends Application {
             markInitializationComplete();
         }
         
+        com.encodeforge.ui.SplashScreen.setProgress(70);
         initializeRuntime();
+        com.encodeforge.ui.SplashScreen.setProgress(90);
     }
     
     /**
@@ -279,6 +299,8 @@ public class MainApp extends Application {
             // Show initialization dialog if dependencies need to be installed
             if (pendingDependencyInstall) {
                 logger.info("Showing initialization dialog");
+                com.encodeforge.ui.SplashScreen.updateStatus("Installing dependencies...");
+                com.encodeforge.ui.SplashScreen.setProgress(95);
                 InitializationDialog initDialog = new InitializationDialog(dependencyManager);
                 initDialog.showAndWait();
                 
@@ -286,6 +308,9 @@ public class MainApp extends Application {
                     logger.warn("User cancelled initialization, some dependencies may be missing");
                 }
             }
+            
+            com.encodeforge.ui.SplashScreen.updateStatus("Loading user interface...");
+            com.encodeforge.ui.SplashScreen.setProgress(98);
             
             // Load FXML
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/MainView.fxml"));
@@ -329,13 +354,20 @@ public class MainApp extends Application {
                 Platform.exit();
             });
             
+            com.encodeforge.ui.SplashScreen.setProgress(100);
             primaryStage.show();
             logger.info("Application started successfully");
+            
+            // Close splash screen now that main window is showing
+            com.encodeforge.ui.SplashScreen.closeSplash();
             
             // Check for updates on startup (background, non-blocking)
             checkForUpdatesOnStartup();
             
         } catch (RuntimeException e) {
+            // Close splash screen before showing error
+            com.encodeforge.ui.SplashScreen.closeSplash();
+            
             // Check if this is a Python not found error
             if (e.getMessage() != null && e.getMessage().contains("Python not found")) {
                 logger.error("Python not found", e);
@@ -345,6 +377,9 @@ public class MainApp extends Application {
                 showErrorAndExit("Failed to start application", e);
             }
         } catch (IOException e) {
+            // Close splash screen before showing error
+            com.encodeforge.ui.SplashScreen.closeSplash();
+            
             logger.error("Failed to load application UI", e);
             showErrorAndExit("Failed to load application interface", e);
         }
@@ -477,8 +512,13 @@ public class MainApp extends Application {
     }
 
     public static void main(String[] args) {
+        // Show Swing splash screen immediately (before JavaFX initialization)
+        com.encodeforge.ui.SplashScreen.showSplash();
+        
         // Set up uncaught exception handler for init() failures
         Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
+            // Close splash screen on fatal error
+            com.encodeforge.ui.SplashScreen.closeSplash();
             System.err.println("FATAL ERROR in thread " + thread.getName());
             throwable.printStackTrace();
             
@@ -533,6 +573,9 @@ public class MainApp extends Application {
         try {
             launch(args);
         } catch (Exception e) {
+            // Close splash screen on launch failure
+            com.encodeforge.ui.SplashScreen.closeSplash();
+            
             // JavaFX launch exceptions
             System.err.println("FATAL: JavaFX launch failed");
             e.printStackTrace();

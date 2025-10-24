@@ -159,7 +159,7 @@ public class MainController {
     
     // Mode Layouts
     @FXML private HBox encoderModeLayout;
-    @FXML private VBox subtitleModeLayout;
+    @FXML private HBox subtitleModeLayout;
     @FXML private VBox renamerModeLayout;
     @FXML private VBox settingsModeLayout;
     @FXML private VBox logsModeLayout;
@@ -363,10 +363,24 @@ public class MainController {
     @FXML private Label activeProviderLabel;
     @FXML private Label renameStatsLabel;
     @FXML private CheckBox createBackupCheck;
-    @FXML private ComboBox<String> subtitleFileCombo;
+    // Subtitle Mode - File List and Details Panel
+    @FXML private ListView<String> subtitleFilesList;
+    @FXML private Label subtitleFilesCountLabel;
+    @FXML private Label subtitleResultCountLabel;
     @FXML private TextArea subtitleDetailsLabel;
     @FXML private Label subtitleStatsLabel;
     @FXML private ComboBox<String> subtitleOutputModeCombo;
+    
+    // Subtitle Info Panel Labels
+    @FXML private Label subtitleInfoFileNameLabel;
+    @FXML private Label subtitleInfoSearchStatusLabel;
+    @FXML private Label subtitleInfoCountLabel;
+    @FXML private Label subtitleInfoLanguageLabel;
+    @FXML private Label subtitleInfoProviderLabel;
+    @FXML private Label subtitleInfoScoreLabel;
+    @FXML private Label subtitleInfoFormatLabel;
+    
+    // Subtitle Table
     @FXML private TableView<SubtitleItem> availableSubtitlesTable;
     @FXML private TableColumn<SubtitleItem, Boolean> subtitleSelectColumn;
     @FXML private TableColumn<SubtitleItem, String> subtitleLanguageColumn;
@@ -379,6 +393,7 @@ public class MainController {
     // Queue Table
     // Queued Files Table
     @FXML private TableView<ConversionJob> queuedTable;
+    @FXML private TableColumn<ConversionJob, Integer> queuedIndexColumn;
     @FXML private TableColumn<ConversionJob, String> queuedStatusColumn;
     @FXML private TableColumn<ConversionJob, String> queuedFileColumn;
     @FXML private TableColumn<ConversionJob, String> queuedOutputColumn;
@@ -389,6 +404,7 @@ public class MainController {
     
     // Processing Files Table
     @FXML private TableView<ConversionJob> processingTable;
+    @FXML private TableColumn<ConversionJob, Integer> procIndexColumn;
     @FXML private TableColumn<ConversionJob, String> procStatusColumn;
     @FXML private TableColumn<ConversionJob, String> procFileColumn;
     @FXML private TableColumn<ConversionJob, String> procOperationColumn;
@@ -400,6 +416,7 @@ public class MainController {
     
     // Completed Files Table
     @FXML private TableView<ConversionJob> completedTable;
+    @FXML private TableColumn<ConversionJob, Integer> compIndexColumn;
     @FXML private TableColumn<ConversionJob, String> compStatusColumn;
     @FXML private TableColumn<ConversionJob, String> compFileColumn;
     @FXML private TableColumn<ConversionJob, String> compOutputColumn;
@@ -516,9 +533,9 @@ public class MainController {
     }
     
     private void setupSubtitleFileSelector() {
-        if (subtitleFileCombo != null) {
+        if (subtitleFilesList != null) {
             // Add listener for file selection changes
-            subtitleFileCombo.valueProperty().addListener((obs, oldVal, newVal) -> {
+            subtitleFilesList.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
                 if (newVal != null && !newVal.equals(currentlySelectedFile)) {
                     currentlySelectedFile = newVal;
                     
@@ -526,8 +543,11 @@ public class MainController {
                     String baseFileName = extractBaseFileName(newVal);
                     
                     // Debug: Log what we're looking for
-                    logger.debug("Dropdown selection changed to: {} (base: {})", newVal, baseFileName);
+                    logger.debug("List selection changed to: {} (base: {})", newVal, baseFileName);
                     logger.debug("Available files in map: {}", subtitlesByFile.keySet());
+                    
+                    // Update subtitle info panel
+                    updateSubtitleInfoPanel(baseFileName);
                     
                     // Update table to show subtitles for selected file
                     if (subtitlesByFile.containsKey(baseFileName) && availableSubtitlesTable != null) {
@@ -541,6 +561,11 @@ public class MainController {
                         }
                         
                         availableSubtitlesTable.setItems(fileSubtitles);
+                        
+                        // Update result count label
+                        if (subtitleResultCountLabel != null) {
+                            subtitleResultCountLabel.setText(fileSubtitles.size() + " found");
+                        }
                         
                         // Update stats
                         if (subtitleStatsLabel != null) {
@@ -571,26 +596,31 @@ public class MainController {
     }
     
     private void updateSubtitleFileList() {
-        if (subtitleFileCombo != null) {
+        if (subtitleFilesList != null) {
             List<ConversionJob> allFiles = getAllFiles();
             if (!allFiles.isEmpty()) {
-            subtitleFileCombo.getItems().clear();
+                subtitleFilesList.getItems().clear();
             
                 // Add files with status tags from ALL queues
                 for (ConversionJob job : allFiles) {
-                String fileName = new java.io.File(job.getInputPath()).getName();
-                String displayName = formatFileNameWithStatus(fileName);
-                subtitleFileCombo.getItems().add(displayName);
-            }
+                    String fileName = new java.io.File(job.getInputPath()).getName();
+                    String displayName = formatFileNameWithStatus(fileName);
+                    subtitleFilesList.getItems().add(displayName);
+                }
             
-            // Select first file if none selected
-            if (currentlySelectedFile == null && !subtitleFileCombo.getItems().isEmpty()) {
-                currentlySelectedFile = subtitleFileCombo.getItems().get(0);
-                subtitleFileCombo.setValue(currentlySelectedFile);
-            } else if (currentlySelectedFile != null) {
-                // Update the display of currently selected file
-                String updatedDisplayName = formatFileNameWithStatus(extractBaseFileName(currentlySelectedFile));
-                subtitleFileCombo.setValue(updatedDisplayName);
+                // Update file count label
+                if (subtitleFilesCountLabel != null) {
+                    subtitleFilesCountLabel.setText(allFiles.size() + " files");
+                }
+            
+                // Select first file if none selected
+                if (currentlySelectedFile == null && !subtitleFilesList.getItems().isEmpty()) {
+                    currentlySelectedFile = subtitleFilesList.getItems().get(0);
+                    subtitleFilesList.getSelectionModel().select(currentlySelectedFile);
+                } else if (currentlySelectedFile != null) {
+                    // Update the display of currently selected file
+                    String updatedDisplayName = formatFileNameWithStatus(extractBaseFileName(currentlySelectedFile));
+                    subtitleFilesList.getSelectionModel().select(updatedDisplayName);
                 }
             }
         }
@@ -1832,7 +1862,17 @@ public class MainController {
     }
     
     private void setupQueuedTable() {
+        // Enable auto-resize to fill available width
+        queuedTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        
         // Setup columns
+        // Index column - shows row number
+        queuedIndexColumn.setCellValueFactory(cd -> {
+            int index = queuedTable.getItems().indexOf(cd.getValue()) + 1;
+            return new javafx.beans.property.SimpleIntegerProperty(index).asObject();
+        });
+        queuedIndexColumn.setStyle("-fx-alignment: CENTER;");
+        
         queuedStatusColumn.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty("⏳"));
         queuedFileColumn.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(new File(cd.getValue().getInputPath()).getName()));
         queuedOutputColumn.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(settings.getOutputFormat().toUpperCase()));
@@ -1857,7 +1897,17 @@ public class MainController {
     }
     
     private void setupProcessingTable() {
+        // Enable auto-resize to fill available width
+        processingTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        
         // Setup columns
+        // Index column - shows row number
+        procIndexColumn.setCellValueFactory(cd -> {
+            int index = processingTable.getItems().indexOf(cd.getValue()) + 1;
+            return new javafx.beans.property.SimpleIntegerProperty(index).asObject();
+        });
+        procIndexColumn.setStyle("-fx-alignment: CENTER;");
+        
         procStatusColumn.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty("⚡"));
         procFileColumn.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(new File(cd.getValue().getInputPath()).getName()));
         procOperationColumn.setCellValueFactory(new PropertyValueFactory<>("operation"));
@@ -1892,7 +1942,17 @@ public class MainController {
     }
     
     private void setupCompletedTable() {
+        // Enable auto-resize to fill available width
+        completedTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        
         // Setup columns
+        // Index column - shows row number
+        compIndexColumn.setCellValueFactory(cd -> {
+            int index = completedTable.getItems().indexOf(cd.getValue()) + 1;
+            return new javafx.beans.property.SimpleIntegerProperty(index).asObject();
+        });
+        compIndexColumn.setStyle("-fx-alignment: CENTER;");
+        
         compStatusColumn.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty("✅"));
         compFileColumn.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(new File(cd.getValue().getInputPath()).getName()));
         compOutputColumn.setCellValueFactory(cd -> new javafx.beans.property.SimpleStringProperty(settings.getOutputFormat().toUpperCase()));
@@ -1961,6 +2021,7 @@ public class MainController {
         // Selection listener to update details panel
         availableSubtitlesTable.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
             updateSubtitleDetails(newVal);
+            updateInfoPanelFromSelection(newVal);
         });
     }
     
@@ -4515,6 +4576,127 @@ public class MainController {
     }
     
     /**
+     * Update the subtitle info panel with file-specific subtitle search information
+     */
+    private void updateSubtitleInfoPanel(String baseFileName) {
+        if (subtitleInfoFileNameLabel != null) {
+            subtitleInfoFileNameLabel.setText(baseFileName);
+        }
+        
+        // Check if we have subtitle results for this file
+        if (subtitlesByFile.containsKey(baseFileName)) {
+            ObservableList<SubtitleItem> fileSubtitles = subtitlesByFile.get(baseFileName);
+            
+            // Update search status
+            if (subtitleInfoSearchStatusLabel != null) {
+                subtitleInfoSearchStatusLabel.setText("✅ Completed");
+                subtitleInfoSearchStatusLabel.setStyle("-fx-text-fill: #4ec9b0;");
+            }
+            
+            // Update subtitle count
+            if (subtitleInfoCountLabel != null) {
+                subtitleInfoCountLabel.setText(fileSubtitles.size() + " found");
+            }
+            
+            // Check if any subtitle is selected
+            SubtitleItem selected = null;
+            for (SubtitleItem item : fileSubtitles) {
+                if (item.isSelected()) {
+                    selected = item;
+                    break;
+                }
+            }
+            
+            if (selected != null) {
+                // Show selected subtitle details
+                if (subtitleInfoLanguageLabel != null) {
+                    subtitleInfoLanguageLabel.setText(selected.getLanguage());
+                }
+                if (subtitleInfoProviderLabel != null) {
+                    subtitleInfoProviderLabel.setText(selected.getProvider());
+                }
+                if (subtitleInfoScoreLabel != null) {
+                    subtitleInfoScoreLabel.setText(String.format("%.1f%%", selected.getScore()));
+                }
+                if (subtitleInfoFormatLabel != null) {
+                    subtitleInfoFormatLabel.setText(selected.getFormat());
+                }
+            } else {
+                // No subtitle selected - clear fields
+                if (subtitleInfoLanguageLabel != null) {
+                    subtitleInfoLanguageLabel.setText("—");
+                }
+                if (subtitleInfoProviderLabel != null) {
+                    subtitleInfoProviderLabel.setText("—");
+                }
+                if (subtitleInfoScoreLabel != null) {
+                    subtitleInfoScoreLabel.setText("—");
+                }
+                if (subtitleInfoFormatLabel != null) {
+                    subtitleInfoFormatLabel.setText("—");
+                }
+            }
+        } else {
+            // No search results yet
+            if (subtitleInfoSearchStatusLabel != null) {
+                subtitleInfoSearchStatusLabel.setText("Not searched");
+                subtitleInfoSearchStatusLabel.setStyle("-fx-text-fill: #808080;");
+            }
+            if (subtitleInfoCountLabel != null) {
+                subtitleInfoCountLabel.setText("—");
+            }
+            if (subtitleInfoLanguageLabel != null) {
+                subtitleInfoLanguageLabel.setText("—");
+            }
+            if (subtitleInfoProviderLabel != null) {
+                subtitleInfoProviderLabel.setText("—");
+            }
+            if (subtitleInfoScoreLabel != null) {
+                subtitleInfoScoreLabel.setText("—");
+            }
+            if (subtitleInfoFormatLabel != null) {
+                subtitleInfoFormatLabel.setText("—");
+            }
+        }
+    }
+    
+    /**
+     * Update the info panel labels when a subtitle is selected from the table
+     */
+    private void updateInfoPanelFromSelection(SubtitleItem subtitle) {
+        if (subtitle == null) {
+            // Clear selected subtitle info
+            if (subtitleInfoLanguageLabel != null) {
+                subtitleInfoLanguageLabel.setText("—");
+            }
+            if (subtitleInfoProviderLabel != null) {
+                subtitleInfoProviderLabel.setText("—");
+            }
+            if (subtitleInfoScoreLabel != null) {
+                subtitleInfoScoreLabel.setText("—");
+            }
+            if (subtitleInfoFormatLabel != null) {
+                subtitleInfoFormatLabel.setText("—");
+            }
+        } else {
+            // Show selected subtitle details
+            if (subtitleInfoLanguageLabel != null) {
+                String langName = getLanguageName(subtitle.getLanguage());
+                subtitleInfoLanguageLabel.setText(langName + " (" + subtitle.getLanguage().toUpperCase() + ")");
+            }
+            if (subtitleInfoProviderLabel != null) {
+                subtitleInfoProviderLabel.setText(subtitle.getProvider());
+            }
+            if (subtitleInfoScoreLabel != null) {
+                subtitleInfoScoreLabel.setText(String.format("%.1f / 100", subtitle.getScore()));
+            }
+            if (subtitleInfoFormatLabel != null) {
+                subtitleInfoFormatLabel.setText(subtitle.getFormat().toUpperCase());
+            }
+        }
+    }
+    
+    /**
      * Show original filenames without searching for metadata
      * Called when entering metadata mode
      */
@@ -5081,9 +5263,9 @@ public class MainController {
             suggestedNamesListView.setItems(FXCollections.observableArrayList());
         }
         
-        // Initialize subtitle preview
-        if (subtitleFileCombo != null) {
-            subtitleFileCombo.setItems(FXCollections.observableArrayList());
+        // Initialize subtitle file list
+        if (subtitleFilesList != null) {
+            subtitleFilesList.getItems().clear();
         }
     }
     
@@ -5518,10 +5700,10 @@ public class MainController {
             return;
         }
         
-        // Get currently selected file from dropdown
-        String selectedDisplayName = subtitleFileCombo != null ? subtitleFileCombo.getValue() : null;
+        // Get currently selected file from list
+        String selectedDisplayName = subtitleFilesList != null ? subtitleFilesList.getSelectionModel().getSelectedItem() : null;
         if (selectedDisplayName == null || selectedDisplayName.isEmpty()) {
-            showWarning("No File Selected", "Please select a file from the dropdown.");
+            showWarning("No File Selected", "Please select a file from the list.");
             return;
         }
         
