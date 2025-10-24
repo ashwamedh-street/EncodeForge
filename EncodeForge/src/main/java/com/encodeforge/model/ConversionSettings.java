@@ -29,6 +29,7 @@ public class ConversionSettings {
     private String ffmpegPath = "ffmpeg";
     private String ffprobePath = "ffprobe";
     private boolean useEmbeddedFFmpeg = true;  // Default to using embedded FFmpeg
+    private String additionalFFmpegArgs = "";  // Custom FFmpeg arguments to append
     
     // General settings
     private String outputDirectory = "";
@@ -124,6 +125,9 @@ public class ConversionSettings {
     
     public String getFfprobePath() { return ffprobePath; }
     public void setFfprobePath(String ffprobePath) { this.ffprobePath = ffprobePath; }
+    
+    public String getAdditionalFFmpegArgs() { return additionalFFmpegArgs; }
+    public void setAdditionalFFmpegArgs(String additionalFFmpegArgs) { this.additionalFFmpegArgs = additionalFFmpegArgs; }
     
     public boolean isUseEmbeddedFFmpeg() { return useEmbeddedFFmpeg; }
     public void setUseEmbeddedFFmpeg(boolean useEmbeddedFFmpeg) { this.useEmbeddedFFmpeg = useEmbeddedFFmpeg; }
@@ -413,6 +417,7 @@ public class ConversionSettings {
         // FFmpeg paths
         json.addProperty("ffmpeg_path", ffmpegPath);
         json.addProperty("ffprobe_path", ffprobePath);
+        json.addProperty("additional_ffmpeg_args", additionalFFmpegArgs);
         
         // General
         json.addProperty("output_directory", outputDirectory);

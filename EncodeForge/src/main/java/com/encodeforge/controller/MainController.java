@@ -26,6 +26,7 @@ import javafx.scene.control.Tooltip;
 import javafx.scene.input.ClipboardContent;
 import javafx.scene.input.Dragboard;
 import javafx.scene.input.TransferMode;
+import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
@@ -157,9 +158,114 @@ public class MainController {
     @FXML private javafx.scene.layout.VBox renamerQuickSettings;
     
     // Mode Layouts
-    @FXML private javafx.scene.control.SplitPane encoderModeLayout;
-    @FXML private javafx.scene.control.SplitPane subtitleModeLayout;
-    @FXML private javafx.scene.control.SplitPane renamerModeLayout;
+    @FXML private HBox encoderModeLayout;
+    @FXML private VBox subtitleModeLayout;
+    @FXML private VBox renamerModeLayout;
+    @FXML private VBox settingsModeLayout;
+    @FXML private VBox logsModeLayout;
+    
+    // File Info Panel Components (Encoder Mode)
+    @FXML private VBox fileInfoPanel;
+    @FXML private VBox fileInfoContent;
+    @FXML private VBox filePreviewBox;
+    @FXML private javafx.scene.image.ImageView filePreviewImage;
+    @FXML private Label filePreviewPlaceholder;
+    @FXML private Label filePreviewLabel;
+    @FXML private Button toggleFileInfoButton;
+    @FXML private Label fileInfoNameLabel;
+    @FXML private Label fileInfoSizeLabel;
+    @FXML private Label fileInfoDurationLabel;
+    @FXML private Label fileInfoVideoCodecLabel;
+    @FXML private Label fileInfoResolutionLabel;
+    @FXML private Label fileInfoFrameRateLabel;
+    @FXML private Label fileInfoVideoBitrateLabel;
+    @FXML private Label fileInfoAudioCodecLabel;
+    @FXML private Label fileInfoAudioChannelsLabel;
+    @FXML private Label fileInfoSampleRateLabel;
+    @FXML private Label fileInfoAudioBitrateLabel;
+    @FXML private Label fileInfoPathLabel;
+    
+    // Settings Mode Components
+    @FXML private javafx.scene.control.TabPane settingsTabPane;
+    @FXML private VBox generalSettingsPanel;
+    @FXML private VBox encodingSettingsPanel;
+    @FXML private VBox subtitleSettingsPanel;
+    @FXML private VBox metadataSettingsPanel;
+    @FXML private VBox ffmpegSettingsPanel;
+    @FXML private VBox advancedSettingsPanel;
+    @FXML private VBox aboutSettingsPanel;
+    
+    // Settings - General Tab
+    @FXML private Label settingsLocationLabel;
+    @FXML private Button openSettingsFolderButton;
+    @FXML private TextField outputDirField;
+    @FXML private CheckBox deleteOriginalCheck;
+    @FXML private CheckBox overwriteCheck;
+    @FXML private CheckBox preserveDateCheck;
+    @FXML private Spinner<Integer> concurrentSpinner;
+    
+    // Settings - FFmpeg Tab
+    @FXML private Label ffmpegVersionLabel;
+    @FXML private TextField ffmpegPathField;
+    @FXML private TextField ffprobePathField;
+    @FXML private Button autoDetectButton;
+    @FXML private Button downloadFFmpegButton;
+    
+    // Settings - Encoding Tab
+    @FXML private ComboBox<String> outputFormatCombo;
+    @FXML private ComboBox<String> videoCodecCombo;
+    @FXML private CheckBox hwDecodeCheck;
+    @FXML private ComboBox<String> qualityPresetCombo;
+    @FXML private Spinner<Integer> crfSpinner;
+    @FXML private ComboBox<String> audioCodecCombo;
+    @FXML private ComboBox<String> audioBitrateCombo;
+    @FXML private CheckBox audioNormalizeCheck;
+    @FXML private RadioButton audioAllTracksRadio;
+    @FXML private RadioButton audioFirstTrackRadio;
+    @FXML private RadioButton audioLanguageRadio;
+    @FXML private TextField audioLanguageField;
+    
+    // Settings - Subtitles Tab
+    @FXML private CheckBox convertSubsCheck;
+    @FXML private ComboBox<String> subtitleFormatCombo;
+    @FXML private Label whisperStatusLabel;
+    @FXML private Label whisperInstalledModelsLabel;
+    @FXML private Button setupWhisperButton;
+    @FXML private Button uninstallWhisperButton;
+    @FXML private ComboBox<String> whisperModelCombo;
+    @FXML private Button downloadModelButton;
+    @FXML private TextField opensubtitlesUsernameField;
+    @FXML private PasswordField opensubtitlesPasswordField;
+    @FXML private Button validateOpenSubsButton;
+    @FXML private Label openSubsValidationLabel;
+    
+    // Settings - Metadata Tab
+    @FXML private TextField tmdbApiKeyField;
+    @FXML private Button validateTMDBButton;
+    @FXML private Label tmdbValidationLabel;
+    @FXML private TextField tvdbApiKeyField;
+    @FXML private Button validateTVDBButton;
+    @FXML private Label tvdbValidationLabel;
+    @FXML private TextField omdbApiKeyField;
+    @FXML private Button validateOMDBButton;
+    @FXML private Label omdbValidationLabel;
+    @FXML private TextField traktApiKeyField;
+    @FXML private Button validateTraktButton;
+    @FXML private Label traktValidationLabel;
+    @FXML private TextField fanartApiKeyField;
+    
+    // Settings - About Tab
+    @FXML private Label appVersionLabel;
+    
+    // Settings - Advanced Tab
+    @FXML private javafx.scene.control.TextArea additionalFFmpegArgsArea;
+    
+    // Logs Mode Components
+    @FXML private javafx.scene.control.TextArea logsTextArea;
+    @FXML private javafx.scene.control.ComboBox<String> logsLevelCombo;
+    @FXML private javafx.scene.control.CheckBox logsAutoScrollCheck;
+    @FXML private javafx.scene.control.Label logsStatsLabel;
+    @FXML private javafx.scene.control.Button logsButton;
     
     // Queue Split Pane (for resizable sections)
     @FXML private javafx.scene.control.SplitPane queueSplitPane;
@@ -384,6 +490,8 @@ public class MainController {
         setupPreviewTabs();
         setupSubtitleFileSelector();
         setupSubtitleProgressBar();
+        setupScrollSpeed();
+        // Settings tabs are now defined in FXML, no need for category setup
         
         // Set default mode to encoder
         handleEncoderMode();
@@ -555,17 +663,728 @@ public class MainController {
         log("Switched to metadata mode");
     }
     
+    @FXML
+    private void handleSettingsMode() {
+        currentMode = "settings";
+        hideAllQuickSettings();
+        showModeLayout(settingsModeLayout);
+        updateModeButtonSelection(settingsButton);
+        loadSettingsValues();
+        log("Switched to settings mode");
+    }
+    
+    @FXML
+    private void handleLogsMode() {
+        currentMode = "logs";
+        hideAllQuickSettings();
+        showModeLayout(logsModeLayout);
+        updateModeButtonSelection(logsButton);
+        initializeLogsMode();
+        log("Switched to logs mode");
+    }
+    
+    private void initializeLogsMode() {
+        if (logsTextArea == null) {
+            logger.warn("logsTextArea is null");
+            return;
+        }
+        
+        // Initialize log level combo
+        if (logsLevelCombo != null && logsLevelCombo.getItems().isEmpty()) {
+            logsLevelCombo.getItems().addAll("ALL", "DEBUG", "INFO", "WARN", "ERROR");
+            logsLevelCombo.setValue("INFO");
+            
+            // Add listener for log level changes
+            logsLevelCombo.valueProperty().addListener((obs, oldVal, newVal) -> {
+                updateLogLevel(newVal);
+            });
+        }
+        
+        // Set up live log streaming
+        setupLiveLogStreaming();
+        
+        // Initial message
+        appendLog("INFO", "Application logs initialized - streaming enabled");
+        if (logsStatsLabel != null) {
+            updateLogStats();
+        }
+    }
+    
+    private void setupLiveLogStreaming() {
+        // Create a custom appender that writes to our TextArea
+        ch.qos.logback.classic.Logger rootLogger = 
+            (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(ch.qos.logback.classic.Logger.ROOT_LOGGER_NAME);
+        
+        // Create custom appender
+        ch.qos.logback.core.AppenderBase<ch.qos.logback.classic.spi.ILoggingEvent> textAreaAppender = 
+            new ch.qos.logback.core.AppenderBase<ch.qos.logback.classic.spi.ILoggingEvent>() {
+            
+            @Override
+            protected void append(ch.qos.logback.classic.spi.ILoggingEvent event) {
+                if (logsTextArea == null) return;
+                
+                // Check if this log level should be shown
+                String currentLevel = logsLevelCombo != null ? logsLevelCombo.getValue() : "INFO";
+                if (!shouldShowLogLevel(event.getLevel().toString(), currentLevel)) {
+                    return;
+                }
+                
+                // Format log message
+                String levelStr = event.getLevel().toString();
+                String loggerName = event.getLoggerName();
+                String message = event.getFormattedMessage();
+                String timestamp = new java.text.SimpleDateFormat("HH:mm:ss.SSS").format(
+                    new java.util.Date(event.getTimeStamp())
+                );
+                
+                // Color code by level
+                String logLine = String.format("[%s] %-5s %s - %s%n", 
+                    timestamp, levelStr, getShortLoggerName(loggerName), message);
+                
+                // Append to TextArea on JavaFX thread
+                javafx.application.Platform.runLater(() -> {
+                    logsTextArea.appendText(logLine);
+                    updateLogStats();
+                    
+                    // Auto-scroll if enabled
+                    if (logsAutoScrollCheck != null && logsAutoScrollCheck.isSelected()) {
+                        logsTextArea.setScrollTop(Double.MAX_VALUE);
+                    }
+                });
+            }
+        };
+        
+        textAreaAppender.setContext(rootLogger.getLoggerContext());
+        textAreaAppender.start();
+        rootLogger.addAppender(textAreaAppender);
+    }
+    
+    private boolean shouldShowLogLevel(String eventLevel, String filterLevel) {
+        if (filterLevel == null || "ALL".equals(filterLevel)) {
+            return true;
+        }
+        
+        // Map levels to priority
+        java.util.Map<String, Integer> levelPriority = new java.util.HashMap<>();
+        levelPriority.put("DEBUG", 1);
+        levelPriority.put("INFO", 2);
+        levelPriority.put("WARN", 3);
+        levelPriority.put("ERROR", 4);
+        
+        int eventPriority = levelPriority.getOrDefault(eventLevel, 0);
+        int filterPriority = levelPriority.getOrDefault(filterLevel, 0);
+        
+        return eventPriority >= filterPriority;
+    }
+    
+    private String getShortLoggerName(String fullName) {
+        if (fullName == null || fullName.isEmpty()) {
+            return "";
+        }
+        
+        // Shorten logger name: com.encodeforge.controller.MainController -> c.e.c.MainController
+        String[] parts = fullName.split("\\.");
+        if (parts.length <= 2) {
+            return fullName;
+        }
+        
+        StringBuilder shortened = new StringBuilder();
+        for (int i = 0; i < parts.length - 1; i++) {
+            shortened.append(parts[i].charAt(0)).append(".");
+        }
+        shortened.append(parts[parts.length - 1]);
+        return shortened.toString();
+    }
+    
+    private void updateLogLevel(String newLevel) {
+        appendLog("INFO", "Log level changed to: " + newLevel);
+        // Refresh display by clearing and re-filtering (if we stored logs)
+        // For now, just note the change
+    }
+    
+    private void appendLog(String level, String message) {
+        if (logsTextArea != null) {
+            String timestamp = new java.text.SimpleDateFormat("HH:mm:ss.SSS").format(new java.util.Date());
+            String logLine = String.format("[%s] %-5s %s%n", timestamp, level, message);
+            logsTextArea.appendText(logLine);
+            updateLogStats();
+        }
+    }
+    
+    private void updateLogStats() {
+        if (logsTextArea != null && logsStatsLabel != null) {
+            String[] lines = logsTextArea.getText().split("\n");
+            int lineCount = lines.length;
+            logsStatsLabel.setText(lineCount + " lines");
+        }
+    }
+    
+    @FXML
+    private void handleCopyLogs() {
+        if (logsTextArea != null) {
+            javafx.scene.input.Clipboard clipboard = javafx.scene.input.Clipboard.getSystemClipboard();
+            javafx.scene.input.ClipboardContent content = new javafx.scene.input.ClipboardContent();
+            content.putString(logsTextArea.getText());
+            clipboard.setContent(content);
+            logger.info("Logs copied to clipboard");
+        }
+    }
+    
+    @FXML
+    private void handleClearAllLogs() {
+        if (logsTextArea != null) {
+            // Confirmation dialog
+            javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
+                javafx.scene.control.Alert.AlertType.CONFIRMATION);
+            alert.setTitle("Clear Logs");
+            alert.setHeaderText("Clear all logs?");
+            alert.setContentText("This action cannot be undone.");
+            
+            javafx.stage.Stage stage = (javafx.stage.Stage) alert.getDialogPane().getScene().getWindow();
+            stage.getIcons().add(new javafx.scene.image.Image(
+                getClass().getResourceAsStream("/icons/app-icon.png")));
+            
+            alert.showAndWait().ifPresent(response -> {
+                if (response == javafx.scene.control.ButtonType.OK) {
+                    logsTextArea.clear();
+                    if (logsStatsLabel != null) {
+                        logsStatsLabel.setText("0 lines");
+                    }
+                    logger.info("Logs cleared by user");
+                }
+            });
+        }
+    }
+    
+    @FXML
+    private void handleExportAllLogs() {
+        if (logsTextArea == null || logsTextArea.getText().isEmpty()) {
+            logger.warn("No logs to export");
+            return;
+        }
+        
+        javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
+        chooser.setTitle("Export Logs");
+        chooser.setInitialFileName("encodeforge-logs-" + 
+            new java.text.SimpleDateFormat("yyyyMMdd-HHmmss").format(new java.util.Date()) + ".txt");
+        chooser.getExtensionFilters().add(
+            new javafx.stage.FileChooser.ExtensionFilter("Text Files", "*.txt"));
+        
+        if (lastDirectory != null && lastDirectory.exists()) {
+            chooser.setInitialDirectory(lastDirectory);
+        }
+        
+        File file = chooser.showSaveDialog(logsTextArea.getScene().getWindow());
+        if (file != null) {
+            try {
+                java.nio.file.Files.write(file.toPath(), logsTextArea.getText().getBytes());
+                lastDirectory = file.getParentFile();
+                logger.info("Logs exported to: " + file.getAbsolutePath());
+                
+                // Show success notification
+                javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
+                    javafx.scene.control.Alert.AlertType.INFORMATION);
+                alert.setTitle("Export Successful");
+                alert.setHeaderText(null);
+                alert.setContentText("Logs exported successfully to:\n" + file.getAbsolutePath());
+                alert.showAndWait();
+            } catch (java.io.IOException e) {
+                logger.error("Failed to export logs: " + e.getMessage());
+                
+                javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
+                    javafx.scene.control.Alert.AlertType.ERROR);
+                alert.setTitle("Export Failed");
+                alert.setHeaderText("Failed to export logs");
+                alert.setContentText(e.getMessage());
+                alert.showAndWait();
+            }
+        }
+    }
+    
+    @FXML
+    private void handleToggleFileInfo() {
+        if (fileInfoPanel != null) {
+            boolean isVisible = fileInfoPanel.isVisible();
+            fileInfoPanel.setVisible(!isVisible);
+            fileInfoPanel.setManaged(!isVisible);
+        }
+    }
+    
+    private void updateFileInfoPanel(String filePath) {
+        if (fileInfoPanel == null) return;
+        
+        try {
+            // Reset all labels to default
+            fileInfoNameLabel.setText("—");
+            fileInfoSizeLabel.setText("—");
+            fileInfoDurationLabel.setText("—");
+            fileInfoVideoCodecLabel.setText("—");
+            fileInfoResolutionLabel.setText("—");
+            fileInfoFrameRateLabel.setText("—");
+            fileInfoVideoBitrateLabel.setText("—");
+            fileInfoAudioCodecLabel.setText("—");
+            fileInfoAudioChannelsLabel.setText("—");
+            fileInfoSampleRateLabel.setText("—");
+            fileInfoAudioBitrateLabel.setText("—");
+            fileInfoPathLabel.setText("—");
+            
+            // Reset preview to placeholder
+            if (filePreviewImage != null) {
+                filePreviewImage.setImage(null);
+                filePreviewImage.setVisible(false);
+                filePreviewImage.setManaged(false);
+            }
+            if (filePreviewPlaceholder != null) {
+                filePreviewPlaceholder.setVisible(true);
+                filePreviewPlaceholder.setManaged(true);
+            }
+            if (filePreviewLabel != null) {
+                filePreviewLabel.setText("No file selected");
+                filePreviewLabel.setVisible(true);
+                filePreviewLabel.setManaged(true);
+            }
+            
+            if (filePath == null || filePath.isEmpty()) {
+                return;
+            }
+            
+            java.io.File file = new java.io.File(filePath);
+            if (!file.exists()) {
+                return;
+            }
+            
+            // Set basic file info
+            fileInfoNameLabel.setText(file.getName());
+            fileInfoPathLabel.setText(filePath);
+            
+            // Format file size (reuse existing formatFileSize method)
+            long sizeBytes = file.length();
+            String sizeStr = formatFileSize(sizeBytes);
+            fileInfoSizeLabel.setText(sizeStr);
+            
+            // Update preview label
+            if (filePreviewLabel != null) {
+                filePreviewLabel.setText("Loading preview...");
+            }
+            
+            // Get video/audio metadata from FFprobe asynchronously
+            fetchMediaMetadata(filePath);
+            
+            // Extract thumbnail asynchronously
+            extractThumbnail(filePath);
+            
+        } catch (Exception e) {
+            logger.error("Error updating file info panel: " + e.getMessage());
+        }
+    }
+    
+    private void fetchMediaMetadata(String filePath) {
+        // Run FFprobe in background to avoid blocking UI
+        javafx.concurrent.Task<java.util.Map<String, String>> task = new javafx.concurrent.Task<>() {
+            @Override
+            protected java.util.Map<String, String> call() throws Exception {
+                return getMediaInfo(filePath);
+            }
+        };
+        
+        task.setOnSucceeded(e -> {
+            java.util.Map<String, String> info = task.getValue();
+            if (info != null && !info.isEmpty()) {
+                updateFileInfoLabels(info);
+            }
+        });
+        
+        task.setOnFailed(e -> {
+            Throwable ex = task.getException();
+            if (ex != null) {
+                logger.error("Failed to fetch media metadata: " + ex.getMessage());
+            }
+        });
+        
+        Thread thread = new Thread(task);
+        thread.setDaemon(true);
+        thread.start();
+    }
+    
+    private java.util.Map<String, String> getMediaInfo(String filePath) {
+        java.util.Map<String, String> info = new java.util.HashMap<>();
+        
+        try {
+            // Get FFprobe path from settings
+            String ffprobePath = settings.getFfprobePath();
+            if (ffprobePath == null || ffprobePath.isEmpty()) {
+                ffprobePath = "ffprobe";
+            }
+            
+            // Build FFprobe command for JSON output
+            java.util.List<String> command = java.util.Arrays.asList(
+                ffprobePath,
+                "-v", "quiet",
+                "-print_format", "json",
+                "-show_format",
+                "-show_streams",
+                filePath
+            );
+            
+            ProcessBuilder pb = new ProcessBuilder(command);
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            
+            // Read output
+            StringBuilder output = new StringBuilder();
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(process.getInputStream(), java.nio.charset.StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    output.append(line);
+                }
+            }
+            
+            int exitCode = process.waitFor();
+            if (exitCode != 0) {
+                logger.warn("FFprobe exited with code: " + exitCode);
+                return info;
+            }
+            
+            // Parse JSON output
+            String jsonStr = output.toString();
+            if (jsonStr.isEmpty()) {
+                return info;
+            }
+            
+            // Parse using Gson
+            com.google.gson.JsonObject json = com.google.gson.JsonParser.parseString(jsonStr).getAsJsonObject();
+            
+            // Get format info
+            long overallBitrate = 0;
+            if (json.has("format")) {
+                com.google.gson.JsonObject format = json.getAsJsonObject("format");
+                
+                // Duration
+                if (format.has("duration")) {
+                    double durationSec = format.get("duration").getAsDouble();
+                    info.put("duration", formatDuration((int)durationSec));
+                }
+                
+                // Overall bitrate (fallback for streams without individual bitrate)
+                if (format.has("bit_rate")) {
+                    try {
+                        overallBitrate = Long.parseLong(format.get("bit_rate").getAsString());
+                    } catch (Exception e) {
+                        // Ignore parse errors
+                    }
+                }
+            }
+            
+            // Get stream info
+            boolean hasVideoBitrate = false;
+            boolean hasAudioBitrate = false;
+            
+            if (json.has("streams")) {
+                com.google.gson.JsonArray streams = json.getAsJsonArray("streams");
+                
+                for (int i = 0; i < streams.size(); i++) {
+                    com.google.gson.JsonObject stream = streams.get(i).getAsJsonObject();
+                    String codecType = stream.has("codec_type") ? stream.get("codec_type").getAsString() : "";
+                    
+                    if ("video".equals(codecType) && !info.containsKey("video_codec")) {
+                        // Video stream
+                        if (stream.has("codec_name")) {
+                            String codec = stream.get("codec_name").getAsString().toUpperCase();
+                            info.put("video_codec", codec);
+                        }
+                        
+                        if (stream.has("width") && stream.has("height")) {
+                            int width = stream.get("width").getAsInt();
+                            int height = stream.get("height").getAsInt();
+                            info.put("resolution", width + "×" + height);
+                        }
+                        
+                        if (stream.has("r_frame_rate")) {
+                            String fpsStr = stream.get("r_frame_rate").getAsString();
+                            try {
+                                String[] parts = fpsStr.split("/");
+                                if (parts.length == 2) {
+                                    double fps = Double.parseDouble(parts[0]) / Double.parseDouble(parts[1]);
+                                    info.put("frame_rate", String.format("%.2f fps", fps));
+                                }
+                            } catch (Exception e) {
+                                // Ignore parse errors
+                            }
+                        }
+                        
+                        if (stream.has("bit_rate")) {
+                            try {
+                                long bitrate = Long.parseLong(stream.get("bit_rate").getAsString());
+                                if (bitrate > 0) {
+                                    info.put("video_bitrate", formatBitrate(bitrate));
+                                    hasVideoBitrate = true;
+                                }
+                            } catch (Exception e) {
+                                // Ignore parse errors
+                            }
+                        }
+                    }
+                    else if ("audio".equals(codecType) && !info.containsKey("audio_codec")) {
+                        // Audio stream
+                        if (stream.has("codec_name")) {
+                            String codec = stream.get("codec_name").getAsString().toUpperCase();
+                            info.put("audio_codec", codec);
+                        }
+                        
+                        if (stream.has("channels")) {
+                            int channels = stream.get("channels").getAsInt();
+                            String channelStr = channels == 1 ? "Mono" : 
+                                              channels == 2 ? "Stereo" :
+                                              channels + " channels";
+                            info.put("audio_channels", channelStr);
+                        }
+                        
+                        if (stream.has("sample_rate")) {
+                            int sampleRate = stream.get("sample_rate").getAsInt();
+                            info.put("sample_rate", (sampleRate / 1000) + " kHz");
+                        }
+                        
+                        if (stream.has("bit_rate")) {
+                            try {
+                                long bitrate = Long.parseLong(stream.get("bit_rate").getAsString());
+                                if (bitrate > 0) {
+                                    info.put("audio_bitrate", formatBitrate(bitrate));
+                                    hasAudioBitrate = true;
+                                }
+                            } catch (Exception e) {
+                                // Ignore parse errors
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // If we don't have individual stream bitrates, use overall bitrate as estimate
+            if (!hasVideoBitrate && overallBitrate > 0 && info.containsKey("video_codec")) {
+                // Estimate: assume 90% of bitrate is video if we have video
+                long estimatedVideoBitrate = (long)(overallBitrate * 0.9);
+                info.put("video_bitrate", formatBitrate(estimatedVideoBitrate) + " (est.)");
+            }
+            if (!hasAudioBitrate && overallBitrate > 0 && info.containsKey("audio_codec")) {
+                // Estimate: assume 10% of bitrate is audio if we have audio
+                long estimatedAudioBitrate = (long)(overallBitrate * 0.1);
+                info.put("audio_bitrate", formatBitrate(estimatedAudioBitrate) + " (est.)");
+            }
+            
+        } catch (Exception e) {
+            logger.error("Error getting media info: " + e.getMessage());
+        }
+        
+        return info;
+    }
+    
+    private void updateFileInfoLabels(java.util.Map<String, String> info) {
+        // Update UI on JavaFX thread
+        javafx.application.Platform.runLater(() -> {
+            if (info.containsKey("duration")) {
+                fileInfoDurationLabel.setText(info.get("duration"));
+            }
+            if (info.containsKey("video_codec")) {
+                fileInfoVideoCodecLabel.setText(info.get("video_codec"));
+            }
+            if (info.containsKey("resolution")) {
+                fileInfoResolutionLabel.setText(info.get("resolution"));
+            }
+            if (info.containsKey("frame_rate")) {
+                fileInfoFrameRateLabel.setText(info.get("frame_rate"));
+            }
+            if (info.containsKey("video_bitrate")) {
+                fileInfoVideoBitrateLabel.setText(info.get("video_bitrate"));
+            }
+            if (info.containsKey("audio_codec")) {
+                fileInfoAudioCodecLabel.setText(info.get("audio_codec"));
+            }
+            if (info.containsKey("audio_channels")) {
+                fileInfoAudioChannelsLabel.setText(info.get("audio_channels"));
+            }
+            if (info.containsKey("sample_rate")) {
+                fileInfoSampleRateLabel.setText(info.get("sample_rate"));
+            }
+            if (info.containsKey("audio_bitrate")) {
+                fileInfoAudioBitrateLabel.setText(info.get("audio_bitrate"));
+            }
+        });
+    }
+    
+    private String formatBitrate(long bitrate) {
+        if (bitrate < 1000) {
+            return bitrate + " bps";
+        } else if (bitrate < 1000000) {
+            return String.format("%.1f kbps", bitrate / 1000.0);
+        } else {
+            return String.format("%.2f Mbps", bitrate / 1000000.0);
+        }
+    }
+    
+    private String formatDuration(int totalSeconds) {
+        int hours = totalSeconds / 3600;
+        int minutes = (totalSeconds % 3600) / 60;
+        int seconds = totalSeconds % 60;
+        
+        if (hours > 0) {
+            return String.format("%d:%02d:%02d", hours, minutes, seconds);
+        } else {
+            return String.format("%d:%02d", minutes, seconds);
+        }
+    }
+    
+    private void extractThumbnail(String filePath) {
+        // Run FFmpeg in background to extract thumbnail
+        javafx.concurrent.Task<javafx.scene.image.Image> task = new javafx.concurrent.Task<>() {
+            @Override
+            protected javafx.scene.image.Image call() throws Exception {
+                return generateThumbnail(filePath);
+            }
+        };
+        
+        task.setOnSucceeded(e -> {
+            javafx.scene.image.Image thumbnail = task.getValue();
+            if (thumbnail != null && filePreviewImage != null) {
+                javafx.application.Platform.runLater(() -> {
+                    filePreviewImage.setImage(thumbnail);
+                    filePreviewImage.setVisible(true);
+                    filePreviewImage.setManaged(true);
+                    
+                    // Hide placeholder
+                    if (filePreviewPlaceholder != null) {
+                        filePreviewPlaceholder.setVisible(false);
+                        filePreviewPlaceholder.setManaged(false);
+                    }
+                    if (filePreviewLabel != null) {
+                        filePreviewLabel.setVisible(false);
+                        filePreviewLabel.setManaged(false);
+                    }
+                });
+            } else {
+                // Failed to generate thumbnail
+                javafx.application.Platform.runLater(() -> {
+                    if (filePreviewLabel != null) {
+                        filePreviewLabel.setText("Preview unavailable");
+                    }
+                });
+            }
+        });
+        
+        task.setOnFailed(e -> {
+            Throwable ex = task.getException();
+            if (ex != null) {
+                logger.debug("Failed to generate thumbnail: " + ex.getMessage());
+            }
+            javafx.application.Platform.runLater(() -> {
+                if (filePreviewLabel != null) {
+                    filePreviewLabel.setText("Preview unavailable");
+                }
+            });
+        });
+        
+        Thread thread = new Thread(task);
+        thread.setDaemon(true);
+        thread.start();
+    }
+    
+    private javafx.scene.image.Image generateThumbnail(String filePath) {
+        java.io.File tempThumb = null;
+        try {
+            // Get FFmpeg path from settings
+            String ffmpegPath = settings.getFfmpegPath();
+            if (ffmpegPath == null || ffmpegPath.isEmpty()) {
+                ffmpegPath = "ffmpeg";
+            }
+            
+            // Create temp file for thumbnail
+            tempThumb = java.io.File.createTempFile("encodeforge_thumb_", ".jpg");
+            tempThumb.deleteOnExit();
+            
+            // Extract frame at 10% of video duration
+            java.util.List<String> command = java.util.Arrays.asList(
+                ffmpegPath,
+                "-ss", "00:00:03",  // Seek to 3 seconds
+                "-i", filePath,
+                "-vframes", "1",     // Extract 1 frame
+                "-vf", "scale=240:-1", // Scale to 240px width, maintain aspect ratio
+                "-y",                // Overwrite output file
+                tempThumb.getAbsolutePath()
+            );
+            
+            ProcessBuilder pb = new ProcessBuilder(command);
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            
+            // Consume output to prevent blocking
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(process.getInputStream()))) {
+                while (reader.readLine() != null) {
+                    // Just consume the output
+                }
+            }
+            
+            int exitCode = process.waitFor();
+            if (exitCode != 0 || !tempThumb.exists() || tempThumb.length() == 0) {
+                logger.debug("FFmpeg thumbnail extraction failed with exit code: " + exitCode);
+                return null;
+            }
+            
+            // Load image from temp file
+            javafx.scene.image.Image image = new javafx.scene.image.Image(
+                tempThumb.toURI().toString(),
+                240,  // requested width
+                135,  // requested height
+                true, // preserve ratio
+                true  // smooth scaling
+            );
+            
+            // Check if image loaded successfully
+            if (image.isError()) {
+                logger.debug("Failed to load thumbnail image");
+                return null;
+            }
+            
+            return image;
+            
+        } catch (Exception e) {
+            logger.debug("Error generating thumbnail: " + e.getMessage());
+            return null;
+        } finally {
+            // Clean up temp file after a delay (image might still be loading)
+            if (tempThumb != null) {
+                final java.io.File finalTempThumb = tempThumb;
+                javafx.application.Platform.runLater(() -> {
+                    try {
+                        Thread.sleep(2000); // Wait 2 seconds
+                        if (finalTempThumb.exists()) {
+                            finalTempThumb.delete();
+                        }
+                    } catch (Exception e) {
+                        // Ignore
+                    }
+                });
+            }
+        }
+    }
+    
     private void updateModeButtonSelection(Button selectedButton) {
         // Remove selected style from all mode buttons
         encoderModeButton.getStyleClass().removeAll("selected");
         subtitleModeButton.getStyleClass().removeAll("selected");
         renamerModeButton.getStyleClass().removeAll("selected");
+        if (settingsButton != null) {
+            settingsButton.getStyleClass().removeAll("selected");
+        }
+        if (logsButton != null) {
+            logsButton.getStyleClass().removeAll("selected");
+        }
         
         // Add selected style to the chosen button
         selectedButton.getStyleClass().add("selected");
     }
     
-    private void showModeLayout(javafx.scene.control.SplitPane layout) {
+    private void showModeLayout(javafx.scene.layout.Region layout) {
         // Hide all layouts
         if (encoderModeLayout != null) {
             encoderModeLayout.setVisible(false);
@@ -579,6 +1398,14 @@ public class MainController {
             renamerModeLayout.setVisible(false);
             renamerModeLayout.setManaged(false);
         }
+        if (settingsModeLayout != null) {
+            settingsModeLayout.setVisible(false);
+            settingsModeLayout.setManaged(false);
+        }
+        if (logsModeLayout != null) {
+            logsModeLayout.setVisible(false);
+            logsModeLayout.setManaged(false);
+        }
         
         // Show selected layout
         if (layout != null) {
@@ -587,8 +1414,7 @@ public class MainController {
         }
     }
     
-    private void showModePanel(javafx.scene.layout.Region panel) {
-        // Hide all panels
+    private void hideAllQuickSettings() {
         if (encoderQuickSettings != null) {
             encoderQuickSettings.setVisible(false);
             encoderQuickSettings.setManaged(false);
@@ -601,6 +1427,10 @@ public class MainController {
             renamerQuickSettings.setVisible(false);
             renamerQuickSettings.setManaged(false);
         }
+    }
+    
+    private void showModePanel(javafx.scene.layout.Region panel) {
+        hideAllQuickSettings();
         
         // Show the selected panel
         if (panel != null) {
@@ -608,6 +1438,352 @@ public class MainController {
             panel.setManaged(true);
         }
     }
+    
+    /**
+     * Settings Mode Methods
+     */
+    private void loadSettingsValues() {
+        // Load General Settings
+        if (outputDirField != null) {
+            outputDirField.setText(settings.getOutputDirectory() != null ? settings.getOutputDirectory() : "");
+        }
+        if (deleteOriginalCheck != null) {
+            deleteOriginalCheck.setSelected(settings.isDeleteOriginal());
+        }
+        if (overwriteCheck != null) {
+            overwriteCheck.setSelected(settings.isOverwriteExisting());
+        }
+        if (preserveDateCheck != null) {
+            preserveDateCheck.setSelected(settings.isPreserveDate());
+        }
+        if (concurrentSpinner != null) {
+            concurrentSpinner.setValueFactory(new javafx.scene.control.SpinnerValueFactory.IntegerSpinnerValueFactory(1, 8, settings.getConcurrentConversions()));
+        }
+        if (settingsLocationLabel != null) {
+            settingsLocationLabel.setText(com.encodeforge.util.PathManager.getBaseDir().toString());
+        }
+        
+        // Load Encoding Settings
+        if (outputFormatCombo != null && outputFormatCombo.getItems().isEmpty()) {
+            outputFormatCombo.getItems().addAll("mp4", "mkv", "avi", "mov", "webm");
+            outputFormatCombo.setValue(settings.getOutputFormat());
+        }
+        if (videoCodecCombo != null && videoCodecCombo.getItems().isEmpty()) {
+            videoCodecCombo.getItems().addAll("h264", "h265", "vp9", "av1", "copy");
+            videoCodecCombo.setValue(settings.getVideoCodec());
+        }
+        if (hwDecodeCheck != null) {
+            hwDecodeCheck.setSelected(settings.isHardwareDecoding());
+        }
+        if (qualityPresetCombo != null && qualityPresetCombo.getItems().isEmpty()) {
+            qualityPresetCombo.getItems().addAll("ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower", "veryslow");
+            qualityPresetCombo.setValue(settings.getQualityPreset());
+        }
+        if (crfSpinner != null) {
+            crfSpinner.setValueFactory(new javafx.scene.control.SpinnerValueFactory.IntegerSpinnerValueFactory(0, 51, settings.getCrfValue()));
+        }
+        if (audioCodecCombo != null && audioCodecCombo.getItems().isEmpty()) {
+            audioCodecCombo.getItems().addAll("aac", "mp3", "opus", "vorbis", "copy");
+            audioCodecCombo.setValue(settings.getAudioCodec());
+        }
+        if (audioBitrateCombo != null && audioBitrateCombo.getItems().isEmpty()) {
+            audioBitrateCombo.getItems().addAll("128k", "192k", "256k", "320k");
+            audioBitrateCombo.setValue(settings.getAudioBitrate());
+        }
+        if (audioNormalizeCheck != null) {
+            audioNormalizeCheck.setSelected(false); // Not in settings yet
+        }
+        
+        // Load Subtitle Settings
+        if (convertSubsCheck != null) {
+            convertSubsCheck.setSelected(settings.isConvertSubtitles());
+        }
+        if (subtitleFormatCombo != null && subtitleFormatCombo.getItems().isEmpty()) {
+            subtitleFormatCombo.getItems().addAll("srt", "ass", "vtt", "sub");
+            subtitleFormatCombo.setValue(settings.getSubtitleFormat());
+        }
+        if (whisperModelCombo != null && whisperModelCombo.getItems().isEmpty()) {
+            whisperModelCombo.getItems().addAll("tiny", "base", "small", "medium", "large");
+            whisperModelCombo.setValue("base");
+        }
+        
+        // Load FFmpeg Settings
+        if (ffmpegVersionLabel != null) {
+            ffmpegVersionLabel.setText("FFmpeg: Checking...");
+        }
+        if (ffmpegPathField != null) {
+            ffmpegPathField.setText(settings.getFfmpegPath() != null ? settings.getFfmpegPath() : "");
+        }
+        if (ffprobePathField != null) {
+            ffprobePathField.setText(settings.getFfprobePath() != null ? settings.getFfprobePath() : "");
+        }
+        
+        // Auto-detect FFmpeg in background if paths are empty
+        if ((settings.getFfmpegPath() == null || settings.getFfmpegPath().isEmpty()) && pythonBridge != null) {
+            new Thread(() -> {
+                try {
+                    if (pythonBridge.isRunning()) {
+                        JsonObject result = pythonBridge.checkFFmpeg();
+                        Platform.runLater(() -> {
+                            if (result != null && result.has("available") && result.get("available").getAsBoolean()) {
+                                String ffmpegPath = result.has("ffmpeg_path") ? result.get("ffmpeg_path").getAsString() : "";
+                                String ffprobePath = result.has("ffprobe_path") ? result.get("ffprobe_path").getAsString() : "";
+                                String version = result.has("version") ? result.get("version").getAsString() : "Unknown";
+                                
+                                if (!ffmpegPath.isEmpty() && ffmpegPathField != null) {
+                                    ffmpegPathField.setText(ffmpegPath);
+                                    settings.setFfmpegPath(ffmpegPath);
+                                }
+                                if (!ffprobePath.isEmpty() && ffprobePathField != null) {
+                                    ffprobePathField.setText(ffprobePath);
+                                    settings.setFfprobePath(ffprobePath);
+                                }
+                                if (ffmpegVersionLabel != null) {
+                                    ffmpegVersionLabel.setText("FFmpeg: " + version);
+                                }
+                                settings.save();
+                            } else if (ffmpegVersionLabel != null) {
+                                ffmpegVersionLabel.setText("FFmpeg: Not found");
+                            }
+                        });
+                    }
+                } catch (Exception e) {
+                    logger.error("Error auto-detecting FFmpeg", e);
+                    Platform.runLater(() -> {
+                        if (ffmpegVersionLabel != null) {
+                            ffmpegVersionLabel.setText("FFmpeg: Detection failed");
+                        }
+                    });
+                }
+            }).start();
+        } else if (ffmpegVersionLabel != null && settings.getFfmpegPath() != null) {
+            // If path exists, show it's set (actual version check would need to run FFmpeg)
+            ffmpegVersionLabel.setText("FFmpeg: Configured");
+        }
+        
+        // Load Metadata API Keys
+        if (tmdbApiKeyField != null) {
+            tmdbApiKeyField.setText(settings.getTmdbApiKey() != null ? settings.getTmdbApiKey() : "");
+        }
+        if (tvdbApiKeyField != null) {
+            tvdbApiKeyField.setText(settings.getTvdbApiKey() != null ? settings.getTvdbApiKey() : "");
+        }
+        if (omdbApiKeyField != null) {
+            omdbApiKeyField.setText(settings.getOmdbApiKey() != null ? settings.getOmdbApiKey() : "");
+        }
+        
+        // Load About
+        if (appVersionLabel != null) {
+            appVersionLabel.setText("Version 0.4.0");
+        }
+        
+        // Load Advanced
+        if (additionalFFmpegArgsArea != null) {
+            additionalFFmpegArgsArea.setText(settings.getAdditionalFFmpegArgs() != null ? settings.getAdditionalFFmpegArgs() : "");
+        }
+        
+        // Add listeners to save settings on change
+        addSettingsChangeListeners();
+    }
+    
+    private void addSettingsChangeListeners() {
+        // General Settings
+        if (outputDirField != null) {
+            outputDirField.textProperty().addListener((obs, old, newVal) -> {
+                settings.setOutputDirectory(newVal.isEmpty() ? null : newVal);
+                settings.save();
+            });
+        }
+        if (deleteOriginalCheck != null) {
+            deleteOriginalCheck.selectedProperty().addListener((obs, old, newVal) -> {
+                settings.setDeleteOriginal(newVal);
+                settings.save();
+            });
+        }
+        if (overwriteCheck != null) {
+            overwriteCheck.selectedProperty().addListener((obs, old, newVal) -> {
+                settings.setOverwriteExisting(newVal);
+                settings.save();
+            });
+        }
+        if (preserveDateCheck != null) {
+            preserveDateCheck.selectedProperty().addListener((obs, old, newVal) -> {
+                settings.setPreserveDate(newVal);
+                settings.save();
+            });
+        }
+        
+        // Encoding Settings
+        if (outputFormatCombo != null) {
+            outputFormatCombo.valueProperty().addListener((obs, old, newVal) -> {
+                if (newVal != null) {
+                    settings.setOutputFormat(newVal);
+                    settings.save();
+                }
+            });
+        }
+        if (videoCodecCombo != null) {
+            videoCodecCombo.valueProperty().addListener((obs, old, newVal) -> {
+                if (newVal != null) {
+                    settings.setVideoCodec(newVal);
+                    settings.save();
+                }
+            });
+        }
+        if (hwDecodeCheck != null) {
+            hwDecodeCheck.selectedProperty().addListener((obs, old, newVal) -> {
+                settings.setHardwareDecoding(newVal);
+                settings.save();
+            });
+        }
+        
+        // Subtitle Settings
+        if (convertSubsCheck != null) {
+            convertSubsCheck.selectedProperty().addListener((obs, old, newVal) -> {
+                settings.setConvertSubtitles(newVal);
+                settings.save();
+            });
+        }
+        
+        // Advanced Settings
+        if (additionalFFmpegArgsArea != null) {
+            additionalFFmpegArgsArea.textProperty().addListener((obs, old, newVal) -> {
+                settings.setAdditionalFFmpegArgs(newVal);
+                settings.save();
+            });
+        }
+    }
+    
+    private VBox createGeneralSettings() {
+        VBox panel = new VBox(16);
+        panel.getStyleClass().add("settings-panel");
+        
+        Label title = new Label("General Settings");
+        title.getStyleClass().add("settings-category-title");
+        
+        // TODO: Add general settings controls
+        Label placeholder = new Label("General settings panel - Coming soon");
+        placeholder.getStyleClass().add("settings-description");
+        
+        panel.getChildren().addAll(title, placeholder);
+        return panel;
+    }
+    
+    private VBox createEncodingSettings() {
+        VBox panel = new VBox(16);
+        panel.getStyleClass().add("settings-panel");
+        
+        Label title = new Label("Encoding Settings");
+        title.getStyleClass().add("settings-category-title");
+        
+        Label placeholder = new Label("Encoding settings panel - Coming soon");
+        placeholder.getStyleClass().add("settings-description");
+        
+        panel.getChildren().addAll(title, placeholder);
+        return panel;
+    }
+    
+    private VBox createSubtitleSettings() {
+        VBox panel = new VBox(16);
+        panel.getStyleClass().add("settings-panel");
+        
+        Label title = new Label("Subtitle Settings");
+        title.getStyleClass().add("settings-category-title");
+        
+        Label placeholder = new Label("Subtitle settings panel - Coming soon");
+        placeholder.getStyleClass().add("settings-description");
+        
+        panel.getChildren().addAll(title, placeholder);
+        return panel;
+    }
+    
+    private VBox createMetadataSettings() {
+        VBox panel = new VBox(16);
+        panel.getStyleClass().add("settings-panel");
+        
+        Label title = new Label("Metadata Settings");
+        title.getStyleClass().add("settings-category-title");
+        
+        Label placeholder = new Label("Metadata settings panel - Coming soon");
+        placeholder.getStyleClass().add("settings-description");
+        
+        panel.getChildren().addAll(title, placeholder);
+        return panel;
+    }
+    
+    private VBox createFFmpegSettings() {
+        VBox panel = new VBox(16);
+        panel.getStyleClass().add("settings-panel");
+        
+        Label title = new Label("FFmpeg Settings");
+        title.getStyleClass().add("settings-category-title");
+        
+        Label placeholder = new Label("FFmpeg settings panel - Coming soon");
+        placeholder.getStyleClass().add("settings-description");
+        
+        panel.getChildren().addAll(title, placeholder);
+        return panel;
+    }
+    
+    private VBox createAdvancedSettings() {
+        VBox panel = new VBox(16);
+        panel.getStyleClass().add("settings-panel");
+        
+        Label title = new Label("Advanced Settings");
+        title.getStyleClass().add("settings-category-title");
+        
+        Label placeholder = new Label("Advanced settings panel - Coming soon");
+        placeholder.getStyleClass().add("settings-description");
+        
+        panel.getChildren().addAll(title, placeholder);
+        return panel;
+    }
+    
+    private VBox createAboutPanel() {
+        VBox panel = new VBox(16);
+        panel.getStyleClass().add("settings-panel");
+        
+        Label title = new Label("About EncodeForge");
+        title.getStyleClass().add("settings-category-title");
+        
+        Label version = new Label("Version 0.4.0");
+        version.getStyleClass().add("settings-version");
+        
+        Label description = new Label("A powerful media encoding and metadata management tool");
+        description.getStyleClass().add("settings-description");
+        
+        HBox buttonGroup = new HBox(12);
+        buttonGroup.getStyleClass().add("settings-button-group");
+        
+        Button viewLogs = new Button("View Logs Folder");
+        viewLogs.setOnAction(e -> openLogsFolder());
+        
+        buttonGroup.getChildren().addAll(viewLogs);
+        
+        panel.getChildren().addAll(title, version, description, buttonGroup);
+        return panel;
+    }
+    
+    private void openLogsFolder() {
+        try {
+            Path logsPath = Paths.get("logs");
+            if (Files.exists(logsPath)) {
+                // Use ProcessBuilder to open file manager
+                if (System.getProperty("os.name").toLowerCase().contains("win")) {
+                    new ProcessBuilder("explorer", logsPath.toAbsolutePath().toString()).start();
+                } else if (System.getProperty("os.name").toLowerCase().contains("mac")) {
+                    new ProcessBuilder("open", logsPath.toAbsolutePath().toString()).start();
+                } else {
+                    new ProcessBuilder("xdg-open", logsPath.toAbsolutePath().toString()).start();
+                }
+            }
+        } catch (IOException e) {
+            logger.error("Failed to open logs folder", e);
+        }
+    }
+    
+    // Settings categories no longer needed with TabPane
+    // Tabs are defined in FXML
     
     /**
      * Update FFmpeg status display in sidebar
@@ -979,6 +2155,42 @@ public class MainController {
             updateQueueCounts();
         });
         startButton.setDisable(true);
+    }
+    
+    private void setupScrollSpeed() {
+        // Increase scroll speed for all ScrollPanes by finding them in the scene
+        javafx.application.Platform.runLater(() -> {
+            if (generalSettingsPanel != null && generalSettingsPanel.getScene() != null) {
+                javafx.scene.Node root = generalSettingsPanel.getScene().getRoot();
+                increaseScrollSpeed(root);
+            }
+        });
+    }
+    
+    private void increaseScrollSpeed(javafx.scene.Node node) {
+        if (node instanceof javafx.scene.control.ScrollPane) {
+            javafx.scene.control.ScrollPane scrollPane = (javafx.scene.control.ScrollPane) node;
+            
+            // Add scroll event filter to increase speed
+            scrollPane.addEventFilter(javafx.scene.input.ScrollEvent.SCROLL, event -> {
+                if (event.getDeltaY() != 0) {
+                    // Multiply scroll by 3 for faster scrolling
+                    double deltaY = event.getDeltaY() * 3.0;
+                    double height = scrollPane.getContent().getBoundsInLocal().getHeight();
+                    double vvalue = scrollPane.getVvalue();
+                    scrollPane.setVvalue(vvalue + -deltaY / height);
+                    event.consume();
+                }
+            });
+        }
+        
+        // Recursively check children
+        if (node instanceof javafx.scene.Parent) {
+            javafx.scene.Parent parent = (javafx.scene.Parent) node;
+            for (javafx.scene.Node child : parent.getChildrenUnmodifiable()) {
+                increaseScrollSpeed(child);
+            }
+        }
     }
     
     @FXML
@@ -1818,54 +3030,8 @@ public class MainController {
     
     @FXML
     private void handleSettings() {
-        openSettings(null);
-    }
-    
-    private void openSettings(String category) {
-        try {
-            FXMLLoader loader = new FXMLLoader(getClass().getResource("/fxml/SettingsDialog.fxml"));
-            SettingsController controller = new SettingsController();
-            loader.setController(controller);
-            
-            Scene scene = new Scene(loader.load());
-            scene.getStylesheets().add(getClass().getResource("/styles/application.css").toExternalForm());
-            
-            Stage dialogStage = new Stage();
-            dialogStage.initStyle(javafx.stage.StageStyle.UNDECORATED);
-            dialogStage.setTitle("Settings - EncodeForge");
-            dialogStage.initModality(Modality.WINDOW_MODAL);
-            dialogStage.initOwner(settingsButton.getScene().getWindow());
-            dialogStage.setScene(scene);
-            
-            controller.setDialogStage(dialogStage);
-            controller.setSettings(settings);
-            controller.setPythonBridge(pythonBridge);
-            controller.setProcessPool(processPool);  // Pass process pool for non-blocking operations
-            controller.setDependencyManager(dependencyManager);  // Pass DependencyManager for FFmpeg detection
-            controller.setStatusManager(statusManager);  // Pass StatusManager for status display
-            
-            // Navigate to specific category if provided
-            if (category != null) {
-                controller.navigateToCategory(category);
-            }
-            
-            dialogStage.showAndWait();
-            
-            if (controller.isApplied()) {
-                // Save settings to disk
-                if (settings.save()) {
-                    log("Settings updated and saved successfully");
-                } else {
-                    log("ERROR: Failed to save settings");
-                }
-                // Refresh all provider status after settings change
-                CompletableFuture.runAsync(this::updateAllStatus);
-            }
-            
-        } catch (IOException e) {
-            logger.error("Error opening settings dialog", e);
-            showError("Error", "Failed to open settings: " + e.getMessage());
-        }
+        // Switch to Settings mode - settings are now integrated in MainView
+        handleSettingsMode();
     }
     
     @FXML
@@ -2287,6 +3453,132 @@ public class MainController {
         } catch (Exception e) {
             logger.error("Error opening settings folder", e);
         }
+    }
+    
+    @FXML
+    private void handleBrowseOutputDir() {
+        javafx.stage.DirectoryChooser chooser = new javafx.stage.DirectoryChooser();
+        chooser.setTitle("Select Default Output Directory");
+        java.io.File selected = chooser.showDialog(outputDirField.getScene().getWindow());
+        if (selected != null) {
+            outputDirField.setText(selected.getAbsolutePath());
+        }
+    }
+    
+    @FXML
+    private void handleBrowseFFmpeg() {
+        javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
+        chooser.setTitle("Select FFmpeg Executable");
+        java.io.File selected = chooser.showOpenDialog(ffmpegPathField.getScene().getWindow());
+        if (selected != null) {
+            ffmpegPathField.setText(selected.getAbsolutePath());
+        }
+    }
+    
+    @FXML
+    private void handleBrowseFFprobe() {
+        javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
+        chooser.setTitle("Select FFprobe Executable");
+        java.io.File selected = chooser.showOpenDialog(ffprobePathField.getScene().getWindow());
+        if (selected != null) {
+            ffprobePathField.setText(selected.getAbsolutePath());
+        }
+    }
+    
+    @FXML
+    private void handleAutoDetect() {
+        logger.info("Auto-detecting FFmpeg...");
+        ffmpegVersionLabel.setText("FFmpeg: Checking...");
+        
+        // Run in background to avoid blocking UI
+        new Thread(() -> {
+            try {
+                if (pythonBridge != null && pythonBridge.isRunning()) {
+                    JsonObject result = pythonBridge.checkFFmpeg();
+                    
+                    Platform.runLater(() -> {
+                        if (result != null && result.has("available") && result.get("available").getAsBoolean()) {
+                            String ffmpegPath = result.has("ffmpeg_path") ? result.get("ffmpeg_path").getAsString() : "";
+                            String ffprobePath = result.has("ffprobe_path") ? result.get("ffprobe_path").getAsString() : "";
+                            String version = result.has("version") ? result.get("version").getAsString() : "Unknown";
+                            
+                            if (!ffmpegPath.isEmpty()) {
+                                ffmpegPathField.setText(ffmpegPath);
+                                settings.setFfmpegPath(ffmpegPath);
+                            }
+                            if (!ffprobePath.isEmpty()) {
+                                ffprobePathField.setText(ffprobePath);
+                                settings.setFfprobePath(ffprobePath);
+                            }
+                            
+                            ffmpegVersionLabel.setText("FFmpeg: " + version);
+                            settings.save();
+                            logger.info("FFmpeg detected: " + version + " at " + ffmpegPath);
+                        } else {
+                            ffmpegVersionLabel.setText("FFmpeg: Not found");
+                            logger.warn("FFmpeg not found on system PATH");
+                        }
+                    });
+                } else {
+                    Platform.runLater(() -> {
+                        ffmpegVersionLabel.setText("FFmpeg: Python bridge not ready");
+                    });
+                }
+            } catch (Exception e) {
+                logger.error("Error detecting FFmpeg", e);
+                Platform.runLater(() -> {
+                    ffmpegVersionLabel.setText("FFmpeg: Detection failed");
+                });
+            }
+        }).start();
+    }
+    
+    @FXML
+    private void handleSetupWhisper() {
+        // TODO: Implement Whisper setup
+        logger.info("Setup Whisper requested");
+    }
+    
+    @FXML
+    private void handleUninstallWhisper() {
+        // TODO: Implement Whisper uninstall
+        logger.info("Uninstall Whisper requested");
+    }
+    
+    @FXML
+    private void handleDownloadWhisperModel() {
+        // TODO: Implement Whisper model download
+        logger.info("Download Whisper model requested");
+    }
+    
+    @FXML
+    private void handleValidateOpenSubtitles() {
+        // TODO: Implement OpenSubtitles validation
+        logger.info("Validate OpenSubtitles requested");
+    }
+    
+    @FXML
+    private void handleValidateTMDB() {
+        // TODO: Implement TMDB validation
+        logger.info("Validate TMDB requested");
+    }
+    
+    @FXML
+    private void handleValidateTVDB() {
+        // TODO: Implement TVDB validation
+        logger.info("Validate TVDB requested");
+    }
+    
+    @FXML
+    private void handleValidateOMDB() {
+        // TODO: Implement OMDB validation
+        logger.info("Validate OMDB requested");
+    }
+    
+    @FXML
+    private void handleValidateTrakt() {
+        // TODO: Implement Trakt validation
+        logger.info("Validate Trakt requested");
     }
     
     @FXML
@@ -3147,73 +4439,13 @@ public class MainController {
     
     private void updateFileInfo(ConversionJob job) {
         if (job == null) {
-            fileInfoLabel.setText("Select a file to view details");
-            if (mediaInfoSection != null) {
-                mediaInfoSection.setVisible(false);
-                mediaInfoSection.setManaged(false);
-            }
+            // Clear file info panel
+            updateFileInfoPanel(null);
             return;
         }
         
-        fileInfoLabel.setText(String.format(
-            "File: %s\nPath: %s\nSize: %s\nStatus: %s",
-            job.getFileName(),
-            job.getInputPath(),
-            job.getSizeString(),
-            job.getStatus()
-        ));
-        
-        // Show media info section and populate with detailed track info
-        if (mediaInfoSection != null) {
-            mediaInfoSection.setVisible(true);
-            mediaInfoSection.setManaged(true);
-        }
-        
-        // Fetch detailed media info from Python (non-blocking)
-        new Thread(() -> {
-            try {
-                // Add a small delay if processing to avoid conflicts
-                if (isProcessing) {
-                    Thread.sleep(500);
-                }
-                
-                JsonObject request = new JsonObject();
-                request.addProperty("action", "get_media_info");
-                request.addProperty("file_path", job.getInputPath());
-                
-                // Use a shorter timeout for media info during processing
-                JsonObject response;
-                if (isProcessing) {
-                    // Quick timeout during processing to avoid blocking
-                    response = pythonBridge.sendCommand(request);
-                } else {
-                    response = pythonBridge.sendCommand(request);
-                }
-                
-                Platform.runLater(() -> {
-                    if (response.has("status") && "success".equals(response.get("status").getAsString())) {
-                        updateMediaTracks(response);
-                    } else {
-                        // Show placeholder info during processing
-                        if (isProcessing) {
-                            showProcessingPlaceholder();
-                        } else {
-                            // Fallback to basic info
-                            if (videoTracksListView != null) videoTracksListView.getItems().clear();
-                            if (audioTracksListView != null) audioTracksListView.getItems().clear();
-                            if (subtitleTracksListView != null) subtitleTracksListView.getItems().clear();
-                        }
-                    }
-                });
-            } catch (Exception e) {
-                logger.debug("Could not get media info (possibly due to processing): " + e.getMessage());
-                Platform.runLater(() -> {
-                    if (isProcessing) {
-                        showProcessingPlaceholder();
-                    }
-                });
-            }
-        }).start();
+        // Update the new file info panel with the selected job's file path
+        updateFileInfoPanel(job.getInputPath());
     }
     
     private void showProcessingPlaceholder() {
@@ -4111,12 +5343,12 @@ public class MainController {
     
     @FXML
     private void handleConfigureSubtitles() {
-        openSettings("Subtitles");
+        handleSettingsMode();
     }
     
     @FXML
     private void handleConfigureRenamer() {
-        openSettings("Metadata");
+        handleSettingsMode();
     }
     
     @FXML
@@ -4144,23 +5376,23 @@ public class MainController {
             }
         } else {
             // Whisper already installed, open settings to configure
-        openSettings("Subtitles");
+        handleSettingsMode();
         }
     }
     
     @FXML
     private void handleConfigureOpenSubtitles() {
-        openSettings("Subtitles");
+        handleSettingsMode();
     }
     
     @FXML
     private void handleConfigureTMDB() {
-        openSettings("Metadata");
+        handleSettingsMode();
     }
     
     @FXML
     private void handleConfigureTVDB() {
-        openSettings("Metadata");
+        handleSettingsMode();
     }
     
     @FXML
@@ -5883,7 +7115,7 @@ public class MainController {
                 
                 Optional<ButtonType> result = alert.showAndWait();
                 if (result.isPresent() && result.get() == openSettings) {
-                    openSettings("Subtitles");  // Open settings to Subtitles tab
+                    handleSettingsMode();  // Open settings to Subtitles tab
                 }
                 return;
             }
@@ -6473,118 +7705,137 @@ public class MainController {
      */
     private void initializeToolbarIcons() {
         try {
-            // Add Files button - Create stacked icon-above-text layout
+            // Add Files button - Create horizontal icon+text layout
             if (addFilesButton != null) {
                 org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
                     org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.FILE_MEDICAL);
-                icon.setIconSize(18);  // Match mode-icon size
-                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                icon.setIconSize(16);
+                icon.setIconColor(javafx.scene.paint.Color.web("rgba(255, 255, 255, 0.7)"));
                 icon.getStyleClass().add("mode-icon");
                 
                 Label textLabel = new Label("Add Files");
                 textLabel.getStyleClass().add("mode-label");
                 
-                javafx.scene.layout.VBox vbox = new javafx.scene.layout.VBox(2);
-                vbox.setAlignment(javafx.geometry.Pos.CENTER);
-                vbox.getChildren().addAll(icon, textLabel);
+                javafx.scene.layout.HBox hbox = new javafx.scene.layout.HBox(8);
+                hbox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+                hbox.getChildren().addAll(icon, textLabel);
                 
-                addFilesButton.setGraphic(vbox);
-                addFilesButton.setText("");  // Clear button text
+                addFilesButton.setGraphic(hbox);
+                addFilesButton.setText("");
             }
             
-            // Add Folder button - Create stacked icon-above-text layout
+            // Add Folder button - Create horizontal icon+text layout
             if (addFolderButton != null) {
                 org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
                     org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.FOLDER_OPEN);
-                icon.setIconSize(18);  // Match mode-icon size
-                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                icon.setIconSize(16);
+                icon.setIconColor(javafx.scene.paint.Color.web("rgba(255, 255, 255, 0.7)"));
                 icon.getStyleClass().add("mode-icon");
                 
                 Label textLabel = new Label("Add Folder");
                 textLabel.getStyleClass().add("mode-label");
                 
-                javafx.scene.layout.VBox vbox = new javafx.scene.layout.VBox(2);
-                vbox.setAlignment(javafx.geometry.Pos.CENTER);
-                vbox.getChildren().addAll(icon, textLabel);
+                javafx.scene.layout.HBox hbox = new javafx.scene.layout.HBox(8);
+                hbox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+                hbox.getChildren().addAll(icon, textLabel);
                 
-                addFolderButton.setGraphic(vbox);
-                addFolderButton.setText("");  // Clear button text
+                addFolderButton.setGraphic(hbox);
+                addFolderButton.setText("");
             }
             
-            // Settings button - Create stacked icon-above-text layout
+            // Settings button - Create horizontal icon+text layout
             if (settingsButton != null) {
                 org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
                     org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.COG);
-                icon.setIconSize(18);  // Match mode-icon size
-                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                icon.setIconSize(16);
+                icon.setIconColor(javafx.scene.paint.Color.web("rgba(255, 255, 255, 0.7)"));
                 icon.getStyleClass().add("mode-icon");
                 
                 Label textLabel = new Label("Settings");
                 textLabel.getStyleClass().add("mode-label");
                 
-                javafx.scene.layout.VBox vbox = new javafx.scene.layout.VBox(2);
-                vbox.setAlignment(javafx.geometry.Pos.CENTER);
-                vbox.getChildren().addAll(icon, textLabel);
+                javafx.scene.layout.HBox hbox = new javafx.scene.layout.HBox(8);
+                hbox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+                hbox.getChildren().addAll(icon, textLabel);
                 
-                settingsButton.setGraphic(vbox);
-                settingsButton.setText("");  // Clear button text
+                settingsButton.setGraphic(hbox);
+                settingsButton.setText("");
             }
             
-            // Encoder Mode button - Create stacked icon-above-text layout
+            // Encoder Mode button - Create horizontal icon+text layout
             if (encoderModeButton != null) {
                 org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
                     org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.VIDEO);
-                icon.setIconSize(18);  // Match mode-icon size
-                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                icon.setIconSize(16);
+                icon.setIconColor(javafx.scene.paint.Color.web("rgba(255, 255, 255, 0.7)"));
                 icon.getStyleClass().add("mode-icon");
                 
                 Label textLabel = new Label("Encoder");
                 textLabel.getStyleClass().add("mode-label");
                 
-                javafx.scene.layout.VBox vbox = new javafx.scene.layout.VBox(2);
-                vbox.setAlignment(javafx.geometry.Pos.CENTER);
-                vbox.getChildren().addAll(icon, textLabel);
+                javafx.scene.layout.HBox hbox = new javafx.scene.layout.HBox(8);
+                hbox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+                hbox.getChildren().addAll(icon, textLabel);
                 
-                encoderModeButton.setGraphic(vbox);
-                encoderModeButton.setText("");  // Clear button text
+                encoderModeButton.setGraphic(hbox);
+                encoderModeButton.setText("");
             }
             
-            // Subtitle Mode button - Create stacked icon-above-text layout
+            // Subtitle Mode button - Create horizontal icon+text layout
             if (subtitleModeButton != null) {
                 org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
                     org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.CLOSED_CAPTIONING);
-                icon.setIconSize(18);  // Match mode-icon size
-                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                icon.setIconSize(16);
+                icon.setIconColor(javafx.scene.paint.Color.web("rgba(255, 255, 255, 0.7)"));
                 icon.getStyleClass().add("mode-icon");
                 
                 Label textLabel = new Label("Subtitles");
                 textLabel.getStyleClass().add("mode-label");
                 
-                javafx.scene.layout.VBox vbox = new javafx.scene.layout.VBox(2);
-                vbox.setAlignment(javafx.geometry.Pos.CENTER);
-                vbox.getChildren().addAll(icon, textLabel);
+                javafx.scene.layout.HBox hbox = new javafx.scene.layout.HBox(8);
+                hbox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+                hbox.getChildren().addAll(icon, textLabel);
                 
-                subtitleModeButton.setGraphic(vbox);
-                subtitleModeButton.setText("");  // Clear button text
+                subtitleModeButton.setGraphic(hbox);
+                subtitleModeButton.setText("");
             }
             
-            // Metadata Mode button - Create stacked icon-above-text layout
+            // Metadata Mode button - Create horizontal icon+text layout
             if (renamerModeButton != null) {
                 org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
                     org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.EDIT);
-                icon.setIconSize(18);  // Match mode-icon size
-                icon.setIconColor(javafx.scene.paint.Color.WHITE);
+                icon.setIconSize(16);
+                icon.setIconColor(javafx.scene.paint.Color.web("rgba(255, 255, 255, 0.7)"));
                 icon.getStyleClass().add("mode-icon");
                 
                 Label textLabel = new Label("Metadata");
                 textLabel.getStyleClass().add("mode-label");
                 
-                javafx.scene.layout.VBox vbox = new javafx.scene.layout.VBox(2);
-                vbox.setAlignment(javafx.geometry.Pos.CENTER);
-                vbox.getChildren().addAll(icon, textLabel);
+                javafx.scene.layout.HBox hbox = new javafx.scene.layout.HBox(8);
+                hbox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+                hbox.getChildren().addAll(icon, textLabel);
                 
-                renamerModeButton.setGraphic(vbox);
-                renamerModeButton.setText("");  // Clear button text
+                renamerModeButton.setGraphic(hbox);
+                renamerModeButton.setText("");
+            }
+            
+            // Logs button - Create horizontal icon+text layout
+            if (logsButton != null) {
+                org.kordamp.ikonli.javafx.FontIcon icon = new org.kordamp.ikonli.javafx.FontIcon(
+                    org.kordamp.ikonli.fontawesome5.FontAwesomeSolid.FILE_ALT);
+                icon.setIconSize(16);
+                icon.setIconColor(javafx.scene.paint.Color.web("rgba(255, 255, 255, 0.7)"));
+                icon.getStyleClass().add("mode-icon");
+                
+                Label textLabel = new Label("Logs");
+                textLabel.getStyleClass().add("mode-label");
+                
+                javafx.scene.layout.HBox hbox = new javafx.scene.layout.HBox(8);
+                hbox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+                hbox.getChildren().addAll(icon, textLabel);
+                
+                logsButton.setGraphic(hbox);
+                logsButton.setText("");
             }
             
             // Start button
@@ -7045,16 +8296,7 @@ public class MainController {
             encoderLogToggleButton.setTooltip(new Tooltip(encoderLogsPanelVisible ? "Hide panel" : "Show panel"));
         }
         
-        // Force layout update by adjusting SplitPane divider
-        if (encoderModeLayout != null) {
-            Platform.runLater(() -> {
-                if (encoderLogsPanelVisible) {
-                    encoderModeLayout.setDividerPositions(0.60);
-                } else {
-                    encoderModeLayout.setDividerPositions(1.0);
-                }
-            });
-        }
+        // Right panels removed - no longer need divider positioning
     }
     
     /**
@@ -7074,16 +8316,7 @@ public class MainController {
             subtitleLogToggleButton.setTooltip(new Tooltip(subtitleLogsPanelVisible ? "Hide panel" : "Show panel"));
         }
         
-        // Force layout update by adjusting SplitPane divider
-        if (subtitleModeLayout != null) {
-            Platform.runLater(() -> {
-                if (subtitleLogsPanelVisible) {
-                    subtitleModeLayout.setDividerPositions(0.75);
-                } else {
-                    subtitleModeLayout.setDividerPositions(1.0);
-                }
-            });
-        }
+        // Right panels removed - no longer need divider positioning
     }
     
     /**
@@ -7103,16 +8336,7 @@ public class MainController {
             renamerLogToggleButton.setTooltip(new Tooltip(renamerLogsPanelVisible ? "Hide panel" : "Show panel"));
         }
         
-        // Force layout update by adjusting SplitPane divider
-        if (renamerModeLayout != null) {
-            Platform.runLater(() -> {
-                if (renamerLogsPanelVisible) {
-                    renamerModeLayout.setDividerPositions(0.75);
-                } else {
-                    renamerModeLayout.setDividerPositions(1.0);
-                }
-            });
-        }
+        // Right panels removed - no longer need divider positioning
     }
     
     /**

@@ -14,6 +14,7 @@ class ConversionSettings:
     # FFmpeg paths
     ffmpeg_path: str = "ffmpeg"
     ffprobe_path: str = "ffprobe"
+    additional_ffmpeg_args: str = ""  # Custom FFmpeg arguments to append
     
     # Hardware acceleration
     use_nvenc: bool = True

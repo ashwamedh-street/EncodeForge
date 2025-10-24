@@ -1,13 +1,48 @@
 /* ========================================
    APPLE-INSPIRED DARK THEME WITH DEPTH
-   EncodeForge - Modern, Spacious, Elevated UI
+   EncodeForge - Responsive, Modern, Spacious UI
+   Responsive Design System v2.0
    ======================================== */
 
 /* ========================================
-   ROOT & BASE COLORS - HARMONIZED
+   CSS VARIABLES - DESIGN TOKENS
+   Base spacing unit: 4px
+   Typography: rem-based scaling
+   Colors: Theme-compatible variables
    ======================================== */
 .root {
-    /* Premium dark color palette with depth */
+    /* === SPACING SCALE === */
+    /* 4px base unit with consistent scale */
+    -fx-space-xs: 4px;      /* 4px - tight spacing */
+    -fx-space-sm: 8px;      /* 8px - small gaps */
+    -fx-space-md: 12px;     /* 12px - standard padding */
+    -fx-space-lg: 16px;     /* 16px - comfortable spacing */
+    -fx-space-xl: 20px;     /* 20px - large spacing */
+    -fx-space-2xl: 24px;    /* 24px - section spacing */
+    -fx-space-3xl: 32px;    /* 32px - major section gaps */
+    -fx-space-4xl: 40px;    /* 40px - layout spacing */
+    -fx-space-5xl: 48px;    /* 48px - large layout */
+    -fx-space-6xl: 64px;    /* 64px - extra large layout */
+    
+    /* === TYPOGRAPHY SCALE === */
+    /* Base: 14px = 0.875rem at 16px root */
+    -fx-font-size-xs: 0.6875em;    /* ~11px - tiny labels */
+    -fx-font-size-sm: 0.75em;      /* ~12px - small text */
+    -fx-font-size-base: 0.875em;   /* ~14px - body text */
+    -fx-font-size-md: 1em;         /* ~16px - readable */
+    -fx-font-size-lg: 1.125em;     /* ~18px - emphasis */
+    -fx-font-size-xl: 1.25em;      /* ~20px - headings */
+    -fx-font-size-2xl: 1.5em;      /* ~24px - large titles */
+    -fx-font-size-3xl: 1.75em;     /* ~28px - major headings */
+    
+    /* === SIZING SCALE === */
+    -fx-scale-factor: 1.0;         /* Responsive multiplier */
+    -fx-component-height-sm: 28px;  /* Small controls */
+    -fx-component-height-md: 32px;  /* Standard controls */
+    -fx-component-height-lg: 36px;  /* Large controls */
+    
+    /* === COLOR PALETTE === */
+    /* Premium dark theme colors */
     -fx-base: #1c1c1e;
     -fx-background: #000000;
     -fx-control-inner-background: #1c1c1e;
@@ -19,84 +54,101 @@
     -fx-faint-focus-color: #0a84ff44;
     -fx-default-button: #0a84ff;
     
-    /* Refined text colors with better contrast */
+    /* Refined text colors */
     -fx-text-fill: #ffffff;
     -fx-text-base-color: #ffffff;
     -fx-text-inner-color: #ffffff;
+    -fx-text-secondary: #a0a0a0;
+    -fx-text-tertiary: #6e6e73;
     
-    /* Selection colors with glow */
+    /* Selection colors */
     -fx-selection-bar: #0a84ff;
     -fx-selection-bar-non-focused: #0a84ff66;
     
-    /* Elevated border colors */
+    /* Border colors */
     -fx-outer-border: #3a3a3c;
     -fx-inner-border: #48484a;
     -fx-body-color: #1c1c1e;
     
-    /* Enhanced shadows for depth */
+    /* === ELEVATION SYSTEM === */
+    /* 6-level shadow depth for UI hierarchy */
+    -fx-elevation-0: none;
+    -fx-elevation-1: dropshadow(gaussian, rgba(0, 0, 0, 0.15), 2, 0, 0, 1);
+    -fx-elevation-2: dropshadow(gaussian, rgba(0, 0, 0, 0.2), 4, 0, 0, 2);
+    -fx-elevation-3: dropshadow(gaussian, rgba(0, 0, 0, 0.25), 8, 0, 0, 4);
+    -fx-elevation-4: dropshadow(gaussian, rgba(0, 0, 0, 0.3), 16, 0, 0, 6);
+    -fx-elevation-5: dropshadow(gaussian, rgba(0, 0, 0, 0.4), 24, 0, 0, 8);
+    
+    /* Enhanced shadow colors */
     -fx-shadow-highlight-color: #ffffff12;
     -fx-drop-shadow-color: #00000080;
+    
+    /* === ANIMATION DURATIONS === */
+    -fx-transition-fast: 150ms;
+    -fx-transition-normal: 200ms;
+    -fx-transition-slow: 300ms;
 }
 
-/* Main application background with elevated window style and deep shadow */
+/* Main application background with elevated window style */
 .root-pane {
     -fx-background-color: linear-gradient(to bottom, #0a0a0a 0%, #1c1c1e 100%);
     -fx-border-color: rgba(58, 58, 60, 0.6);
-    -fx-border-width: 1;
+    -fx-border-width: 1px;
     -fx-border-radius: 0;
     -fx-background-radius: 0;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.9), 40, 0.15, 0, 8);
+    -fx-effect: -fx-elevation-5;
 }
 
 /* ========================================
-   COMPACT TYPOGRAPHY SYSTEM
+   RESPONSIVE TYPOGRAPHY SYSTEM
+   Using em units for scalability
    ======================================== */
 .large-title {
-    -fx-font-size: 20px;
+    -fx-font-size: 24px;
     -fx-font-weight: 600;
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: rgba(255, 255, 255, 0.9);
     -fx-font-family: "Segoe UI", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
 }
 
 .title-1 {
     -fx-font-size: 18px;
     -fx-font-weight: 600;
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: rgba(255, 255, 255, 0.9);
     -fx-font-family: "Segoe UI", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
 }
 
 .title-2 {
     -fx-font-size: 16px;
     -fx-font-weight: 600;
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: rgba(255, 255, 255, 0.9);
     -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
 }
 
 .title-3 {
     -fx-font-size: 14px;
     -fx-font-weight: 600;
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: rgba(255, 255, 255, 0.9);
     -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
 }
 
 .headline {
     -fx-font-size: 13px;
     -fx-font-weight: 500;
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: rgba(255, 255, 255, 0.9);
     -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
 }
 
 .body {
-    -fx-font-size: 12px;
+    -fx-font-size: 13px;
     -fx-font-weight: 400;
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: rgba(255, 255, 255, 0.9);
     -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
 }
 
 .caption-1 {
     -fx-font-size: 12px;
     -fx-font-weight: 400;
-    -fx-text-fill: #a0a0a0;
+    -fx-text-fill: rgba(255, 255, 255, 0.6);
     -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
 }
 
@@ -108,40 +160,43 @@
 }
 
 /* ========================================
-   CUSTOM TITLE BAR & WINDOW CONTROLS
+   CUSTOM TITLE BAR & WINDOW CONTROLS - Enhanced Depth
    ======================================== */
 .custom-title-bar {
-    -fx-background-color: linear-gradient(to bottom, rgba(28, 28, 30, 0.98) 0%, rgba(28, 28, 30, 0.95) 100%);
-    -fx-border-color: transparent transparent rgba(58, 58, 60, 0.3) transparent;
-    -fx-border-width: 0 0 0.5 0;
+    -fx-background-color: linear-gradient(to bottom, 
+        rgba(28, 28, 30, 0.98) 0%, 
+        rgba(24, 24, 26, 0.98) 50%,
+        rgba(20, 20, 22, 0.98) 100%);
+    -fx-border-color: transparent transparent rgba(58, 58, 60, 0.5) transparent;
+    -fx-border-width: 0 0 0.5px 0;
     -fx-padding: 0;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.3), 8, 0, 0, 2);
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.4), 10, 0, 0, 4);
     -fx-background-radius: 0;
-    -fx-min-height: 44;
-    -fx-pref-height: 44;
+    -fx-min-height: 44px;
+    -fx-pref-height: 44px;
 }
 
 .title-section {
-    -fx-padding: 0 20;
+    -fx-padding: 0 24px;
 }
 
 .app-icon {
-    -fx-font-size: 18px;
-    -fx-text-fill: #0a84ff;
-    -fx-effect: dropshadow(gaussian, rgba(10, 132, 255, 0.4), 4, 0, 0, 0);
+    -fx-font-size: 16px;
+    -fx-text-fill: rgba(10, 132, 255, 0.5);
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.3), 6, 0, 0, 2);
 }
 
 .app-title {
     -fx-font-family: "SF Pro Display", "Segoe UI Semibold", "Helvetica Neue", Arial, sans-serif;
     -fx-font-size: 14px;
     -fx-font-weight: 600;
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: rgba(255, 255, 255, 0.9);
     -fx-letter-spacing: 0.3px;
 }
 
 .draggable-spacer {
     -fx-background-color: transparent;
-    -fx-min-width: 20;
+    -fx-min-width: 20px;
     -fx-cursor: default;
 }
 
@@ -406,39 +461,42 @@
 /* ========================================
    ELEVATED BUTTONS WITH DEPTH
    ======================================== */
+/* ========================================
+   BUTTONS - Responsive with Variables
+   ======================================== */
 .button {
     -fx-background-color: linear-gradient(to bottom, #3a3a3c 0%, #2c2c2e 100%);
-    -fx-text-fill: #ffffff;
-    -fx-border-color: rgba(72, 72, 74, 0.6);
-    -fx-border-width: 0.5;
-    -fx-border-radius: 0;
-    -fx-background-radius: 0;
-    -fx-padding: 7 14;
+    -fx-text-fill: rgba(255, 255, 255, 0.9);
+    -fx-border-color: rgba(58, 58, 60, 0.5);
+    -fx-border-width: 0.5px;
+    -fx-border-radius: 6px;
+    -fx-background-radius: 6px;
+    -fx-padding: 6px 12px;
     -fx-cursor: hand;
     -fx-font-family: "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-    -fx-font-size: 12px;
+    -fx-font-size: 13px;
     -fx-font-weight: 500;
-    -fx-min-height: 30;
-    -fx-pref-height: 30;
-    -fx-min-width: 80;
+    -fx-min-height: 32px;
+    -fx-pref-height: 32px;
+    -fx-min-width: 80px;
     -fx-pref-width: -1;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.25), 4, 0, 0, 2);
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.3), 6, 0, 0, 2);
 }
 
 .button:hover {
     -fx-background-color: linear-gradient(to bottom, #48484a 0%, #3a3a3c 100%);
     -fx-border-color: rgba(10, 132, 255, 0.5);
-    -fx-effect: dropshadow(gaussian, rgba(10, 132, 255, 0.3), 8, 0, 0, 2);
-    -fx-scale-x: 1.01;
-    -fx-scale-y: 1.01;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.4), 10, 0, 0, 4);
+    -fx-scale-x: 1.02;
+    -fx-scale-y: 1.02;
 }
 
 .button:pressed {
     -fx-background-color: linear-gradient(to bottom, #2c2c2e 0%, #1c1c1e 100%);
-    -fx-border-color: #0a84ff;
+    -fx-border-color: rgba(10, 132, 255, 0.5);
     -fx-effect: innershadow(gaussian, rgba(0, 0, 0, 0.4), 4, 0, 0, 1);
-    -fx-scale-x: 0.99;
-    -fx-scale-y: 0.99;
+    -fx-scale-x: 0.98;
+    -fx-scale-y: 0.98;
 }
 
 .button:disabled {
@@ -448,129 +506,126 @@
 }
 
 /* ========================================
-   ELEVATED TEXT INPUTS WITH DEPTH
+   TEXT INPUTS - Responsive with Variables
    ======================================== */
 .text-field, .text-area {
-    -fx-background-color: rgba(28, 28, 30, 0.8);
-    -fx-text-fill: #ffffff;
-    -fx-border-color: rgba(72, 72, 74, 0.4);
-    -fx-border-width: 0.5;
-    -fx-border-radius: 0;
-    -fx-background-radius: 0;
-    -fx-padding: 10 14;
-    -fx-prompt-text-fill: rgba(160, 160, 160, 0.7);
+    -fx-background-color: rgba(44, 44, 46, 0.4);
+    -fx-text-fill: rgba(255, 255, 255, 0.9);
+    -fx-border-color: rgba(58, 58, 60, 0.5);
+    -fx-border-width: 0.5px;
+    -fx-border-radius: 6px;
+    -fx-background-radius: 6px;
+    -fx-padding: 6px 12px;
+    -fx-prompt-text-fill: -fx-text-secondary;
     -fx-font-family: "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     -fx-font-size: 13px;
-    -fx-min-height: 36;
-    -fx-pref-height: 36;
-    -fx-effect: innershadow(gaussian, rgba(0, 0, 0, 0.3), 2, 0, 0, 1);
+    -fx-min-height: 32px;
+    -fx-pref-height: 32px;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.15), 2, 0, 0, 1);
 }
 
 .text-field:focused, .text-area:focused {
-    -fx-background-color: rgba(28, 28, 30, 1.0);
-    -fx-border-color: #0a84ff;
-    -fx-border-width: 1.5;
-    -fx-effect: dropshadow(gaussian, rgba(10, 132, 255, 0.4), 8, 0, 0, 0);
+    -fx-background-color: rgba(44, 44, 46, 0.4);
+    -fx-border-color: rgba(10, 132, 255, 0.5);
+    -fx-border-width: 1.5px;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.3), 6, 0, 0, 2);
 }
 
 .text-field:hover, .text-area:hover {
-    -fx-background-color: rgba(44, 44, 46, 0.9);
-    -fx-border-color: rgba(72, 72, 74, 0.6);
-    /* Remove bulky scale effects */
-    -fx-scale-x: 1.0;
-    -fx-scale-y: 1.0;
+    -fx-background-color: rgba(44, 44, 46, 0.6);
+    -fx-border-color: rgba(58, 58, 60, 0.5);
 }
 
 .password-field {
-    -fx-background-color: rgba(28, 28, 30, 0.8);
-    -fx-text-fill: #ffffff;
-    -fx-border-color: rgba(72, 72, 74, 0.4);
-    -fx-border-width: 0.5;
-    -fx-border-radius: 0;
-    -fx-background-radius: 0;
-    -fx-padding: 10 14;
-    -fx-prompt-text-fill: rgba(160, 160, 160, 0.7);
+    -fx-background-color: rgba(44, 44, 46, 0.4);
+    -fx-text-fill: rgba(255, 255, 255, 0.9);
+    -fx-border-color: rgba(58, 58, 60, 0.5);
+    -fx-border-width: 0.5px;
+    -fx-border-radius: 6px;
+    -fx-background-radius: 6px;
+    -fx-padding: 6px 12px;
+    -fx-prompt-text-fill: -fx-text-secondary;
     -fx-font-family: "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     -fx-font-size: 13px;
-    -fx-min-height: 36;
-    -fx-pref-height: 36;
-    -fx-effect: innershadow(gaussian, rgba(0, 0, 0, 0.3), 2, 0, 0, 1);
+    -fx-min-height: 32px;
+    -fx-pref-height: 32px;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.15), 2, 0, 0, 1);
 }
 
 .password-field:focused {
-    -fx-background-color: rgba(28, 28, 30, 1.0);
-    -fx-border-color: #0a84ff;
-    -fx-border-width: 1.5;
-    -fx-effect: dropshadow(gaussian, rgba(10, 132, 255, 0.4), 8, 0, 0, 0);
+    -fx-background-color: rgba(44, 44, 46, 0.4);
+    -fx-border-color: rgba(10, 132, 255, 0.5);
+    -fx-border-width: 1.5px;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.3), 6, 0, 0, 2);
 }
 
 /* ========================================
-   COMPACT COMBO BOXES
+   COMBO BOXES - Responsive with Variables
    ======================================== */
 .combo-box {
-    -fx-background-color: #252525;
-    -fx-border-color: #3a3a3a;
-    -fx-border-width: 1;
-    -fx-border-radius: 0;
-    -fx-background-radius: 0;
-    -fx-min-height: 28;
-    -fx-pref-height: 28;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.05), 2, 0, 0, 1);
+    -fx-background-color: rgba(44, 44, 46, 0.4);
+    -fx-border-color: rgba(58, 58, 60, 0.5);
+    -fx-border-width: 0.5px;
+    -fx-border-radius: 6px;
+    -fx-background-radius: 6px;
+    -fx-min-height: 32px;
+    -fx-pref-height: 32px;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.15), 2, 0, 0, 1);
 }
 
 .combo-box .list-cell {
     -fx-background-color: transparent;
-    -fx-text-fill: #ffffff;
+    -fx-text-fill: rgba(255, 255, 255, 0.9);
     -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-    -fx-font-size: 12px;
-    -fx-padding: 4 8;
+    -fx-font-size: 13px;
+    -fx-padding: 6px 12px;
 }
 
 .combo-box .arrow-button {
     -fx-background-color: transparent;
     -fx-border-color: transparent;
-    -fx-padding: 0 6;
+    -fx-padding: 0 6px;
 }
 
 .combo-box .arrow {
-    -fx-background-color: #a0a0a0;
+    -fx-background-color: rgba(255, 255, 255, 0.6);
     -fx-shape: "M 0 0 L 4 4 L 8 0 Z";
     -fx-scale-shape: true;
-    -fx-pref-width: 8;
-    -fx-pref-height: 4;
+    -fx-pref-width: 8px;
+    -fx-pref-height: 4px;
 }
 
 .combo-box:hover {
-    -fx-background-color: #2d2d2d;
-    -fx-border-color: #0078d4;
+    -fx-background-color: rgba(44, 44, 46, 0.6);
+    -fx-border-color: rgba(10, 132, 255, 0.5);
 }
 
 .combo-box-popup .list-view {
-    -fx-background-color: #252525;
-    -fx-border-color: #3a3a3a;
-    -fx-border-width: 1;
-    -fx-border-radius: 0;
-    -fx-background-radius: 0;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.3), 12, 0, 0, 2);
+    -fx-background-color: #2c2c2e;
+    -fx-border-color: rgba(58, 58, 60, 0.5);
+    -fx-border-width: 1px;
+    -fx-border-radius: 6px;
+    -fx-background-radius: 6px;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.5), 16, 0, 0, 8);
 }
 
 .combo-box-popup .list-view .list-cell {
     -fx-background-color: transparent;
-    -fx-text-fill: #ffffff;
-    -fx-padding: 2 8;
+    -fx-text-fill: rgba(255, 255, 255, 0.9);
+    -fx-padding: 4px 12px;
     -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-    -fx-font-size: 12px;
-    -fx-min-height: 24;
-    -fx-pref-height: 24;
+    -fx-font-size: 13px;
+    -fx-min-height: 28px;
+    -fx-pref-height: 28px;
 }
 
 .combo-box-popup .list-view .list-cell:hover {
-    -fx-background-color: #0078d422;
+    -fx-background-color: rgba(10, 132, 255, 0.15);
 }
 
 .combo-box-popup .list-view .list-cell:selected {
-    -fx-background-color: #0078d4;
-    -fx-text-fill: #ffffff;
+    -fx-background-color: rgba(10, 132, 255, 0.25);
+    -fx-text-fill: #0a84ff;
 }
 
 /* ========================================
@@ -629,45 +684,48 @@
 }
 
 /* ========================================
-   COMPACT SPINNERS
+   SPINNERS - Fixed Text Truncation Issue
    ======================================== */
 .spinner {
-    -fx-background-color: #252525;
-    -fx-border-color: #3a3a3a;
-    -fx-border-width: 1;
-    -fx-border-radius: 4;
-    -fx-background-radius: 4;
-    -fx-min-height: 28;
-    -fx-pref-height: 28;
-    -fx-min-width: 100;
+    -fx-background-color: rgba(44, 44, 46, 0.4);
+    -fx-border-color: rgba(58, 58, 60, 0.5);
+    -fx-border-width: 0.5px;
+    -fx-border-radius: 6px;
+    -fx-background-radius: 6px;
+    -fx-min-height: 32px;
+    -fx-pref-height: 32px;
+    -fx-min-width: 90px;
     -fx-pref-width: -1;
 }
 
 .spinner .text-field {
     -fx-background-color: transparent;
     -fx-border-width: 0;
-    -fx-text-fill: #ffffff;
-    -fx-font-size: 12px;
-    -fx-min-width: 60;
+    -fx-text-fill: rgba(255, 255, 255, 0.9);
+    -fx-font-size: 13px;
+    -fx-min-width: 70px;
+    -fx-padding: 2px 8px;
+    -fx-alignment: CENTER_RIGHT;
 }
 
 .spinner .increment-arrow-button,
 .spinner .decrement-arrow-button {
-    -fx-background-color: #2d2d2d;
-    -fx-border-color: #3a3a3a;
-    -fx-pref-width: 16;
+    -fx-background-color: rgba(44, 44, 46, 0.6);
+    -fx-border-color: rgba(58, 58, 60, 0.5);
+    -fx-pref-width: 16px;
+    -fx-padding: 0;
 }
 
 .spinner .increment-arrow-button:hover,
 .spinner .decrement-arrow-button:hover {
-    -fx-background-color: #3a3a3a;
+    -fx-background-color: rgba(10, 132, 255, 0.5);
 }
 
 .spinner .increment-arrow,
 .spinner .decrement-arrow {
-    -fx-background-color: #a0a0a0;
-    -fx-pref-width: 6;
-    -fx-pref-height: 4;
+    -fx-background-color: rgba(255, 255, 255, 0.6);
+    -fx-pref-width: 6px;
+    -fx-pref-height: 4px;
 }
 
 /* ========================================
@@ -795,52 +853,57 @@
 /* ========================================
    COMPACT TABLE VIEWS
    ======================================== */
+/* ========================================
+   TABLES - Enhanced with Depth & Transitions
+   ======================================== */
 .queue-table {
-    -fx-background-color: #1e1e1e;
+    -fx-background-color: rgba(44, 44, 46, 0.4);
     -fx-border-color: transparent;
     -fx-table-cell-border-color: transparent;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.15), 2, 0, 0, 1);
 }
 
 .queue-table .column-header-background {
-    -fx-background-color: #252525;
+    -fx-background-color: rgba(44, 44, 46, 0.6);
 }
 
 .queue-table .column-header {
-    -fx-background-color: #252525;
-    -fx-text-fill: #ffffff;
-    -fx-border-color: transparent transparent #2d2d2d transparent;
-    -fx-border-width: 0 0 1 0;
+    -fx-background-color: rgba(44, 44, 46, 0.6);
+    -fx-text-fill: rgba(255, 255, 255, 0.9);
+    -fx-border-color: transparent transparent rgba(58, 58, 60, 0.5) transparent;
+    -fx-border-width: 0 0 1px 0;
     -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
     -fx-font-weight: 500;
-    -fx-font-size: 11px;
-    -fx-padding: 6 8;
+    -fx-font-size: 12px;
+    -fx-padding: 6px 12px;
 }
 
 .queue-table .table-row-cell {
-    -fx-background-color: #1e1e1e;
-    -fx-text-fill: #ffffff;
+    -fx-background-color: rgba(44, 44, 46, 0.4);
+    -fx-text-fill: rgba(255, 255, 255, 0.9);
     -fx-border-color: transparent;
     -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-    -fx-font-size: 11px;
-    -fx-cell-size: 24;
+    -fx-font-size: 12px;
+    -fx-cell-size: 28px;
 }
 
 .queue-table .table-row-cell:odd {
-    -fx-background-color: #252525;
+    -fx-background-color: rgba(44, 44, 46, 0.6);
 }
 
 .queue-table .table-row-cell:selected {
-    -fx-background-color: #0078d4;
-    -fx-text-fill: #ffffff;
+    -fx-background-color: rgba(10, 132, 255, 0.5);
+    -fx-text-fill: rgba(255, 255, 255, 0.9);
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.3), 6, 0, 0, 2);
 }
 
 .queue-table .table-row-cell:hover {
-    -fx-background-color: #2d2d2d;
+    -fx-background-color: rgba(10, 132, 255, 0.1);
 }
 
 .queue-table .table-cell {
     -fx-border-color: transparent;
-    -fx-padding: 4 8;
+    -fx-padding: 4px 12px;
     -fx-alignment: CENTER_LEFT;
 }
 
@@ -849,25 +912,25 @@
 }
 
 .draggable-table .table-row-cell:hover {
-    -fx-background-color: #2d2d2d;
-    -fx-border-color: #0078d4;
-    -fx-border-width: 1 0;
+    -fx-background-color: rgba(10, 132, 255, 0.15);
+    -fx-border-color: rgba(10, 132, 255, 0.5);
+    -fx-border-width: 1px 0;
 }
 
 .draggable-table .table-row-cell.drag-source {
     -fx-opacity: 0.6;
-    -fx-effect: dropshadow(gaussian, rgba(0, 120, 212, 0.3), 6, 0, 0, 0);
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.4), 10, 0, 0, 4);
 }
 
 .draggable-table .table-row-cell.drop-target {
     -fx-border-color: #16c60c;
-    -fx-border-width: 2 0 0 0;
+    -fx-border-width: 2px 0 0 0;
 }
 
 .placeholder-label {
-    -fx-text-fill: #a0a0a0;
+    -fx-text-fill: rgba(255, 255, 255, 0.6);
     -fx-font-family: "Segoe UI", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-    -fx-font-size: 12px;
+    -fx-font-size: 13px;
     -fx-font-style: italic;
 }
 
@@ -964,6 +1027,16 @@
 }
 
 .scroll-pane .viewport {
+    -fx-background-color: transparent;
+}
+
+/* Faster scroll speed for all scroll panes */
+.scroll-pane {
+    -fx-pannable: true;
+    -fx-fit-to-width: true;
+}
+
+.scroll-pane > .viewport {
     -fx-background-color: transparent;
 }
 
@@ -1596,34 +1669,40 @@
 /* ========================================
    ELEVATED SIDEBAR WITH DEPTH
    ======================================== */
+/* ========================================
+   SIDEBAR - Enhanced with Depth & Gradients
+   ======================================== */
 .sidebar {
-    -fx-background-color: linear-gradient(to bottom, rgba(28, 28, 30, 0.98) 0%, rgba(20, 20, 22, 1.0) 100%);
+    -fx-background-color: linear-gradient(to right, 
+        rgba(24, 24, 26, 1.0) 0%, 
+        rgba(28, 28, 30, 0.98) 50%,
+        rgba(30, 30, 32, 0.95) 100%);
     -fx-border-color: transparent rgba(58, 58, 60, 0.5) transparent transparent;
-    -fx-border-width: 0 0.5 0 0;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.4), 12, 0, 4, 0);
-    -fx-min-width: 110;
-    -fx-pref-width: 110;
-    -fx-max-width: 150;
+    -fx-border-width: 0 0.5px 0 0;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.5), 16, 0, 0, 8);
+    -fx-min-width: 145px;
+    -fx-pref-width: 145px;
+    -fx-max-width: 200px;
 }
 
 .sidebar-section-title {
     -fx-font-family: "SF Pro Text", "Segoe UI Semibold", "Helvetica Neue", Arial, sans-serif;
-    -fx-font-size: 10px;
+    -fx-font-size: 11px;
     -fx-font-weight: 700;
-    -fx-text-fill: rgba(160, 160, 160, 0.8);
-    -fx-padding: 0 0 8 0;
+    -fx-text-fill: rgba(255, 255, 255, 0.5);
+    -fx-padding: 0 0 6px 0;
     -fx-letter-spacing: 0.8px;
     -fx-text-transform: uppercase;
 }
 
 .sidebar-separator {
     -fx-background-color: transparent;
-    -fx-padding: 12 0;
+    -fx-padding: 12px 0;
 }
 
 .sidebar-separator .line {
-    -fx-border-color: rgba(58, 58, 60, 0.6);
-    -fx-border-width: 0.5 0 0 0;
+    -fx-border-color: rgba(58, 58, 60, 0.5);
+    -fx-border-width: 0.5px 0 0 0;
 }
 
 /* FFmpeg Status Section with Elevated Card Style */
@@ -1722,59 +1801,61 @@
 }
 
 .button.mode-button {
-    -fx-background-color: rgba(44, 44, 46, 0.4);
-    -fx-border-color: rgba(58, 58, 60, 0.5);
-    -fx-border-width: 0.5;
-    -fx-border-radius: 9;
-    -fx-background-radius: 9;
-    -fx-padding: 10 6;
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-border-width: 0;
+    -fx-border-radius: 0;
+    -fx-background-radius: 4;
+    -fx-padding: 10 8;
     -fx-cursor: hand;
     -fx-font-size: 12px;
-    -fx-min-height: 60;
-    -fx-pref-height: 60;
-    -fx-min-width: 90;
-    -fx-pref-width: 90;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.2), 4, 0, 0, 2);
+    -fx-min-height: 36;
+    -fx-pref-height: 38;
+    -fx-alignment: CENTER_LEFT;
 }
 
 .button.mode-button:hover {
-    -fx-background-color: rgba(10, 132, 255, 0.15);
-    -fx-border-color: rgba(10, 132, 255, 0.4);
-    -fx-border-width: 0.5;
-    -fx-effect: dropshadow(gaussian, rgba(10, 132, 255, 0.3), 8, 0, 0, 3);
-    -fx-scale-x: 1.01;
-    -fx-scale-y: 1.01;
+    -fx-background-color: rgba(255, 255, 255, 0.05);
 }
 
 .button.mode-button.selected {
-    -fx-background-color: rgba(10, 132, 255, 0.25);
-    -fx-border-color: #0a84ff;
-    -fx-border-width: 1.5;
-    -fx-effect: dropshadow(gaussian, rgba(10, 132, 255, 0.5), 12, 0, 0, 4);
+    -fx-background-color: rgba(10, 132, 255, 0.2);
+    -fx-border-color: transparent transparent transparent #0a84ff;
+    -fx-border-width: 0 0 0 3;
 }
 
 .mode-icon {
-    -fx-font-size: 22px;
-    -fx-text-fill: #ffffff;
+    -fx-font-size: 18px;
+    -fx-text-fill: rgba(255, 255, 255, 0.7);
     -fx-font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
-    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.4), 2, 0, 0, 1);
+    -fx-alignment: CENTER;
+    -fx-content-display: CENTER;
 }
 
 .button.mode-button.selected .mode-icon {
     -fx-text-fill: #0a84ff;
-    -fx-effect: dropshadow(gaussian, rgba(10, 132, 255, 0.6), 4, 0, 0, 2);
+}
+
+.button.mode-button:hover .mode-icon {
+    -fx-text-fill: rgba(255, 255, 255, 0.9);
 }
 
 .mode-label {
     -fx-font-family: "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-    -fx-font-size: 10px;
-    -fx-font-weight: 600;
-    -fx-text-fill: rgba(255, 255, 255, 0.9);
+    -fx-font-size: 12px;
+    -fx-font-weight: 500;
+    -fx-text-fill: rgba(255, 255, 255, 0.7);
+    -fx-wrap-text: false;
+    -fx-alignment: CENTER_LEFT;
 }
 
 .button.mode-button.selected .mode-label {
     -fx-text-fill: #0a84ff;
-    -fx-font-weight: 700;
+    -fx-font-weight: 600;
+}
+
+.button.mode-button:hover .mode-label {
+    -fx-text-fill: rgba(255, 255, 255, 0.9);
 }
 
 /* File Operations */
@@ -1785,6 +1866,208 @@
 /* Settings Section */
 .settings-section {
     -fx-spacing: 10;
+}
+
+/* ==========================================
+   Settings Mode Styles
+   ========================================== */
+
+/* Settings Mode Container */
+.settings-mode-container {
+    -fx-background-color: #1c1c1e;
+}
+
+/* TabPane Styles */
+.settings-tabs {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+}
+
+.settings-tabs .tab-header-area {
+    -fx-background-color: #2c2c2e;
+    -fx-border-color: transparent transparent rgba(58, 58, 60, 0.5) transparent;
+    -fx-border-width: 0 0 1 0;
+    -fx-padding: 8 16 0 16;
+}
+
+.settings-tabs .tab-header-background {
+    -fx-background-color: transparent;
+}
+
+.settings-tabs .headers-region {
+    -fx-background-color: transparent;
+}
+
+.settings-tabs .tab {
+    -fx-background-color: transparent;
+    -fx-background-radius: 6 6 0 0;
+    -fx-border-color: transparent;
+    -fx-padding: 10 20 8 20;
+}
+
+.settings-tabs .tab:selected {
+    -fx-background-color: rgba(10, 132, 255, 0.15);
+    -fx-border-color: #0a84ff transparent transparent transparent;
+    -fx-border-width: 2 0 0 0;
+}
+
+.settings-tabs .tab .tab-label {
+    -fx-font-family: "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -fx-font-size: 13px;
+    -fx-font-weight: 500;
+    -fx-text-fill: rgba(255, 255, 255, 0.7);
+}
+
+.settings-tabs .tab:selected .tab-label {
+    -fx-text-fill: #0a84ff;
+    -fx-font-weight: 600;
+}
+
+.settings-tabs .tab:hover {
+    -fx-background-color: rgba(44, 44, 46, 0.5);
+}
+
+.settings-tabs .tab-content-area {
+    -fx-background-color: #1c1c1e;
+    -fx-border-color: transparent;
+    -fx-padding: 0;
+}
+
+/* Settings Navigation Panel (old - kept for backwards compatibility) */
+.settings-nav {
+    -fx-background-color: #1c1c1e;
+    -fx-border-color: transparent rgba(58, 58, 60, 0.5) transparent transparent;
+    -fx-border-width: 0 1 0 0;
+}
+
+/* Category List */
+.category-list {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent;
+    -fx-padding: 8 0;
+}
+
+.category-list .list-cell {
+    -fx-background-color: transparent;
+    -fx-text-fill: rgba(255, 255, 255, 0.85);
+    -fx-padding: 12 16;
+    -fx-font-size: 13px;
+    -fx-font-weight: 500;
+    -fx-background-radius: 6;
+    -fx-border-radius: 6;
+}
+
+.category-list .list-cell:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.05);
+}
+
+.category-list .list-cell:selected {
+    -fx-background-color: rgba(10, 132, 255, 0.25);
+    -fx-text-fill: #0a84ff;
+    -fx-font-weight: 600;
+}
+
+/* Settings Scroll Pane */
+.settings-scroll {
+    -fx-background-color: #1c1c1e;
+    -fx-border-color: transparent;
+}
+
+.settings-scroll .viewport {
+    -fx-background-color: #1c1c1e;
+}
+
+.settings-scroll .scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-pref-width: 8px;
+}
+
+.settings-scroll .scroll-bar:vertical .track {
+    -fx-background-color: rgba(255, 255, 255, 0.03);
+    -fx-background-radius: 4;
+}
+
+.settings-scroll .scroll-bar:vertical .thumb {
+    -fx-background-color: rgba(255, 255, 255, 0.15);
+    -fx-background-radius: 4;
+}
+
+.settings-scroll .scroll-bar:vertical .thumb:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.25);
+}
+
+/* Settings Content (old - kept for backwards compatibility) */
+.settings-content {
+    -fx-background-color: #1e1e1e;
+}
+
+/* Settings Panel Container */
+.settings-panel {
+    -fx-spacing: 16;
+    -fx-padding: 20;
+    -fx-background-color: rgba(44, 44, 46, 0.4);
+    -fx-border-color: rgba(58, 58, 60, 0.5);
+    -fx-border-width: 1;
+    -fx-border-radius: 10;
+    -fx-background-radius: 10;
+    -fx-effect: dropshadow(gaussian, rgba(0, 0, 0, 0.3), 8, 0, 0, 2);
+}
+
+/* Settings Category Title */
+.settings-category-title {
+    -fx-font-size: 18px;
+    -fx-font-weight: 700;
+    -fx-text-fill: #ffffff;
+    -fx-padding: 0 0 8 0;
+}
+
+/* Settings Section Title */
+.settings-section-title {
+    -fx-font-size: 14px;
+    -fx-font-weight: 600;
+    -fx-text-fill: rgba(255, 255, 255, 0.9);
+    -fx-padding: 12 0 8 0;
+}
+
+/* Settings Row (label + control) */
+.settings-row {
+    -fx-spacing: 12;
+    -fx-alignment: CENTER_LEFT;
+    -fx-padding: 8 0;
+}
+
+.settings-row .label {
+    -fx-font-size: 12px;
+    -fx-text-fill: rgba(255, 255, 255, 0.85);
+    -fx-min-width: 140px;
+    -fx-pref-width: 140px;
+}
+
+.settings-row .combo-box,
+.settings-row .text-field {
+    -fx-min-width: 220px;
+    -fx-pref-width: 300px;
+}
+
+/* Settings Description Text */
+.settings-description {
+    -fx-font-size: 11px;
+    -fx-text-fill: rgba(255, 255, 255, 0.6);
+    -fx-wrap-text: true;
+    -fx-padding: 4 0 0 0;
+}
+
+/* Settings Version Label */
+.settings-version {
+    -fx-font-size: 14px;
+    -fx-text-fill: rgba(255, 255, 255, 0.7);
+    -fx-padding: 8 0;
+}
+
+/* Settings Button Group */
+.settings-button-group {
+    -fx-spacing: 12;
+    -fx-padding: 12 0 0 0;
 }
 
 /* ==========================================
@@ -2360,6 +2643,25 @@ BorderPane .text {
     -fx-effect: none;
 }
 
+/* Additional FFmpeg Args TextArea specific styling */
+#additionalFFmpegArgsArea {
+    -fx-min-height: 100px;
+    -fx-pref-height: 120px;
+    -fx-max-height: 200px;
+}
+
+#additionalFFmpegArgsArea .content {
+    -fx-padding: 8px;
+}
+
+#additionalFFmpegArgsArea .scroll-pane {
+    -fx-background-color: transparent;
+}
+
+#additionalFFmpegArgsArea .scroll-pane .viewport {
+    -fx-background-color: transparent;
+}
+
 .button-bar {
     -fx-background-color: #252525;
     -fx-border-color: #2d2d2d transparent transparent transparent;
@@ -2407,4 +2709,87 @@ BorderPane .text {
 
 .button-bar .button.default-button:pressed {
     -fx-background-color: #005a9e;
+}
+
+/* ========================================
+   FILE INFO PANEL (macOS/Windows style)
+   ======================================== */
+
+.file-info-panel {
+    -fx-background-color: #1e1e1e;
+    -fx-border-color: #2a2a2a;
+    -fx-border-width: 0 0 0 1;
+}
+
+.file-info-title {
+    -fx-font-size: 14px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #e0e0e0;
+}
+
+.close-button {
+    -fx-background-color: transparent;
+    -fx-text-fill: #808080;
+    -fx-cursor: hand;
+    -fx-background-radius: 4;
+}
+
+.close-button:hover {
+    -fx-background-color: #2a2a2a;
+    -fx-text-fill: #ffffff;
+}
+
+.file-info-scroll {
+    -fx-background-color: transparent;
+    -fx-background-insets: 0;
+    -fx-padding: 0;
+}
+
+.file-info-scroll > .viewport {
+    -fx-background-color: transparent;
+}
+
+.file-info-scroll .scroll-bar:vertical {
+    -fx-background-color: transparent;
+    -fx-pref-width: 8px;
+}
+
+.file-info-scroll .scroll-bar:vertical .thumb {
+    -fx-background-color: #3a3a3a;
+    -fx-background-radius: 4;
+}
+
+.file-info-scroll .scroll-bar:vertical .thumb:hover {
+    -fx-background-color: #4a4a4a;
+}
+
+.file-preview-box {
+    -fx-background-color: #252525;
+    -fx-border-color: #333333;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 20;
+}
+
+.info-section-header {
+    -fx-font-size: 11px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #888888;
+    -fx-padding: 0 0 4 0;
+}
+
+.info-label-header {
+    -fx-font-size: 11px;
+    -fx-text-fill: #888888;
+}
+
+.info-label-value {
+    -fx-font-size: 13px;
+    -fx-text-fill: #d0d0d0;
+    -fx-font-weight: 500;
+}
+
+.preview-label {
+    -fx-font-size: 12px;
+    -fx-text-fill: #808080;
 }

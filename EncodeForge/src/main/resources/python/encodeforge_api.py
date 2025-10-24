@@ -1522,6 +1522,10 @@ class FFmpegAPI:
         if "custom_args" in settings_dict:
             # Store for potential future use
             pass
+        if "additional_ffmpeg_args" in settings_dict:
+            # Store additional FFmpeg arguments for appending to commands
+            self.settings.additional_ffmpeg_args = settings_dict["additional_ffmpeg_args"]
+            logger.info(f"Set additional_ffmpeg_args = {self.settings.additional_ffmpeg_args}")
         if "copy_metadata" in settings_dict:
             # Store for potential future use
             pass
