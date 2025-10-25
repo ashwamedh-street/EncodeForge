@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://sirstig.github.io/EncodeForge/sitemap.xml

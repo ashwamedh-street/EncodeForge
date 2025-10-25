@@ -1,18 +1,27 @@
-# Encode Forge
+# EncodeForge - FFmpeg GUI for Batch Video Encoding, AI Subtitles & Media File Renaming
 
 <div align="center">
-  <img src="EncodeForge/src/main/resources/icons/app-icon.png" alt="Encode Forge Logo" width="128" height="128">
+  <img src="EncodeForge/src/main/resources/icons/app-icon.png" alt="EncodeForge Logo - FFmpeg GUI Desktop Application" width="128" height="128">
   
   **Version 0.4.1**
   
-  *The all-in-one media processing application*
+  *Free open-source FFmpeg GUI for Windows, macOS, and Linux - Hardware-accelerated video transcoding, AI-powered subtitle generation, and automated media file organization*
+  
+  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+  [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)](https://github.com/SirStig/EncodeForge/releases)
+  [![GitHub release](https://img.shields.io/github/v/release/SirStig/EncodeForge)](https://github.com/SirStig/EncodeForge/releases/latest)
 </div>
 
 ---
 
-## What is Encode Forge?
+## What is EncodeForge?
 
-Encode Forge is a comprehensive media processing application that combines video encoding, subtitle generation using AI directly on your computer, and smart file renaming into a single, easy-to-use desktop application. Built with JavaFX and Python, it provides a modern interface for all your media processing needs.
+**EncodeForge** is a free, open-source **FFmpeg GUI** and media processing application for Windows, macOS, and Linux. Perfect for anyone who wants to:
+- **Batch convert videos** with hardware acceleration (NVIDIA NVENC, AMD AMF, Intel QuickSync, Apple VideoToolbox)
+- **Generate AI subtitles** using OpenAI Whisper (90+ languages, runs locally on your computer)
+- **Automatically rename media files** using metadata from TMDB, TVDB, AniDB, and 7+ other providers
+
+Built with JavaFX and Python, EncodeForge provides a modern dark-themed desktop interface for video transcoding, subtitle management, and smart file organization - no command-line experience required.
 
 ## Features
 
