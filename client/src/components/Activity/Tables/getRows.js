@@ -1,11 +1,13 @@
-export default function getRows(status, data) {
-  console.log(data, 'this is the data');
-  if (!data) return [];
+
+export default function fetRows(status, teamData, authUser) {
+  if (!teamData) return [];
   let userActivity = [];
-  data.forEach((doc) => {
-    if (!doc) return;
-    if (doc.status === status || status == 'Total')
-      userActivity.push(createData(doc));
+  teamData.forEach(user => {
+    if(user.uid != authUser.uid) return
+    user.work.forEach(activity =>{
+        if(!activity || activity.status!= status && status!='Total') return 
+        userActivity.push(createData(activity));
+    });
   });
   userActivity.reverse();
   return userActivity;
