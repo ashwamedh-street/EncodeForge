@@ -12,7 +12,7 @@ const userSchema = new Schema({
 
     //critical attributes
     currentYear : Number, //how to validate this? through roll number ? 
-    department : String,
+    department : String, //need an array here
     designation : String,
 
     // Activity
