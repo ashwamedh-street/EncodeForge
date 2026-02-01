@@ -71,7 +71,9 @@ export default function SimpleTabs(props) {
         </Tabs>
       </AppBar>
       <TabPanel value={value} index={0}>
+        {/* ************************************************************* */}
         <ActivitiesTotal/>
+        {/* ******************************************************************* */}
       </TabPanel>
     </div>
   );
