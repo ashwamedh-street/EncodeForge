@@ -42,7 +42,7 @@ export default function FloatingActionButtonZoom(props) {
 
   return (
     <div className={classes.root}>
-      <CommentBox data={props.data} />
+      <CommentBox {...props} />
     </div>
   );
 }

@@ -59,18 +59,18 @@ export default function NativeSelects(props) {
         </div>
         {/* ************************************************************************* */}
           <Autocomplete
-          value={user}
-          onChange={(event, newValue) => {
-            setUser(newValue);
-          }}
-          inputValue={inputValue}
-          onInputChange={(event, newInputValue) => {
-            setInputValue(newInputValue);
-          }}
-          id="controllable-states-demo"
-          options={options}
-          style={{ width: 300 }}
-          renderInput={(params) => <TextField {...params} label="Select User" variant="outlined" />}
+            value={user}
+            onChange={(event, newValue) => {
+              setUser(newValue);
+            }}
+            inputValue={inputValue}
+            onInputChange={(event, newInputValue) => {
+              setInputValue(newInputValue);
+            }}
+            id="controllable-states-demo"
+            options={options}
+            style={{ width: 300 }}
+            renderInput={(params) => <TextField {...params} label="Select User" variant="outlined" />}
         />
       </FormControl>
     </div>

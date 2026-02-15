@@ -13,6 +13,7 @@ import DoneIcon from '@material-ui/icons/Done';
 import Done from "@material-ui/icons/Done";
 import { IconButton } from "@material-ui/core";
 import CloseIcon from '@material-ui/icons/Close';
+import RefreshContext from "../../../Contexts/RefreshContext";
 
 
 function getModalStyle() {
@@ -83,9 +84,9 @@ render(){
         e.preventDefault()
         handleClose();
         const authUser = this.context.authUser
+        
         if(!authUser) return 
-        console.log(data,'this data')
-        const setAuthUser = this.context.setAuthUser
+        // const setAuthUser = this.context.setAuthUser
         const send = {
             verdict:this.state.verdict,
             text:this.state.value,
@@ -97,7 +98,7 @@ render(){
         console.log(send,'sending to approve');
         const url = `/api/${authUser.uid}/processActivity`;
         axios.post(url,send).then((res)=>{
-            // console.log('Process Activity ',res)
+            
         });
     }
     return (

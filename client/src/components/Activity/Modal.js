@@ -118,23 +118,26 @@ render(){
                 <div style={modalStyle} className={classes.paper}>
                     <h2>Add Activity</h2>
                     <form onSubmit = {onSubmit}>
-<div style={formStyle}>
-          <TextField required id="outlined-title" label="Title" type="text" onChange={handleOnChange} required="true" variant="outlined" />
-<TextField required id="outlined-desc" label="Description" type="text" onChange={handleOnChange} required="true" variant="outlined" />
-<FormControl variant="outlined" className={classes.formControl}>
-       <InputLabel id="outlined-category-label">Category</InputLabel>
-       <Select onChange={handleOnChange} label="Age" required="true" value="Category">
-         <MenuItem value="None">
-           <em>None</em>
-         </MenuItem>
-         <MenuItem value="Script" ><em>Script</em></MenuItem>
-         <MenuItem value="Online"><em>Online</em></MenuItem>
-       </Select>
-     </FormControl>
-     <Button variant="contained" color="primary">Submit</Button>
+                <div style={formStyle}>
+                <TextField required id="outlined-title" label="title" name = "title" type="text" onChange={handleOnChange} required="true" variant="outlined" />
+                <TextField required id="outlined-desc" label="description" name = "description" type="text" onChange={handleOnChange} required="true" variant="outlined" />
+                <FormControl variant="outlined" className={classes.formControl}>
+                    <InputLabel id="outlined-category-label">Category</InputLabel>
+                    <Select onChange={handleOnChange} label="category" required="true" name = "category" value="Category">
+                        <MenuItem value="None">
+                        <em>None</em>
+                        </MenuItem>
+                        <MenuItem value="Script" ><em>Script</em></MenuItem>
+                        <MenuItem value="Online"><em>Online</em></MenuItem>
+                    </Select>
+                    </FormControl>
+                    {/* <Button variant="contained" color="primary" type = "submit">Submit</Button> */}
+                    <label>
+                            <input type = 'submit'/>
+                        </label>
                     </div>
                     </form>
-                </div>
+                    </div>
             </Modal>
         </div>
     );

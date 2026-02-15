@@ -8,6 +8,7 @@ import axios from "axios";
 import AuthUserContext from "../../../../Contexts/AuthUserContext";
 import SendIcon from '@material-ui/icons/Send';
 import DeleteIcon from '@material-ui/icons/Delete';
+import RefreshContext from "../../../../Contexts/RefreshContext";
 
 // import "./styles.css";
 
@@ -22,16 +23,21 @@ const useStyles = makeStyles((theme) => ({
       width: theme.spacing(4),
       height: theme.spacing(4),
     },
+    customHoverFocus: {
+      opacity:'60%',
+      "&:hover": {opacity:'100%', background: "none"},
+      transform:'scale(0.9)',
+    }
 }));
 
 const GetComments = (data) => {
   //function to delete this comment
   const authUser = useContext(AuthUserContext).authUser;
-  const {refresh,setRefresh} = useContext(AuthUserContext);
+  const {refresh,setRefresh} = useContext(RefreshContext);
   const setTeamData = useContext(TeamDataContext).setTeamData;
 
   const deleteComment = (e) =>{
-    console.log(e.currentTarget.value,'comment id')
+    console.log(e.currentTarget.value,'comment deleted')
     const url = `/api/${authUser.uid}/teamActivity/delete`;
     axios.post(url,{
       userId:data.userId,
@@ -68,7 +74,7 @@ const GetComments = (data) => {
             </p>
           </Grid>
         </div>
-        <IconButton value = {comment._id} onClick = {deleteComment}>
+        <IconButton value = {comment._id} onClick = {deleteComment} className = {classes.customHoverFocus}>
             <DeleteIcon></DeleteIcon>
         </IconButton>
       </Grid>
