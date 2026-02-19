@@ -1,4 +1,4 @@
-import React, { useCallback, useContext, useEffect, useState } from 'react';
+import React, { useCallback, useContext, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import { makeStyles } from '@material-ui/core/styles';
 import Box from '@material-ui/core/Box';
@@ -14,10 +14,14 @@ import Typography from '@material-ui/core/Typography';
 import Paper from '@material-ui/core/Paper';
 import KeyboardArrowDownIcon from '@material-ui/icons/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@material-ui/icons/KeyboardArrowUp';
+import { useState } from 'react';
+import Modal from '../Modal';
 import AuthUserContext from '../../../Contexts/AuthUserContext';
-import ProcessActivity from './ProcessActivity';
-import CommentBox from './Comments/CommentBox';
-import CommentIndex from './Comments';
+import getRows from './getRows';
+import CommentIndex from './Comments'
+import RefreshContext from '../../../Contexts/RefreshContext';
+import TeamDataContext from '../../../Contexts/TeamDataContext';
+
 const useButtonStyles = makeStyles({
   outer: {
     display: 'flex',
@@ -37,40 +41,12 @@ const useRowStyles = makeStyles({
       borderBottom: 'unset',
     },
   },
-  description: {
-    border: '1px solid black',
-    marginBottom: '10px',
-    backgroundColor: 'white',
-    padding: '5px',
-  },
-  dropdownBG: {
-    backgroundColor: '#99ccff',
-    padding: '5px',
-  },
 });
 
-const GetApprovalCell = () => {
-  const authUser = useContext(AuthUserContext).authUser;
-  if (!authUser) return null;
-
-  return <TableCell align="right">Approve</TableCell>;
-};
-
-function GetApprovalCellButton(data) {
-  const authUser = useContext(AuthUserContext).authUser;
-  if (!authUser) return null;
-  return (
-    <TableCell align="right">
-      {/* ********************************************************************************************** */}
-      <ProcessActivity data={data} />
-      {/* ********************************************************************************************** */}
-    </TableCell>
-  );
-}
-
 function Row(props) {
-  const { row } = props; //row data received as props
+  const { row } = props;
   const [open, setOpen] = React.useState(false);
+  // const [isEditOn,setIsEditOn] = React.useState(false);
   const classes = useRowStyles();
 
   return (
@@ -86,32 +62,23 @@ function Row(props) {
           </IconButton>
         </TableCell>
         <TableCell component="th" scope="row">
-          {row.name}
-        </TableCell>
-        <TableCell component="th" scope="row">
           {row.title}
         </TableCell>
         <TableCell align="right">{row.category}</TableCell>
         <TableCell align="right">{row.date}</TableCell>
         <TableCell align="right">{row.status}</TableCell>
-        {GetApprovalCellButton(row)}
       </TableRow>
       <TableRow>
-        {/* ************************************** DROPDOWN **************************************** */}
-        <TableCell className={classes.dropdownBG} colSpan={8}>
+        {/* dropdown */}
+        <TableCell style={{ paddingBottom: 0, paddingTop: 0 }} colSpan={6}>
           <Collapse in={open} timeout="auto" unmountOnExit>
             <Box margin={1}>
-              <div className={classes.description}>
-                <Typography variant="h6" gutterBottom component="div">
-                  Description
-                </Typography>
-                <div>{row.history}</div>
-                <br></br>
-                <br></br>
-              </div>
-              {/* ****************************************************************************************** */}
-              <CommentIndex data={row} />
-              {/* ****************************************************************************************** */}
+              <Typography variant="h6" gutterBottom component="div">
+                Description
+              </Typography>
+              <div>{row.history}</div>
+              <br />
+              <CommentIndex data={row} refreshTable = {props.refreshTable} />
             </Box>
           </Collapse>
         </TableCell>
@@ -138,8 +105,37 @@ Row.propTypes = {
   }).isRequired,
 };
 
-const TableStructure = (props) => {
-  const { rows } = props;
+const CollapsibleTable = (props) => {
+  // rows has been initialized to an empty array
+  const [rows, setRows] = useState([]);
+  const [isTableReady, setIsTableReady] = useState(false);
+  //this state is managed my add button component
+  //whenever an update is made to the activity table, the add button toggles this state(via props)
+  //then this table is renrender because use effect is listening to changes on refresh state.
+  const [refresh, setRefresh] = useState(false);
+
+  const refreshTable = () => {
+    setRefresh(!refresh);
+    console.log('refresh called');
+  };
+  //response is the data sent back by the backend server.
+  //useEffect re renders everytime [authUser,refresh] is changed.
+  //this then rerenders the table and along with user's activities
+  // const {refresh, setRefresh} = useContext(RefreshContext);
+  const authUser = useContext(AuthUserContext).authUser;
+  const teamData = useContext(TeamDataContext).teamData;
+
+  useEffect(() => {
+    const fetchRowData = async () => {
+      setIsTableReady(false);
+      if (!authUser) return;
+      const data = teamData;
+      setRows(getRows(props.filter, data, authUser));
+      setIsTableReady(true);
+    };
+    fetchRowData();
+  }, [authUser, refresh, teamData]);
+
   const classes = useButtonStyles();
   return (
     <div className={classes.outer}>
@@ -148,25 +144,21 @@ const TableStructure = (props) => {
           <TableHead>
             <TableRow>
               <TableCell />
-              <TableCell>Name</TableCell>
               <TableCell>Title</TableCell>
               <TableCell align="right">Department</TableCell>
               <TableCell align="right">Date</TableCell>
               <TableCell align="right">Status</TableCell>
-              {GetApprovalCell()}
             </TableRow>
           </TableHead>
           <TableBody>
-            {/* ********************************************************************************* */}
             {rows.map((row) => (
-              <Row key={row.name} row={row} />
+              <Row key={row.name} row={row} refreshTable = {refreshTable}/>
             ))}
-            {/* ********************************************************************************* */}
           </TableBody>
         </Table>
       </TableContainer>
-      {/* <Modal refreshTable = {refreshTable} isTableReady = {isTableReady}/> */}
+      <Modal refreshTable={refreshTable} isTableReady={isTableReady} />
     </div>
   );
 };
-export default TableStructure;
+export default CollapsibleTable;
